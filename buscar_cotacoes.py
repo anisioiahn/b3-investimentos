@@ -1,481 +1,66 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Investimentos B3</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<style>
-:root{--green:#1a5f3f;--green-light:#e8f5e9;--bg:#f5f5f5;--card:#fff;--border:#e0e0e0;--text:#1a1a1a;--text2:#666;--text3:#999;--radius:14px;--shadow:0 2px 12px rgba(0,0,0,.07)}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.app{max-width:960px;margin:0 auto;background:var(--card);min-height:100vh;box-shadow:var(--shadow)}
+import json, time, requests
+from datetime import datetime
 
-/* HEADER */
-.header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid var(--border);background:#fff;position:sticky;top:0;z-index:10}
-.hlogo{display:flex;align-items:center;gap:10px}
-.logo{width:38px;height:38px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700}
-.htitle{font-size:17px;font-weight:700}
-.hsub{font-size:11px;color:var(--text2);margin-top:1px}
-.hright{display:flex;align-items:center;gap:10px}
-.status-pill{display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 12px;border-radius:20px;border:1px solid var(--border);color:var(--text2)}
-.dot{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.btn-refresh{padding:6px 14px;font-size:12px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;color:var(--text2)}
-.btn-refresh:hover{border-color:var(--green);color:var(--green)}
+TOKEN = "iSm92y2Qg4f9iapi1MuHhh"
+BASE_URL = "https://brapi.dev/api/quote"
+OUTPUT_FILE = "cotacoes.json"
+HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 
-/* TABS */
-.tabs{display:flex;border-bottom:1px solid var(--border);padding:0 1.5rem;background:#fff}
-.tab{padding:11px 16px;font-size:13px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s}
-.tab.active{color:var(--green);border-bottom-color:var(--green);font-weight:600}
-.tab-badge{background:#e53935;color:#fff;font-size:10px;font-weight:600;border-radius:10px;padding:1px 6px;margin-left:4px}
-
-/* CONTENT */
-.content{padding:1.5rem}
-.page{display:none}.page.active{display:block}
-
-/* SECTORS */
-.sectors-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
-.sector-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem;cursor:pointer;text-align:center;transition:all .15s;box-shadow:var(--shadow)}
-.sector-card:hover{border-color:var(--green);transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,.1)}
-.sector-icon{width:50px;height:50px;border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:26px}
-.sector-name{font-size:12.5px;font-weight:600;margin-bottom:3px;line-height:1.3}
-.sector-count{font-size:11px;color:var(--text2)}
-
-/* BACK + SECTOR HEADER */
-.back-btn{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);cursor:pointer;margin-bottom:1rem;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff}
-.back-btn:hover{color:var(--text)}
-.sec-hdr{display:flex;align-items:center;gap:12px;margin-bottom:1.2rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
-.sec-hdr-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
-.sec-hdr-info{flex:1}
-.sec-hdr-name{font-size:16px;font-weight:700}
-.sec-hdr-sub{font-size:11px;color:var(--text2);margin-top:2px}
-.sec-hdr-badge{font-size:10px;color:var(--green);background:var(--green-light);padding:2px 8px;border-radius:10px;margin-left:8px}
-
-/* COMPANY ROWS */
-.companies{display:flex;flex-direction:column;gap:8px}
-.co-row{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
-.co-row:hover{border-color:var(--green);transform:translateX(2px)}
-.co-logo{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden}
-.co-logo img{width:100%;height:100%;object-fit:cover;border-radius:10px}
-.co-info{flex:1;min-width:0}
-.co-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.co-ticker{font-size:11px;color:var(--text2);font-family:monospace}
-.co-price-blk{text-align:right;min-width:90px}
-.co-price{font-size:15px;font-weight:700}
-.co-chg{font-size:11px;margin-top:2px}
-.up{color:#16a34a}.dn{color:#e53935}.flat{color:var(--text2)}
-.co-range{font-size:10px;color:var(--text3);margin-top:2px}
-.co-target-blk{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:120px}
-.tgt-lbl{font-size:10px;color:var(--text2)}
-.tgt-row{display:flex;gap:4px}
-.tgt-inp{width:72px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;text-align:right;font-family:monospace}
-.tgt-inp:focus{outline:none;border-color:var(--green)}
-.tgt-btn{padding:4px 8px;font-size:11px;border:1px solid var(--green);border-radius:6px;background:transparent;color:var(--green);cursor:pointer;white-space:nowrap}
-.tgt-btn:hover{background:var(--green);color:#fff}
-.alrt-on{font-size:10px;color:#f59e0b;display:flex;align-items:center;gap:3px}
-.alrt-trig{font-size:10px;color:#e53935;font-weight:600;display:flex;align-items:center;gap:3px}
-.notif-bar{background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;color:#78350f}
-
-/* MODAL DE GRÁFICO */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center;padding:1rem}
-.modal-overlay.open{display:flex}
-.modal{background:#fff;border-radius:var(--radius);width:100%;max-width:720px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
-.modal-header{display:flex;align-items:center;justify-content:space-between;padding:1.2rem 1.5rem;border-bottom:1px solid var(--border)}
-.modal-title{display:flex;align-items:center;gap:10px}
-.modal-logo{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff}
-.modal-name{font-size:15px;font-weight:700}
-.modal-ticker{font-size:12px;color:var(--text2);font-family:monospace}
-.modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;color:var(--text2)}
-.modal-close:hover{background:var(--bg)}
-.modal-body{padding:1.5rem}
-.modal-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem}
-.stat-box{background:var(--bg);border-radius:10px;padding:10px 12px;text-align:center}
-.stat-label{font-size:10px;color:var(--text2);margin-bottom:4px}
-.stat-value{font-size:14px;font-weight:700}
-.chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.chart-title{font-size:13px;font-weight:600;color:var(--text2)}
-.chart-ranges{display:flex;gap:4px}
-.range-btn{padding:4px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;color:var(--text2)}
-.range-btn.active{background:var(--green);color:#fff;border-color:var(--green)}
-.chart-wrap{position:relative;height:280px}
-.chart-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text2);background:#fff}
-
-/* ALERTAS */
-.alts-empty{text-align:center;padding:3rem;color:var(--text2)}
-.alts-empty-icon{font-size:40px;margin-bottom:12px}
-.alts-header{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px}
-.alt-item{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:8px;box-shadow:var(--shadow)}
-.alt-logo{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
-.alt-info{flex:1}
-.alt-ticker{font-size:13px;font-weight:700}
-.alt-detail{font-size:12px;color:var(--text2);margin-top:2px}
-.alt-sector{font-size:10px;color:var(--text3);margin-top:2px}
-.alt-badge-wait{background:var(--bg);color:var(--text2);font-size:11px;padding:3px 9px;border-radius:6px;white-space:nowrap}
-.alt-badge-hit{background:#fef3c7;color:#92400e;font-size:11px;font-weight:600;padding:3px 9px;border-radius:6px;white-space:nowrap}
-.del-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:4px;border-radius:6px}
-.del-btn:hover{color:#e53935;background:#fff0f0}
-</style>
-</head>
-<body>
-<div class="app">
-  <div class="header">
-    <div class="hlogo">
-      <div class="logo">B3</div>
-      <div>
-        <div class="htitle">Investimentos B3</div>
-        <div class="hsub" id="last-upd">Carregando cotações...</div>
-      </div>
-    </div>
-    <div class="hright">
-      <div class="status-pill"><span class="dot"></span><span id="status-txt">Conectando</span></div>
-      <button class="btn-refresh" onclick="forcarAtualizacao()">↻ Atualizar</button>
-    </div>
-  </div>
-
-  <div class="tabs">
-    <div class="tab active" onclick="goPage('setores',this)">📊 Setores</div>
-    <div class="tab" onclick="goPage('empresas',this)" id="tab-empresas" style="display:none">🏢 <span id="tab-sname">Empresas</span></div>
-    <div class="tab" onclick="goPage('alertas',this)">🔔 Alertas <span class="tab-badge" id="alt-cnt" style="display:none">0</span></div>
-  </div>
-
-  <div class="content">
-    <div class="page active" id="page-setores">
-      <div class="sectors-grid" id="sgrid"></div>
-    </div>
-    <div class="page" id="page-empresas">
-      <div class="back-btn" onclick="goBack()">← Voltar para setores</div>
-      <div class="sec-hdr" id="shdr"></div>
-      <div id="narea"></div>
-      <div class="companies" id="clist"></div>
-    </div>
-    <div class="page" id="page-alertas">
-      <div id="altbox"></div>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL GRÁFICO -->
-<div class="modal-overlay" id="modal" onclick="fecharModal(event)">
-  <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-header">
-      <div class="modal-title">
-        <div class="modal-logo" id="modal-logo"></div>
-        <div>
-          <div class="modal-name" id="modal-name"></div>
-          <div class="modal-ticker" id="modal-ticker"></div>
-        </div>
-      </div>
-      <button class="modal-close" onclick="fecharModal()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="modal-stats" id="modal-stats"></div>
-      <div class="chart-header">
-        <div class="chart-title">Histórico de preço</div>
-        <div class="chart-ranges">
-          <button class="range-btn" onclick="filtrarChart(30,this)">1M</button>
-          <button class="range-btn" onclick="filtrarChart(90,this)">3M</button>
-          <button class="range-btn" onclick="filtrarChart(180,this)">6M</button>
-          <button class="range-btn active" onclick="filtrarChart(365,this)">1A</button>
-        </div>
-      </div>
-      <div class="chart-wrap">
-        <div class="chart-loading" id="chart-loading">Carregando histórico...</div>
-        <canvas id="priceChart"></canvas>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-let DADOS = {setores:{}};
-let currentSector = null;
-let alerts = JSON.parse(localStorage.getItem('b3_alerts_v3') || '[]');
-let targets = JSON.parse(localStorage.getItem('b3_targets_v3') || '{}');
-let chartInstance = null;
-let chartDataFull = [];
-let currentTicker = null;
-
-function save(){
-  localStorage.setItem('b3_alerts_v3', JSON.stringify(alerts));
-  localStorage.setItem('b3_targets_v3', JSON.stringify(targets));
+SETORES = {
+    "petroleo":         {"nome":"Petróleo, Gás e Biocombustíveis","icone":"🛢️","cor_fundo":"#e8f5e9","tickers":{"PETR4":{"nome":"Petrobras PN","cor":"#005a2b"},"PETR3":{"nome":"Petrobras ON","cor":"#007a3d"}}},
+    "utilidade":        {"nome":"Utilidade Pública","icone":"⚡","cor_fundo":"#fff8e1","tickers":{"ENGI11":{"nome":"Energisa","cor":"#f9a825"},"CPFE3":{"nome":"CPFL Energia","cor":"#b71c1c"},"TAEE11":{"nome":"Taesa","cor":"#00695c"},"EQTL3":{"nome":"Equatorial","cor":"#1565c0"},"CMIG4":{"nome":"Cemig","cor":"#7b1fa2"}}},
+    "materiais":        {"nome":"Materiais Básicos","icone":"🪨","cor_fundo":"#efebe9","tickers":{"VALE3":{"nome":"Vale","cor":"#1a5276"},"CSAN3":{"nome":"Cosan","cor":"#1a237e"},"SUZB3":{"nome":"Suzano","cor":"#1b5e20"},"KLBN11":{"nome":"Klabin","cor":"#33691e"},"DXCO3":{"nome":"Dexco","cor":"#5d4037"},"GGBR4":{"nome":"Gerdau","cor":"#37474f"},"CSNA3":{"nome":"CSN","cor":"#263238"}}},
+    "industriais":      {"nome":"Bens Industriais","icone":"🏗️","cor_fundo":"#fffde7","tickers":{"WEGE3":{"nome":"WEG","cor":"#003366"},"EMBR3":{"nome":"Embraer","cor":"#003a80"},"RAIL3":{"nome":"Rumo","cor":"#bf360c"},"UGPA3":{"nome":"Ultrapar","cor":"#e65100"},"CYRE3":{"nome":"Cyrela","cor":"#1565c0"},"MRVE3":{"nome":"MRV","cor":"#f57f17"},"EZTC3":{"nome":"EZTEC","cor":"#004d40"},"DIRR3":{"nome":"Direcional","cor":"#c62828"},"TEND3":{"nome":"Tenda","cor":"#1a237e"}}},
+    "financeiro":       {"nome":"Financeiro","icone":"🏦","cor_fundo":"#e3f2fd","tickers":{"ITUB4":{"nome":"Itaú Unibanco","cor":"#ff6600"},"BBDC4":{"nome":"Bradesco","cor":"#cc0000"},"BBAS3":{"nome":"Banco do Brasil","cor":"#003399"},"SANB11":{"nome":"Santander BR","cor":"#cc0000"},"B3SA3":{"nome":"B3 S.A.","cor":"#003a80"},"BPAC11":{"nome":"BTG Pactual","cor":"#1a1a2e"}}},
+    "consumo_nciclico": {"nome":"Consumo Não Cíclico","icone":"🌾","cor_fundo":"#f1f8e9","tickers":{"ABEV3":{"nome":"Ambev","cor":"#f9a825"},"JBSS3":{"nome":"JBS","cor":"#c62828"},"BEEF3":{"nome":"Minerva","cor":"#bf360c"},"SLCE3":{"nome":"SLC Agrícola","cor":"#33691e"},"SMTO3":{"nome":"São Martinho","cor":"#2e7d32"},"AGRO3":{"nome":"BrasilAgro","cor":"#1b5e20"}}},
+    "consumo_ciclico":  {"nome":"Consumo Cíclico","icone":"🛍️","cor_fundo":"#f3e5f5","tickers":{"LREN3":{"nome":"Lojas Renner","cor":"#c62828"},"ASAI3":{"nome":"Assaí","cor":"#e53935"},"MGLU3":{"nome":"Magazine Luiza","cor":"#0000cc"},"PCAR3":{"nome":"Grupo GPA","cor":"#f57c00"},"SOMA3":{"nome":"Grupo Soma","cor":"#6a1b9a"},"CVCB3":{"nome":"CVC Corp","cor":"#ff5722"}}},
+    "saude":            {"nome":"Saúde","icone":"🏥","cor_fundo":"#ffebee","tickers":{"RDOR3":{"nome":"Rede D'Or","cor":"#c62828"},"HAPV3":{"nome":"Hapvida","cor":"#0277bd"},"FLRY3":{"nome":"Fleury","cor":"#1565c0"},"HYPE3":{"nome":"Hypera","cor":"#006064"},"DASA3":{"nome":"Dasa","cor":"#0288d1"}}},
+    "comunicacoes":     {"nome":"Comunicações","icone":"📡","cor_fundo":"#e0f2f1","tickers":{"VIVT3":{"nome":"Telefônica Vivo","cor":"#6200ea"},"TIMS3":{"nome":"TIM","cor":"#0000cc"}}},
+    "tecnologia":       {"nome":"Tecnologia da Informação","icone":"💻","cor_fundo":"#ede7f6","tickers":{"TOTS3":{"nome":"TOTVS","cor":"#e53935"},"LWSA3":{"nome":"Locaweb","cor":"#0033cc"},"INTB3":{"nome":"Intelbras","cor":"#1a237e"}}},
 }
 
-// ── Dados ──────────────────────────────────────────────────
-async function carregarDados(){
-  try {
-    const r = await fetch('/api/cotacoes');
-    DADOS = await r.json();
-    document.getElementById('status-txt').textContent = 'Ao vivo · brapi.dev';
-    if(DADOS.atualizado_em){
-      const d = new Date(DADOS.atualizado_em);
-      document.getElementById('last-upd').textContent = 'Atualizado às ' + d.toLocaleTimeString('pt-BR');
-    }
-    renderSectors();
-    if(currentSector) renderEmpresas(true);
-    renderAlerts();
-    updateAltCnt();
-  } catch(e) {
-    document.getElementById('status-txt').textContent = 'Erro de conexão';
-  }
-}
+def buscar_ticker(ticker):
+    try:
+        resp = requests.get(f"{BASE_URL}/{ticker}", headers=HEADERS, timeout=15)
+        if resp.status_code == 200:
+            results = resp.json().get("results", [])
+            return results[0] if results else None
+        print(f"  ⚠️  {ticker}: HTTP {resp.status_code}")
+    except Exception as e:
+        print(f"  ⚠️  {ticker}: {e}")
+    return None
 
-async function forcarAtualizacao(){
-  document.getElementById('status-txt').textContent = 'Atualizando...';
-  try { await fetch('/api/atualizar', {method:'POST'}); } catch(e){}
-  await carregarDados();
-}
+def buscar_historico(ticker):
+    try:
+        url = f"{BASE_URL}/{ticker}?range=1y&interval=1d"
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        if resp.status_code == 200:
+            results = resp.json().get("results", [])
+            if results and results[0].get("historicalDataPrice"):
+                hist = results[0]["historicalDataPrice"]
+                return [{"date": h.get("date"), "close": h.get("close")} for h in hist if h.get("close")]
+    except Exception as e:
+        print(f"  ⚠️  Histórico {ticker}: {e}")
+    return []
 
-// ── Navegação ───────────────────────────────────────────────
-function goPage(p, el){
-  document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
-  document.getElementById('page-'+p).classList.add('active');
-  if(el) el.classList.add('active');
-  if(p==='alertas') renderAlerts();
-}
+def buscar_todas_cotacoes():
+    resultado = {"atualizado_em": datetime.now().isoformat(), "setores": {}}
+    for sid, s in SETORES.items():
+        print(f"\n🔍 {s['nome']}")
+        empresas = []
+        for ticker, meta in s["tickers"].items():
+            d = buscar_ticker(ticker)
+            if d:
+                print(f"   ✅ {ticker}: R$ {d.get('regularMarketPrice')}")
+                empresas.append({"ticker": ticker, "nome": meta["nome"], "cor": meta["cor"], "preco": d.get("regularMarketPrice"), "variacao": d.get("regularMarketChange"), "variacao_pct": d.get("regularMarketChangePercent"), "maxima_dia": d.get("regularMarketDayHigh"), "minima_dia": d.get("regularMarketDayLow"), "volume": d.get("regularMarketVolume"), "logo": d.get("logourl")})
+            else:
+                print(f"   ❌ {ticker}: não encontrado")
+                empresas.append({"ticker": ticker, "nome": meta["nome"], "cor": meta["cor"], "preco": None})
+            time.sleep(0.4)
+        resultado["setores"][sid] = {"nome": s["nome"], "icone": s["icone"], "cor_fundo": s["cor_fundo"], "empresas": empresas}
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        json.dump(resultado, f, ensure_ascii=False, indent=2)
+    return resultado
 
-function goBack(){
-  currentSector = null;
-  document.getElementById('tab-empresas').style.display = 'none';
-  goPage('setores', document.querySelector('.tab'));
-}
-
-// ── Setores ─────────────────────────────────────────────────
-function renderSectors(){
-  document.getElementById('sgrid').innerHTML = Object.entries(DADOS.setores||{}).map(([id,s])=>`
-    <div class="sector-card" onclick="abrirSetor('${id}')">
-      <div class="sector-icon" style="background:${s.cor_fundo}">${s.icone}</div>
-      <div class="sector-name">${s.nome}</div>
-      <div class="sector-count">${s.empresas.filter(e=>e.preco).length} / ${s.empresas.length} com cotação</div>
-    </div>`).join('');
-}
-
-// ── Empresas ─────────────────────────────────────────────────
-function abrirSetor(id){
-  currentSector = id;
-  const s = DADOS.setores[id];
-  document.getElementById('tab-empresas').style.display = 'flex';
-  document.getElementById('tab-sname').textContent = s.nome;
-  document.getElementById('shdr').innerHTML = `
-    <div class="sec-hdr-icon" style="background:${s.cor_fundo}">${s.icone}</div>
-    <div class="sec-hdr-info">
-      <div class="sec-hdr-name">${s.nome}<span class="sec-hdr-badge">Setor oficial B3</span></div>
-      <div class="sec-hdr-sub">${s.empresas.filter(e=>e.preco).length} empresas com cotação · clique em uma empresa para ver o gráfico</div>
-    </div>`;
-  renderEmpresas(false);
-  goPage('empresas', document.getElementById('tab-empresas'));
-}
-
-function renderEmpresas(silencioso){
-  const s = DADOS.setores[currentSector];
-  if(!s) return;
-  const ordenadas = [...s.empresas].filter(e=>e.preco!=null).sort((a,b)=>b.preco-a.preco);
-  document.getElementById('narea').innerHTML = '';
-  document.getElementById('clist').innerHTML = ordenadas.map(c => {
-    const tgt = targets[c.ticker] || '';
-    const hasAlert = alerts.some(a=>a.ticker===c.ticker);
-    const triggered = tgt && c.preco >= parseFloat(tgt);
-    const cls = c.variacao > 0 ? 'up' : c.variacao < 0 ? 'dn' : 'flat';
-    const arrow = c.variacao > 0 ? '▲' : c.variacao < 0 ? '▼' : '—';
-    const sign = (c.variacao||0) >= 0 ? '+' : '';
-    const alertHtml = hasAlert
-      ? (triggered ? `<div class="alrt-trig">🔔 Alvo atingido!</div>` : `<div class="alrt-on">🔔 Alerta ativo</div>`)
-      : `<button class="tgt-btn" onclick="event.stopPropagation();setAlert('${c.ticker}')">+ Alertar</button>`;
-    const logoHtml = c.logo
-      ? `<img src="${c.logo}" alt="${c.nome}" onerror="this.parentElement.textContent='${c.ticker.substring(0,4)}'">`
-      : c.ticker.substring(0,4);
-    return `<div class="co-row" onclick="abrirGrafico('${c.ticker}')">
-      <div class="co-logo" style="background:${c.cor}">${logoHtml}</div>
-      <div class="co-info">
-        <div class="co-name">${c.nome}</div>
-        <div class="co-ticker">${c.ticker}</div>
-      </div>
-      <div class="co-price-blk">
-        <div class="co-price">R$ ${c.preco.toFixed(2)}</div>
-        <div class="co-chg ${cls}">${arrow} ${sign}${(c.variacao||0).toFixed(2)} (${(c.variacao_pct||0).toFixed(2)}%)</div>
-        <div class="co-range">Hoje: ${c.minima_dia?.toFixed(2)||'—'} – ${c.maxima_dia?.toFixed(2)||'—'}</div>
-      </div>
-      <div class="co-target-blk" onclick="event.stopPropagation()">
-        <div class="tgt-lbl">Valor alvo</div>
-        <div class="tgt-row">
-          <input class="tgt-inp" type="number" step="0.01" value="${tgt}" id="inp-${c.ticker}"
-            placeholder="R$ 0,00" onchange="updateTarget('${c.ticker}',this.value)">
-        </div>
-        ${alertHtml}
-      </div>
-    </div>`;
-  }).join('');
-  checkTriggered(s);
-}
-
-function checkTriggered(s){
-  const hits = alerts.filter(a=>{
-    const co = s.empresas.find(e=>e.ticker===a.ticker);
-    return co && co.preco != null && co.preco >= a.target;
-  });
-  document.getElementById('narea').innerHTML = hits.map(h=>{
-    const co = s.empresas.find(e=>e.ticker===h.ticker);
-    return `<div class="notif-bar">🔔 <strong>${h.ticker}</strong> atingiu o alvo! Atual: R$ ${co.preco.toFixed(2)} → Alvo: R$ ${h.target.toFixed(2)}</div>`;
-  }).join('');
-}
-
-// ── Gráfico ──────────────────────────────────────────────────
-async function abrirGrafico(ticker){
-  // Busca empresa em qualquer setor
-  let co = null;
-  for(const s of Object.values(DADOS.setores)){
-    co = s.empresas.find(e=>e.ticker===ticker);
-    if(co) break;
-  }
-  if(!co) return;
-
-  currentTicker = ticker;
-  document.getElementById('modal-logo').style.background = co.cor;
-  document.getElementById('modal-logo').textContent = ticker.substring(0,4);
-  document.getElementById('modal-name').textContent = co.nome;
-  document.getElementById('modal-ticker').textContent = ticker;
-  document.getElementById('modal-stats').innerHTML = `
-    <div class="stat-box"><div class="stat-label">Preço Atual</div><div class="stat-value">R$ ${co.preco?.toFixed(2)||'—'}</div></div>
-    <div class="stat-box"><div class="stat-label">Variação Dia</div><div class="stat-value ${(co.variacao||0)>=0?'up':'dn'}">${(co.variacao||0)>=0?'+':''}${(co.variacao||0).toFixed(2)}</div></div>
-    <div class="stat-box"><div class="stat-label">Mínima Dia</div><div class="stat-value">R$ ${co.minima_dia?.toFixed(2)||'—'}</div></div>
-    <div class="stat-box"><div class="stat-label">Máxima Dia</div><div class="stat-value">R$ ${co.maxima_dia?.toFixed(2)||'—'}</div></div>`;
-
-  document.getElementById('modal').classList.add('open');
-  document.getElementById('chart-loading').style.display = 'flex';
-  if(chartInstance){ chartInstance.destroy(); chartInstance=null; }
-
-  try {
-    const r = await fetch(`/api/historico/${ticker}`);
-    const data = await r.json();
-    chartDataFull = data.historico || [];
-    document.getElementById('chart-loading').style.display = 'none';
-    // ativa botão 1A por padrão
-    document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.range-btn')[3].classList.add('active');
-    renderChart(chartDataFull);
-  } catch(e){
-    document.getElementById('chart-loading').textContent = 'Erro ao carregar histórico';
-  }
-}
-
-function filtrarChart(dias, btn){
-  document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  const cutoff = Date.now() - dias * 86400000;
-  const filtrado = chartDataFull.filter(d => (d.date*1000) >= cutoff);
-  renderChart(filtrado);
-}
-
-function renderChart(dados){
-  if(!dados.length) return;
-  const labels = dados.map(d=>{
-    const dt = new Date(d.date*1000);
-    return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
-  });
-  const prices = dados.map(d=>d.close);
-  const primeiro = prices[0], ultimo = prices[prices.length-1];
-  const cor = ultimo >= primeiro ? '#16a34a' : '#e53935';
-  const corBg = ultimo >= primeiro ? 'rgba(22,163,74,.08)' : 'rgba(229,57,53,.08)';
-
-  if(chartInstance) chartInstance.destroy();
-  const ctx = document.getElementById('priceChart').getContext('2d');
-  chartInstance = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets:[{
-        data: prices, borderColor: cor, backgroundColor: corBg,
-        borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, fill: true, tension: 0.3
-      }]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>`R$ ${ctx.parsed.y.toFixed(2)}`}}},
-      scales:{
-        x:{grid:{display:false},ticks:{maxTicksLimit:8,font:{size:10}}},
-        y:{grid:{color:'#f0f0f0'},ticks:{callback:v=>`R$ ${v.toFixed(2)}`,font:{size:10}}}
-      }
-    }
-  });
-}
-
-function fecharModal(e){
-  if(!e || e.target === document.getElementById('modal')){
-    document.getElementById('modal').classList.remove('open');
-  }
-}
-
-// ── Alertas ──────────────────────────────────────────────────
-function updateTarget(ticker, val){
-  if(val && parseFloat(val)>0) targets[ticker] = parseFloat(val);
-  else delete targets[ticker];
-  save();
-}
-
-function setAlert(ticker){
-  const inp = document.getElementById('inp-'+ticker);
-  const val = parseFloat(inp.value);
-  if(!val||val<=0){inp.focus();inp.style.borderColor='#e53935';setTimeout(()=>inp.style.borderColor='',1500);return;}
-  targets[ticker] = val;
-  let co = null; let sNome = '';
-  for(const s of Object.values(DADOS.setores)){
-    const found = s.empresas.find(e=>e.ticker===ticker);
-    if(found){co=found;sNome=s.nome;break;}
-  }
-  if(!alerts.some(a=>a.ticker===ticker)){
-    alerts.push({ticker, name:co.nome, target:val, color:co.cor, sector:sNome});
-  } else {
-    alerts.find(a=>a.ticker===ticker).target = val;
-  }
-  save(); updateAltCnt(); renderEmpresas(true);
-}
-
-function removeAlert(ticker){
-  alerts = alerts.filter(a=>a.ticker!==ticker);
-  delete targets[ticker];
-  save(); updateAltCnt(); renderAlerts();
-}
-
-function updateAltCnt(){
-  const el = document.getElementById('alt-cnt');
-  if(alerts.length>0){el.textContent=alerts.length;el.style.display='inline';}
-  else el.style.display='none';
-}
-
-function renderAlerts(){
-  const c = document.getElementById('altbox');
-  if(!alerts.length){
-    c.innerHTML=`<div class="alts-empty"><div class="alts-empty-icon">🔔</div><div style="font-size:15px;font-weight:600;margin-bottom:6px">Nenhum alerta configurado</div><div style="font-size:13px">Acesse um setor, defina um valor alvo e clique em "+ Alertar"</div></div>`;
-    return;
-  }
-  c.innerHTML = `<div class="alts-header">${alerts.length} alerta${alerts.length>1?'s':''} configurado${alerts.length>1?'s':''}</div>` +
-    alerts.map(a=>{
-      let curr = 0;
-      for(const s of Object.values(DADOS.setores||{})){
-        const co = s.empresas.find(e=>e.ticker===a.ticker);
-        if(co&&co.preco){curr=co.preco;break;}
-      }
-      const hit = curr>=a.target;
-      const dist = curr>0 ? ((a.target-curr)/curr*100) : 0;
-      return `<div class="alt-item">
-        <div class="alt-logo" style="background:${a.color}">${a.ticker.substring(0,4)}</div>
-        <div class="alt-info">
-          <div class="alt-ticker">${a.ticker} · ${a.name}</div>
-          <div class="alt-detail">Atual: <strong>R$ ${curr.toFixed(2)}</strong> · Alvo: R$ ${a.target.toFixed(2)} · <span style="color:${hit?'#f59e0b':'inherit'}">${hit?'✓ Atingido':dist>=0?`+${dist.toFixed(1)}% para atingir`:`${Math.abs(dist).toFixed(1)}% acima do alvo`}</span></div>
-          <div class="alt-sector">${a.sector}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="${hit?'alt-badge-hit':'alt-badge-wait'}">${hit?'🔔 Atingido':'⏳ Aguardando'}</span>
-          <button class="del-btn" onclick="removeAlert('${a.ticker}')">🗑</button>
-        </div>
-      </div>`;
-    }).join('');
-}
-
-// ── Init ─────────────────────────────────────────────────────
-carregarDados();
-setInterval(carregarDados, 300000);
-</script>
-</body>
-</html>
+if __name__ == "__main__":
+    buscar_todas_cotacoes()
