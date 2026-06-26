@@ -1,11 +1,3 @@
-services:
-  - type: web
-    name: b3-investimentos
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn servidor:app --workers 1 --timeout 120
-    envVars:
-      - key: BRAPI_TOKEN
-        value: iSm92y2Qg4f9iapi1MuHhh
-      - key: INTERVALO_SEGUNDOS
-        value: 300
+flask==3.0.3
+requests==2.32.3
+gunicorn==22.0.0
