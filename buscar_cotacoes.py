@@ -19,18 +19,32 @@ SETORES = {
     "tecnologia":       {"nome":"Tecnologia da Informação","icone":"💻","cor_fundo":"#ede7f6","tickers":{"TOTS3":{"nome":"TOTVS","cor":"#e53935"},"LWSA3":{"nome":"Locaweb","cor":"#0033cc"},"INTB3":{"nome":"Intelbras","cor":"#1a237e"}}},
 }
 
+# Intervalo entre requisições — respeita o rate limit do plano gratuito
+INTERVALO_REQ = float(os.environ.get("INTERVALO_REQ", "2.0")) if False else 2.0
+
 def buscar_ticker(ticker):
-    try:
-        resp = requests.get(f"{BASE_URL}/{ticker}", headers=HEADERS, timeout=15)
-        if resp.status_code == 200:
-            results = resp.json().get("results", [])
-            return results[0] if results else None
-        print(f"  ⚠️  {ticker}: HTTP {resp.status_code}")
-    except Exception as e:
-        print(f"  ⚠️  {ticker}: {e}")
+    """Busca 1 ticker com retry automático em caso de 429."""
+    for tentativa in range(3):
+        try:
+            resp = requests.get(f"{BASE_URL}/{ticker}", headers=HEADERS, timeout=15)
+            if resp.status_code == 200:
+                results = resp.json().get("results", [])
+                return results[0] if results else None
+            elif resp.status_code == 429:
+                wait = 15 * (tentativa + 1)
+                print(f"  ⏳ {ticker}: rate limit (429), aguardando {wait}s...")
+                time.sleep(wait)
+                continue
+            else:
+                print(f"  ⚠️  {ticker}: HTTP {resp.status_code}")
+                return None
+        except Exception as e:
+            print(f"  ⚠️  {ticker}: {e}")
+            return None
     return None
 
 def buscar_historico(ticker):
+    """Busca histórico de 1 ano com intervalo diário."""
     try:
         url = f"{BASE_URL}/{ticker}?range=1y&interval=1d"
         resp = requests.get(url, headers=HEADERS, timeout=15)
@@ -51,13 +65,26 @@ def buscar_todas_cotacoes():
         for ticker, meta in s["tickers"].items():
             d = buscar_ticker(ticker)
             if d:
-                print(f"   ✅ {ticker}: R$ {d.get('regularMarketPrice')}")
-                empresas.append({"ticker": ticker, "nome": meta["nome"], "cor": meta["cor"], "preco": d.get("regularMarketPrice"), "variacao": d.get("regularMarketChange"), "variacao_pct": d.get("regularMarketChangePercent"), "maxima_dia": d.get("regularMarketDayHigh"), "minima_dia": d.get("regularMarketDayLow"), "volume": d.get("regularMarketVolume"), "logo": d.get("logourl")})
+                preco = d.get("regularMarketPrice")
+                pct = d.get("regularMarketChangePercent", 0)
+                print(f"   ✅ {ticker}: R$ {preco} ({pct:+.2f}%)")
+                empresas.append({
+                    "ticker": ticker, "nome": meta["nome"], "cor": meta["cor"],
+                    "preco": preco, "variacao": d.get("regularMarketChange"),
+                    "variacao_pct": pct, "maxima_dia": d.get("regularMarketDayHigh"),
+                    "minima_dia": d.get("regularMarketDayLow"),
+                    "volume": d.get("regularMarketVolume"), "logo": d.get("logourl"),
+                })
             else:
                 print(f"   ❌ {ticker}: não encontrado")
                 empresas.append({"ticker": ticker, "nome": meta["nome"], "cor": meta["cor"], "preco": None})
-            time.sleep(0.4)
-        resultado["setores"][sid] = {"nome": s["nome"], "icone": s["icone"], "cor_fundo": s["cor_fundo"], "empresas": empresas}
+            time.sleep(INTERVALO_REQ)  # respeita rate limit
+
+        resultado["setores"][sid] = {
+            "nome": s["nome"], "icone": s["icone"],
+            "cor_fundo": s["cor_fundo"], "empresas": empresas,
+        }
+
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(resultado, f, ensure_ascii=False, indent=2)
     return resultado
