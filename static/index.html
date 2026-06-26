@@ -10,49 +10,38 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .app{max-width:960px;margin:0 auto;background:var(--card);min-height:100vh;box-shadow:var(--shadow)}
-
-/* HEADER */
 .header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid var(--border);background:#fff;position:sticky;top:0;z-index:10}
 .hlogo{display:flex;align-items:center;gap:10px}
 .logo{width:38px;height:38px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700}
 .htitle{font-size:17px;font-weight:700}
 .hsub{font-size:11px;color:var(--text2);margin-top:1px}
-.hright{display:flex;align-items:center;gap:10px}
+.hright{display:flex;align-items:center;gap:8px}
 .status-pill{display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 12px;border-radius:20px;border:1px solid var(--border);color:var(--text2)}
 .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:pulse 2s infinite}
+.dot.loading{background:#f59e0b}
+.dot.err{background:#e53935;animation:none}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .btn-refresh{padding:6px 14px;font-size:12px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;color:var(--text2)}
 .btn-refresh:hover{border-color:var(--green);color:var(--green)}
-
-/* TABS */
-.tabs{display:flex;border-bottom:1px solid var(--border);padding:0 1.5rem;background:#fff}
-.tab{padding:11px 16px;font-size:13px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s}
+.tabs{display:flex;border-bottom:1px solid var(--border);padding:0 1.5rem;background:#fff;overflow-x:auto}
+.tab{padding:11px 16px;font-size:13px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;display:flex;align-items:center;gap:6px}
 .tab.active{color:var(--green);border-bottom-color:var(--green);font-weight:600}
-.tab-badge{background:#e53935;color:#fff;font-size:10px;font-weight:600;border-radius:10px;padding:1px 6px;margin-left:4px}
-
-/* CONTENT */
+.tab-badge{background:#e53935;color:#fff;font-size:10px;font-weight:600;border-radius:10px;padding:1px 6px}
 .content{padding:1.5rem}
 .page{display:none}.page.active{display:block}
-
-/* SECTORS */
 .sectors-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
 .sector-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem;cursor:pointer;text-align:center;transition:all .15s;box-shadow:var(--shadow)}
-.sector-card:hover{border-color:var(--green);transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,.1)}
+.sector-card:hover{border-color:var(--green);transform:translateY(-2px)}
 .sector-icon{width:50px;height:50px;border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:26px}
 .sector-name{font-size:12.5px;font-weight:600;margin-bottom:3px;line-height:1.3}
 .sector-count{font-size:11px;color:var(--text2)}
-
-/* BACK + SECTOR HEADER */
 .back-btn{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);cursor:pointer;margin-bottom:1rem;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff}
 .back-btn:hover{color:var(--text)}
 .sec-hdr{display:flex;align-items:center;gap:12px;margin-bottom:1.2rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
 .sec-hdr-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
-.sec-hdr-info{flex:1}
 .sec-hdr-name{font-size:16px;font-weight:700}
 .sec-hdr-sub{font-size:11px;color:var(--text2);margin-top:2px}
 .sec-hdr-badge{font-size:10px;color:var(--green);background:var(--green-light);padding:2px 8px;border-radius:10px;margin-left:8px}
-
-/* COMPANY ROWS */
 .companies{display:flex;flex-direction:column;gap:8px}
 .co-row{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
 .co-row:hover{border-color:var(--green);transform:translateX(2px)}
@@ -71,13 +60,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .tgt-row{display:flex;gap:4px}
 .tgt-inp{width:72px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;text-align:right;font-family:monospace}
 .tgt-inp:focus{outline:none;border-color:var(--green)}
-.tgt-btn{padding:4px 8px;font-size:11px;border:1px solid var(--green);border-radius:6px;background:transparent;color:var(--green);cursor:pointer;white-space:nowrap}
+.tgt-btn{padding:4px 8px;font-size:11px;border:1px solid var(--green);border-radius:6px;background:transparent;color:var(--green);cursor:pointer}
 .tgt-btn:hover{background:var(--green);color:#fff}
 .alrt-on{font-size:10px;color:#f59e0b;display:flex;align-items:center;gap:3px}
-.alrt-trig{font-size:10px;color:#e53935;font-weight:600;display:flex;align-items:center;gap:3px}
+.alrt-trig{font-size:10px;color:#e53935;font-weight:600}
 .notif-bar{background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;color:#78350f}
-
-/* MODAL DE GRÁFICO */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center;padding:1rem}
 .modal-overlay.open{display:flex}
 .modal{background:#fff;border-radius:var(--radius);width:100%;max-width:720px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
@@ -87,7 +74,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .modal-name{font-size:15px;font-weight:700}
 .modal-ticker{font-size:12px;color:var(--text2);font-family:monospace}
 .modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;color:var(--text2)}
-.modal-close:hover{background:var(--bg)}
 .modal-body{padding:1.5rem}
 .modal-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem}
 .stat-box{background:var(--bg);border-radius:10px;padding:10px 12px;text-align:center}
@@ -100,8 +86,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .range-btn.active{background:var(--green);color:#fff;border-color:var(--green)}
 .chart-wrap{position:relative;height:280px}
 .chart-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text2);background:#fff}
-
-/* ALERTAS */
 .alts-empty{text-align:center;padding:3rem;color:var(--text2)}
 .alts-empty-icon{font-size:40px;margin-bottom:12px}
 .alts-header{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px}
@@ -111,10 +95,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .alt-ticker{font-size:13px;font-weight:700}
 .alt-detail{font-size:12px;color:var(--text2);margin-top:2px}
 .alt-sector{font-size:10px;color:var(--text3);margin-top:2px}
-.alt-badge-wait{background:var(--bg);color:var(--text2);font-size:11px;padding:3px 9px;border-radius:6px;white-space:nowrap}
-.alt-badge-hit{background:#fef3c7;color:#92400e;font-size:11px;font-weight:600;padding:3px 9px;border-radius:6px;white-space:nowrap}
+.alt-badge-wait{background:var(--bg);color:var(--text2);font-size:11px;padding:3px 9px;border-radius:6px}
+.alt-badge-hit{background:#fef3c7;color:#92400e;font-size:11px;font-weight:600;padding:3px 9px;border-radius:6px}
 .del-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:4px;border-radius:6px}
-.del-btn:hover{color:#e53935;background:#fff0f0}
+.del-btn:hover{color:#e53935}
+
+/* LOG */
+.log-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.log-title{font-size:14px;font-weight:600;flex:1}
+.log-clear{padding:5px 12px;font-size:12px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;color:var(--text2)}
+.log-clear:hover{border-color:#e53935;color:#e53935}
+.log-status{font-size:11px;color:var(--text2);display:flex;align-items:center;gap:5px}
+.log-dot{width:6px;height:6px;border-radius:50%;background:#22c55e;animation:pulse 2s infinite}
+.log-box{background:#0d1117;border-radius:12px;padding:1rem;height:500px;overflow-y:auto;font-family:monospace;font-size:12px;line-height:1.7}
+.log-box::-webkit-scrollbar{width:6px}
+.log-box::-webkit-scrollbar-track{background:transparent}
+.log-box::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+.log-line{display:flex;gap:10px;padding:1px 0}
+.log-ts{color:#555;flex-shrink:0;min-width:55px}
+.log-msg{flex:1;word-break:break-word}
+.log-info .log-msg{color:#8b949e}
+.log-setor .log-msg{color:#58a6ff;font-weight:600}
+.log-cotacao .log-msg{color:#3fb950}
+.log-aviso .log-msg{color:#d29922}
+.log-erro .log-msg{color:#f85149}
+.log-sucesso .log-msg{color:#3fb950;font-weight:600}
+.log-empty{color:#555;text-align:center;padding:2rem}
 </style>
 </head>
 <body>
@@ -128,7 +134,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       </div>
     </div>
     <div class="hright">
-      <div class="status-pill"><span class="dot"></span><span id="status-txt">Conectando</span></div>
+      <div class="status-pill"><span class="dot" id="sdot"></span><span id="status-txt">Conectando</span></div>
       <button class="btn-refresh" onclick="forcarAtualizacao()">↻ Atualizar</button>
     </div>
   </div>
@@ -137,6 +143,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="tab active" onclick="goPage('setores',this)">📊 Setores</div>
     <div class="tab" onclick="goPage('empresas',this)" id="tab-empresas" style="display:none">🏢 <span id="tab-sname">Empresas</span></div>
     <div class="tab" onclick="goPage('alertas',this)">🔔 Alertas <span class="tab-badge" id="alt-cnt" style="display:none">0</span></div>
+    <div class="tab" onclick="goPage('log',this)">🖥️ Log</div>
   </div>
 
   <div class="content">
@@ -152,6 +159,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="page" id="page-alertas">
       <div id="altbox"></div>
     </div>
+    <div class="page" id="page-log">
+      <div class="log-toolbar">
+        <div class="log-title">Log de atualizações</div>
+        <div class="log-status"><span class="log-dot" id="log-dot"></span><span id="log-conn">Conectando...</span></div>
+        <button class="log-clear" onclick="limparLog()">Limpar</button>
+      </div>
+      <div class="log-box" id="log-box">
+        <div class="log-empty">Aguardando eventos...</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -161,10 +178,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="modal-header">
       <div class="modal-title">
         <div class="modal-logo" id="modal-logo"></div>
-        <div>
-          <div class="modal-name" id="modal-name"></div>
-          <div class="modal-ticker" id="modal-ticker"></div>
-        </div>
+        <div><div class="modal-name" id="modal-name"></div><div class="modal-ticker" id="modal-ticker"></div></div>
       </div>
       <button class="modal-close" onclick="fecharModal()">✕</button>
     </div>
@@ -188,24 +202,73 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 </div>
 
 <script>
-let DADOS = {setores:{}};
-let currentSector = null;
-let alerts = JSON.parse(localStorage.getItem('b3_alerts_v3') || '[]');
-let targets = JSON.parse(localStorage.getItem('b3_targets_v3') || '{}');
-let chartInstance = null;
-let chartDataFull = [];
-let currentTicker = null;
+let DADOS={setores:{}}, currentSector=null;
+let alerts=JSON.parse(localStorage.getItem('b3_alerts_v3')||'[]');
+let targets=JSON.parse(localStorage.getItem('b3_targets_v3')||'{}');
+let chartInstance=null, chartDataFull=[], logLines=[];
+let sseSource=null;
 
-function save(){
-  localStorage.setItem('b3_alerts_v3', JSON.stringify(alerts));
-  localStorage.setItem('b3_targets_v3', JSON.stringify(targets));
+function save(){localStorage.setItem('b3_alerts_v3',JSON.stringify(alerts));localStorage.setItem('b3_targets_v3',JSON.stringify(targets));}
+
+// ── SSE Log ─────────────────────────────────────────────────
+function conectarLog(){
+  if(sseSource) sseSource.close();
+  sseSource = new EventSource('/api/logs/stream');
+  sseSource.onmessage = e => {
+    try{
+      const d = JSON.parse(e.data);
+      if(d.ping) return;
+      adicionarLogLine(d);
+    }catch(err){}
+  };
+  sseSource.onopen = () => {
+    document.getElementById('log-conn').textContent = 'Ao vivo';
+    document.getElementById('log-dot').style.background = '#22c55e';
+  };
+  sseSource.onerror = () => {
+    document.getElementById('log-conn').textContent = 'Reconectando...';
+    document.getElementById('log-dot').style.background = '#f59e0b';
+  };
 }
 
-// ── Dados ──────────────────────────────────────────────────
+function adicionarLogLine(entry){
+  logLines.push(entry);
+  if(logLines.length > 200) logLines.shift();
+  renderLog();
+}
+
+function renderLog(){
+  const box = document.getElementById('log-box');
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  if(!logLines.length){box.innerHTML='<div class="log-empty">Sem eventos ainda...</div>';return;}
+  box.innerHTML = logLines.map(e=>`
+    <div class="log-line log-${e.tipo||'info'}">
+      <span class="log-ts">${e.ts}</span>
+      <span class="log-msg">${e.msg}</span>
+    </div>`).join('');
+  if(atBottom) box.scrollTop = box.scrollHeight;
+}
+
+function limparLog(){logLines=[];renderLog();}
+
+async function carregarLogsIniciais(){
+  try{
+    const r = await fetch('/api/logs');
+    const data = await r.json();
+    logLines = data;
+    renderLog();
+    const box = document.getElementById('log-box');
+    box.scrollTop = box.scrollHeight;
+  }catch(e){}
+}
+
+// ── Dados ────────────────────────────────────────────────────
 async function carregarDados(){
-  try {
+  try{
     const r = await fetch('/api/cotacoes');
     DADOS = await r.json();
+    const dot = document.getElementById('sdot');
+    dot.className = 'dot';
     document.getElementById('status-txt').textContent = 'Ao vivo · brapi.dev';
     if(DADOS.atualizado_em){
       const d = new Date(DADOS.atualizado_em);
@@ -215,82 +278,73 @@ async function carregarDados(){
     if(currentSector) renderEmpresas(true);
     renderAlerts();
     updateAltCnt();
-  } catch(e) {
+  }catch(e){
     document.getElementById('status-txt').textContent = 'Erro de conexão';
+    document.getElementById('sdot').className = 'dot err';
   }
 }
 
 async function forcarAtualizacao(){
   document.getElementById('status-txt').textContent = 'Atualizando...';
-  try { await fetch('/api/atualizar', {method:'POST'}); } catch(e){}
-  await carregarDados();
+  document.getElementById('sdot').className = 'dot loading';
+  try{await fetch('/api/atualizar',{method:'POST'});}catch(e){}
+  setTimeout(carregarDados, 3000);
+  setTimeout(carregarDados, 8000);
+  setTimeout(carregarDados, 20000);
+  setTimeout(carregarDados, 40000);
 }
 
-// ── Navegação ───────────────────────────────────────────────
-function goPage(p, el){
+// ── Nav ──────────────────────────────────────────────────────
+function goPage(p,el){
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   if(el) el.classList.add('active');
   if(p==='alertas') renderAlerts();
 }
+function goBack(){currentSector=null;document.getElementById('tab-empresas').style.display='none';goPage('setores',document.querySelector('.tab'));}
 
-function goBack(){
-  currentSector = null;
-  document.getElementById('tab-empresas').style.display = 'none';
-  goPage('setores', document.querySelector('.tab'));
-}
-
-// ── Setores ─────────────────────────────────────────────────
+// ── Setores ──────────────────────────────────────────────────
 function renderSectors(){
-  document.getElementById('sgrid').innerHTML = Object.entries(DADOS.setores||{}).map(([id,s])=>`
+  document.getElementById('sgrid').innerHTML=Object.entries(DADOS.setores||{}).map(([id,s])=>`
     <div class="sector-card" onclick="abrirSetor('${id}')">
       <div class="sector-icon" style="background:${s.cor_fundo}">${s.icone}</div>
       <div class="sector-name">${s.nome}</div>
-      <div class="sector-count">${s.empresas.filter(e=>e.preco).length} / ${s.empresas.length} com cotação</div>
+      <div class="sector-count">${s.empresas.filter(e=>e.preco).length}/${s.empresas.length} com cotação</div>
     </div>`).join('');
 }
 
 // ── Empresas ─────────────────────────────────────────────────
 function abrirSetor(id){
-  currentSector = id;
-  const s = DADOS.setores[id];
-  document.getElementById('tab-empresas').style.display = 'flex';
-  document.getElementById('tab-sname').textContent = s.nome;
-  document.getElementById('shdr').innerHTML = `
+  currentSector=id;
+  const s=DADOS.setores[id];
+  document.getElementById('tab-empresas').style.display='flex';
+  document.getElementById('tab-sname').textContent=s.nome;
+  document.getElementById('shdr').innerHTML=`
     <div class="sec-hdr-icon" style="background:${s.cor_fundo}">${s.icone}</div>
-    <div class="sec-hdr-info">
-      <div class="sec-hdr-name">${s.nome}<span class="sec-hdr-badge">Setor oficial B3</span></div>
-      <div class="sec-hdr-sub">${s.empresas.filter(e=>e.preco).length} empresas com cotação · clique em uma empresa para ver o gráfico</div>
-    </div>`;
+    <div><div class="sec-hdr-name">${s.nome}<span class="sec-hdr-badge">Setor oficial B3</span></div>
+    <div class="sec-hdr-sub">Clique em uma empresa para ver o gráfico histórico</div></div>`;
   renderEmpresas(false);
-  goPage('empresas', document.getElementById('tab-empresas'));
+  goPage('empresas',document.getElementById('tab-empresas'));
 }
 
 function renderEmpresas(silencioso){
-  const s = DADOS.setores[currentSector];
+  const s=DADOS.setores[currentSector];
   if(!s) return;
-  const ordenadas = [...s.empresas].filter(e=>e.preco!=null).sort((a,b)=>b.preco-a.preco);
-  document.getElementById('narea').innerHTML = '';
-  document.getElementById('clist').innerHTML = ordenadas.map(c => {
-    const tgt = targets[c.ticker] || '';
-    const hasAlert = alerts.some(a=>a.ticker===c.ticker);
-    const triggered = tgt && c.preco >= parseFloat(tgt);
-    const cls = c.variacao > 0 ? 'up' : c.variacao < 0 ? 'dn' : 'flat';
-    const arrow = c.variacao > 0 ? '▲' : c.variacao < 0 ? '▼' : '—';
-    const sign = (c.variacao||0) >= 0 ? '+' : '';
-    const alertHtml = hasAlert
-      ? (triggered ? `<div class="alrt-trig">🔔 Alvo atingido!</div>` : `<div class="alrt-on">🔔 Alerta ativo</div>`)
-      : `<button class="tgt-btn" onclick="event.stopPropagation();setAlert('${c.ticker}')">+ Alertar</button>`;
-    const logoHtml = c.logo
-      ? `<img src="${c.logo}" alt="${c.nome}" onerror="this.parentElement.textContent='${c.ticker.substring(0,4)}'">`
-      : c.ticker.substring(0,4);
+  const ordenadas=[...s.empresas].filter(e=>e.preco!=null).sort((a,b)=>b.preco-a.preco);
+  document.getElementById('narea').innerHTML='';
+  document.getElementById('clist').innerHTML=ordenadas.map(c=>{
+    const tgt=targets[c.ticker]||'';
+    const hasAlert=alerts.some(a=>a.ticker===c.ticker);
+    const triggered=tgt&&c.preco>=parseFloat(tgt);
+    const cls=c.variacao>0?'up':c.variacao<0?'dn':'flat';
+    const arrow=c.variacao>0?'▲':c.variacao<0?'▼':'—';
+    const sign=(c.variacao||0)>=0?'+':'';
+    const alertHtml=hasAlert?(triggered?`<div class="alrt-trig">🔔 Alvo atingido!</div>`:`<div class="alrt-on">🔔 Alerta ativo</div>`):`<button class="tgt-btn" onclick="event.stopPropagation();setAlert('${c.ticker}')">+ Alertar</button>`;
+    const logoHtml=c.logo?`<img src="${c.logo}" alt="${c.nome}" onerror="this.parentElement.textContent='${c.ticker.substring(0,4)}'">`:c.ticker.substring(0,4);
     return `<div class="co-row" onclick="abrirGrafico('${c.ticker}')">
       <div class="co-logo" style="background:${c.cor}">${logoHtml}</div>
-      <div class="co-info">
-        <div class="co-name">${c.nome}</div>
-        <div class="co-ticker">${c.ticker}</div>
-      </div>
+      <div class="co-info"><div class="co-name">${c.nome}</div><div class="co-ticker">${c.ticker}</div></div>
       <div class="co-price-blk">
         <div class="co-price">R$ ${c.preco.toFixed(2)}</div>
         <div class="co-chg ${cls}">${arrow} ${sign}${(c.variacao||0).toFixed(2)} (${(c.variacao_pct||0).toFixed(2)}%)</div>
@@ -298,10 +352,7 @@ function renderEmpresas(silencioso){
       </div>
       <div class="co-target-blk" onclick="event.stopPropagation()">
         <div class="tgt-lbl">Valor alvo</div>
-        <div class="tgt-row">
-          <input class="tgt-inp" type="number" step="0.01" value="${tgt}" id="inp-${c.ticker}"
-            placeholder="R$ 0,00" onchange="updateTarget('${c.ticker}',this.value)">
-        </div>
+        <div class="tgt-row"><input class="tgt-inp" type="number" step="0.01" value="${tgt}" id="inp-${c.ticker}" placeholder="R$ 0,00" onchange="updateTarget('${c.ticker}',this.value)"></div>
         ${alertHtml}
       </div>
     </div>`;
@@ -310,154 +361,89 @@ function renderEmpresas(silencioso){
 }
 
 function checkTriggered(s){
-  const hits = alerts.filter(a=>{
-    const co = s.empresas.find(e=>e.ticker===a.ticker);
-    return co && co.preco != null && co.preco >= a.target;
-  });
-  document.getElementById('narea').innerHTML = hits.map(h=>{
-    const co = s.empresas.find(e=>e.ticker===h.ticker);
+  const hits=alerts.filter(a=>{const co=s.empresas.find(e=>e.ticker===a.ticker);return co&&co.preco!=null&&co.preco>=a.target;});
+  document.getElementById('narea').innerHTML=hits.map(h=>{
+    const co=s.empresas.find(e=>e.ticker===h.ticker);
     return `<div class="notif-bar">🔔 <strong>${h.ticker}</strong> atingiu o alvo! Atual: R$ ${co.preco.toFixed(2)} → Alvo: R$ ${h.target.toFixed(2)}</div>`;
   }).join('');
 }
 
 // ── Gráfico ──────────────────────────────────────────────────
 async function abrirGrafico(ticker){
-  // Busca empresa em qualquer setor
-  let co = null;
-  for(const s of Object.values(DADOS.setores)){
-    co = s.empresas.find(e=>e.ticker===ticker);
-    if(co) break;
-  }
+  let co=null;
+  for(const s of Object.values(DADOS.setores)){co=s.empresas.find(e=>e.ticker===ticker);if(co) break;}
   if(!co) return;
-
-  currentTicker = ticker;
-  document.getElementById('modal-logo').style.background = co.cor;
-  document.getElementById('modal-logo').textContent = ticker.substring(0,4);
-  document.getElementById('modal-name').textContent = co.nome;
-  document.getElementById('modal-ticker').textContent = ticker;
-  document.getElementById('modal-stats').innerHTML = `
+  document.getElementById('modal-logo').style.background=co.cor;
+  document.getElementById('modal-logo').textContent=ticker.substring(0,4);
+  document.getElementById('modal-name').textContent=co.nome;
+  document.getElementById('modal-ticker').textContent=ticker;
+  document.getElementById('modal-stats').innerHTML=`
     <div class="stat-box"><div class="stat-label">Preço Atual</div><div class="stat-value">R$ ${co.preco?.toFixed(2)||'—'}</div></div>
     <div class="stat-box"><div class="stat-label">Variação Dia</div><div class="stat-value ${(co.variacao||0)>=0?'up':'dn'}">${(co.variacao||0)>=0?'+':''}${(co.variacao||0).toFixed(2)}</div></div>
     <div class="stat-box"><div class="stat-label">Mínima Dia</div><div class="stat-value">R$ ${co.minima_dia?.toFixed(2)||'—'}</div></div>
     <div class="stat-box"><div class="stat-label">Máxima Dia</div><div class="stat-value">R$ ${co.maxima_dia?.toFixed(2)||'—'}</div></div>`;
-
   document.getElementById('modal').classList.add('open');
-  document.getElementById('chart-loading').style.display = 'flex';
-  if(chartInstance){ chartInstance.destroy(); chartInstance=null; }
-
-  try {
-    const r = await fetch(`/api/historico/${ticker}`);
-    const data = await r.json();
-    chartDataFull = data.historico || [];
-    document.getElementById('chart-loading').style.display = 'none';
-    // ativa botão 1A por padrão
+  document.getElementById('chart-loading').style.display='flex';
+  if(chartInstance){chartInstance.destroy();chartInstance=null;}
+  try{
+    const r=await fetch(`/api/historico/${ticker}`);
+    const data=await r.json();
+    chartDataFull=data.historico||[];
+    document.getElementById('chart-loading').style.display='none';
     document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.range-btn')[3].classList.add('active');
     renderChart(chartDataFull);
-  } catch(e){
-    document.getElementById('chart-loading').textContent = 'Erro ao carregar histórico';
-  }
+  }catch(e){document.getElementById('chart-loading').textContent='Erro ao carregar histórico';}
 }
 
-function filtrarChart(dias, btn){
+function filtrarChart(dias,btn){
   document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  const cutoff = Date.now() - dias * 86400000;
-  const filtrado = chartDataFull.filter(d => (d.date*1000) >= cutoff);
-  renderChart(filtrado);
+  const cutoff=Date.now()-dias*86400000;
+  renderChart(chartDataFull.filter(d=>(d.date*1000)>=cutoff));
 }
 
 function renderChart(dados){
   if(!dados.length) return;
-  const labels = dados.map(d=>{
-    const dt = new Date(d.date*1000);
-    return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
-  });
-  const prices = dados.map(d=>d.close);
-  const primeiro = prices[0], ultimo = prices[prices.length-1];
-  const cor = ultimo >= primeiro ? '#16a34a' : '#e53935';
-  const corBg = ultimo >= primeiro ? 'rgba(22,163,74,.08)' : 'rgba(229,57,53,.08)';
-
+  const labels=dados.map(d=>{const dt=new Date(d.date*1000);return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});});
+  const prices=dados.map(d=>d.close);
+  const primeiro=prices[0],ultimo=prices[prices.length-1];
+  const cor=ultimo>=primeiro?'#16a34a':'#e53935';
+  const corBg=ultimo>=primeiro?'rgba(22,163,74,.08)':'rgba(229,57,53,.08)';
   if(chartInstance) chartInstance.destroy();
-  const ctx = document.getElementById('priceChart').getContext('2d');
-  chartInstance = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets:[{
-        data: prices, borderColor: cor, backgroundColor: corBg,
-        borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, fill: true, tension: 0.3
-      }]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>`R$ ${ctx.parsed.y.toFixed(2)}`}}},
-      scales:{
-        x:{grid:{display:false},ticks:{maxTicksLimit:8,font:{size:10}}},
-        y:{grid:{color:'#f0f0f0'},ticks:{callback:v=>`R$ ${v.toFixed(2)}`,font:{size:10}}}
-      }
-    }
-  });
+  const ctx=document.getElementById('priceChart').getContext('2d');
+  chartInstance=new Chart(ctx,{type:'line',data:{labels,datasets:[{data:prices,borderColor:cor,backgroundColor:corBg,borderWidth:2,pointRadius:0,pointHoverRadius:4,fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>`R$ ${ctx.parsed.y.toFixed(2)}`}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:8,font:{size:10}}},y:{grid:{color:'#f0f0f0'},ticks:{callback:v=>`R$ ${v.toFixed(2)}`,font:{size:10}}}}}});
 }
 
-function fecharModal(e){
-  if(!e || e.target === document.getElementById('modal')){
-    document.getElementById('modal').classList.remove('open');
-  }
-}
+function fecharModal(e){if(!e||e.target===document.getElementById('modal')){document.getElementById('modal').classList.remove('open');}}
 
 // ── Alertas ──────────────────────────────────────────────────
-function updateTarget(ticker, val){
-  if(val && parseFloat(val)>0) targets[ticker] = parseFloat(val);
-  else delete targets[ticker];
-  save();
-}
+function updateTarget(ticker,val){if(val&&parseFloat(val)>0)targets[ticker]=parseFloat(val);else delete targets[ticker];save();}
 
 function setAlert(ticker){
-  const inp = document.getElementById('inp-'+ticker);
-  const val = parseFloat(inp.value);
+  const inp=document.getElementById('inp-'+ticker);
+  const val=parseFloat(inp.value);
   if(!val||val<=0){inp.focus();inp.style.borderColor='#e53935';setTimeout(()=>inp.style.borderColor='',1500);return;}
-  targets[ticker] = val;
-  let co = null; let sNome = '';
-  for(const s of Object.values(DADOS.setores)){
-    const found = s.empresas.find(e=>e.ticker===ticker);
-    if(found){co=found;sNome=s.nome;break;}
-  }
-  if(!alerts.some(a=>a.ticker===ticker)){
-    alerts.push({ticker, name:co.nome, target:val, color:co.cor, sector:sNome});
-  } else {
-    alerts.find(a=>a.ticker===ticker).target = val;
-  }
-  save(); updateAltCnt(); renderEmpresas(true);
+  targets[ticker]=val;
+  let co=null,sNome='';
+  for(const s of Object.values(DADOS.setores)){const f=s.empresas.find(e=>e.ticker===ticker);if(f){co=f;sNome=s.nome;break;}}
+  if(!alerts.some(a=>a.ticker===ticker)){alerts.push({ticker,name:co.nome,target:val,color:co.cor,sector:sNome});}
+  else{alerts.find(a=>a.ticker===ticker).target=val;}
+  save();updateAltCnt();renderEmpresas(true);
 }
 
-function removeAlert(ticker){
-  alerts = alerts.filter(a=>a.ticker!==ticker);
-  delete targets[ticker];
-  save(); updateAltCnt(); renderAlerts();
-}
+function removeAlert(ticker){alerts=alerts.filter(a=>a.ticker!==ticker);delete targets[ticker];save();updateAltCnt();renderAlerts();}
 
-function updateAltCnt(){
-  const el = document.getElementById('alt-cnt');
-  if(alerts.length>0){el.textContent=alerts.length;el.style.display='inline';}
-  else el.style.display='none';
-}
+function updateAltCnt(){const el=document.getElementById('alt-cnt');if(alerts.length>0){el.textContent=alerts.length;el.style.display='inline';}else el.style.display='none';}
 
 function renderAlerts(){
-  const c = document.getElementById('altbox');
-  if(!alerts.length){
-    c.innerHTML=`<div class="alts-empty"><div class="alts-empty-icon">🔔</div><div style="font-size:15px;font-weight:600;margin-bottom:6px">Nenhum alerta configurado</div><div style="font-size:13px">Acesse um setor, defina um valor alvo e clique em "+ Alertar"</div></div>`;
-    return;
-  }
-  c.innerHTML = `<div class="alts-header">${alerts.length} alerta${alerts.length>1?'s':''} configurado${alerts.length>1?'s':''}</div>` +
+  const c=document.getElementById('altbox');
+  if(!alerts.length){c.innerHTML=`<div class="alts-empty"><div class="alts-empty-icon">🔔</div><div style="font-size:15px;font-weight:600;margin-bottom:6px">Nenhum alerta configurado</div><div style="font-size:13px">Acesse um setor, defina um valor alvo e clique em "+ Alertar"</div></div>`;return;}
+  c.innerHTML=`<div class="alts-header">${alerts.length} alerta${alerts.length>1?'s':''} configurado${alerts.length>1?'s':''}</div>`+
     alerts.map(a=>{
-      let curr = 0;
-      for(const s of Object.values(DADOS.setores||{})){
-        const co = s.empresas.find(e=>e.ticker===a.ticker);
-        if(co&&co.preco){curr=co.preco;break;}
-      }
-      const hit = curr>=a.target;
-      const dist = curr>0 ? ((a.target-curr)/curr*100) : 0;
+      let curr=0;
+      for(const s of Object.values(DADOS.setores||{})){const co=s.empresas.find(e=>e.ticker===a.ticker);if(co&&co.preco){curr=co.preco;break;}}
+      const hit=curr>=a.target,dist=curr>0?((a.target-curr)/curr*100):0;
       return `<div class="alt-item">
         <div class="alt-logo" style="background:${a.color}">${a.ticker.substring(0,4)}</div>
         <div class="alt-info">
@@ -475,8 +461,9 @@ function renderAlerts(){
 
 // ── Init ─────────────────────────────────────────────────────
 carregarDados();
-setInterval(carregarDados, 300000);
+carregarLogsIniciais();
+conectarLog();
+setInterval(carregarDados, 60000);
 </script>
 </body>
 </html>
-
