@@ -306,10 +306,13 @@ let _countdownTimer = null;
 async function setIntervalo(segundos){
   _intervaloSegundos = parseInt(segundos);
   try{
-    const r = await fetch('/api/intervalo', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({segundos:_intervaloSegundos})});
-    const d = await r.json();
-    _proximoUpdate = Date.now() + _intervaloSegundos * 1000;
+    await fetch('/api/intervalo', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({segundos:_intervaloSegundos})});
   }catch(e){}
+  if(_intervaloSegundos > 0){
+    _proximoUpdate = Date.now() + _intervaloSegundos * 1000;
+  } else {
+    _proximoUpdate = null;
+  }
 }
 
 function atualizarCountdown(){
@@ -325,7 +328,12 @@ function atualizarCountdown(){
   if(cd) cd.textContent = restante > 60 ? `${m}m ${String(s).padStart(2,'0')}s` : `${restante}s`;
   const pct = Math.round((1 - restante / _intervaloSegundos) * 100);
   if(pf) pf.style.width = `${Math.min(100, Math.max(0, pct))}%`;
-  if(restante === 0 && !dadosCarregados) forcarAtualizacao();
+
+  // Chegou a zero — dispara atualização e reinicia o contador
+  if(restante === 0){
+    _proximoUpdate = Date.now() + _intervaloSegundos * 1000; // reinicia imediatamente
+    forcarAtualizacao();
+  }
 }
 
 async function carregarStatus(){
@@ -333,8 +341,10 @@ async function carregarStatus(){
     const r = await fetch('/api/status');
     const d = await r.json();
     if(d.intervalo_segundos) _intervaloSegundos = d.intervalo_segundos;
-    if(d.segundos_para_proxima !== null && d.segundos_para_proxima !== undefined){
+    if(d.segundos_para_proxima !== null && d.segundos_para_proxima !== undefined && d.segundos_para_proxima > 0){
       _proximoUpdate = Date.now() + d.segundos_para_proxima * 1000;
+    } else if(_intervaloSegundos > 0){
+      _proximoUpdate = Date.now() + _intervaloSegundos * 1000;
     }
     // Sincroniza o select com o intervalo do servidor
     const sel = document.getElementById('iv-select');
@@ -405,6 +415,15 @@ async function carregarDados(){
 async function forcarAtualizacao(){
   document.getElementById('status-txt').textContent='Atualizando...';
   try{await fetch('/api/atualizar',{method:'POST'});}catch(e){}
+  // Recarrega dados progressivamente após disparar
+  setTimeout(carregarDados, 5000);
+  setTimeout(carregarDados, 15000);
+  setTimeout(carregarDados, 30000);
+  setTimeout(carregarDados, 60000);
+  // Reinicia o countdown a partir de agora
+  if(_intervaloSegundos > 0){
+    _proximoUpdate = Date.now() + _intervaloSegundos * 1000;
+  }
 }
 async function carregarLogsIniciais(){
   try{
