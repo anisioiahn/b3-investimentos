@@ -295,19 +295,39 @@ function limparLog(){logLines=[];renderLog();}
 async function carregarDados(){
   try{
     const r=await fetch('/api/cotacoes');
-    DADOS=await r.json();
+    const novo=await r.json();
+    const temSetores=novo.setores&&Object.keys(novo.setores).length>0;
+    const temEmpresas=temSetores&&Object.values(novo.setores).some(s=>s.empresas&&s.empresas.length>0);
+    if(!temEmpresas){
+      // Dados ainda não prontos — mostra loading e tenta de novo em 5s
+      document.getElementById('status-txt').textContent='Buscando cotações...';
+      document.getElementById('sgrid').innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text2)"><div style="font-size:32px;margin-bottom:12px">⏳</div><div style="font-size:15px;font-weight:600;margin-bottom:6px">Buscando cotações da B3...</div><div style="font-size:13px">Aguarde, isso pode levar alguns minutos na primeira vez.</div><div style="font-size:12px;margin-top:8px;color:var(--text3)">Acompanhe o progresso na aba <strong>Log</strong></div></div>`;
+      setTimeout(carregarDados,5000);
+      return;
+    }
+    DADOS=novo;
     document.getElementById('sdot').className='dot';
     document.getElementById('status-txt').textContent='Ao vivo · brapi.dev';
     if(DADOS.atualizado_em){const d=new Date(DADOS.atualizado_em);document.getElementById('last-upd').textContent='Atualizado às '+d.toLocaleTimeString('pt-BR');}
     renderSectors();
     if(currentSector) renderEmpresas(true);
     renderAlerts();updateAltCnt();
-  }catch(e){document.getElementById('status-txt').textContent='Erro';document.getElementById('sdot').className='dot err';}
+  }catch(e){
+    document.getElementById('status-txt').textContent='Erro de conexão';
+    document.getElementById('sdot').className='dot err';
+    setTimeout(carregarDados,10000);
+  }
 }
 async function forcarAtualizacao(){
   document.getElementById('status-txt').textContent='Atualizando...';
+  document.getElementById('sgrid').innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text2)"><div style="font-size:32px;margin-bottom:12px">🔄</div><div style="font-size:15px;font-weight:600">Buscando cotações atualizadas...</div><div style="font-size:13px;margin-top:6px">Acompanhe o progresso na aba Log</div></div>`;
   try{await fetch('/api/atualizar',{method:'POST'});}catch(e){}
-  setTimeout(carregarDados,5000);setTimeout(carregarDados,15000);setTimeout(carregarDados,40000);
+  // Polling a cada 5s até os dados chegarem
+  setTimeout(carregarDados,5000);
+  setTimeout(carregarDados,15000);
+  setTimeout(carregarDados,30000);
+  setTimeout(carregarDados,60000);
+  setTimeout(carregarDados,120000);
 }
 async function carregarLogsIniciais(){
   try{const r=await fetch('/api/logs');logLines=await r.json();renderLog();const b=document.getElementById('log-box');b.scrollTop=b.scrollHeight;}catch(e){}
