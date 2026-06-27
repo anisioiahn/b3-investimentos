@@ -3,24 +3,40 @@ from datetime import datetime, timezone, timedelta
 from flask import Flask, jsonify, send_from_directory, request
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 
-VERSION = "1.7.2"
+VERSION = "1.8.0"
 
 # Fuso horário de Brasília (UTC-3)
 TZ_BRASILIA = timezone(timedelta(hours=-3))
 
 def agora():
-    """Retorna datetime atual no horário de Brasília."""
     return datetime.now(TZ_BRASILIA)
 
 app = Flask(__name__, static_folder="static")
-INTERVALO = int(os.getenv("INTERVALO_SEGUNDOS", "300"))
 TOKEN = os.getenv("BRAPI_TOKEN", "iSm92y2Qg4f9iapi1MuHhh")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 QUOTE_URL = "https://brapi.dev/api/quote"
+OUTPUT_FILE = "cotacoes.json"
 
-_cache = {"atualizado_em": None, "setores": {}, "version": VERSION}
 _log_entries = []
 _atualizando = False
+_intervalo_segundos = 3600  # padrão: 1 hora
+_proximo_update = None
+
+# ── Carrega cache do disco ao iniciar ────────────────────────
+def _carregar_cache():
+    try:
+        if os.path.exists(OUTPUT_FILE):
+            with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
+                dados = json.load(f)
+            total = sum(len(s.get("empresas",[])) for s in dados.get("setores",{}).values())
+            if total > 0:
+                print(f"[INIT] Cache carregado do disco: {total} ativos", flush=True)
+                return dados
+    except Exception as e:
+        print(f"[INIT] Erro ao carregar cache: {e}", flush=True)
+    return {"atualizado_em": None, "setores": {}, "version": VERSION}
+
+_cache = _carregar_cache()
 
 # Setores e tickers fixos — igual à versão que funcionava
 SETORES = {
@@ -150,20 +166,35 @@ def atualizar_cache():
 
         com_preco = sum(1 for s in novo["setores"].values() for e in s["empresas"] if e.get("preco"))
         log(f"✅ {com_preco}/{total} ativos em {len(novo['setores'])} setores", "sucesso")
+
+        # Salva no disco para persistir entre restarts
+        try:
+            with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+                json.dump(novo, f, ensure_ascii=False)
+            log(f"💾 Cache salvo em disco", "info")
+        except Exception as e:
+            log(f"⚠️ Erro ao salvar cache: {e}", "aviso")
+
+        # Agenda próxima atualização
+        _proximo_update = agora().timestamp() + _intervalo_segundos
+
     except Exception as e:
         log(f"❌ Erro: {e}", "erro")
     finally:
         _atualizando = False
 
 def loop_auto():
-    time.sleep(INTERVALO)
+    global _proximo_update
     while True:
-        atualizar_cache()
-        time.sleep(INTERVALO)
+        time.sleep(10)  # verifica a cada 10s se é hora de atualizar
+        if _proximo_update and agora().timestamp() >= _proximo_update and not _atualizando:
+            log(f"⏱️ Atualização automática programada", "info")
+            atualizar_cache()
 
 log(f"🚀 App B3 v{VERSION} iniciado", "info")
+# Cache do disco já carregado — agenda próxima atualização para daqui 1 hora
+_proximo_update = agora().timestamp() + _intervalo_segundos
 threading.Thread(target=loop_auto, daemon=True).start()
-# Não inicia busca automática — usuário clica em Atualizar
 
 @app.route("/")
 def index(): return send_from_directory("static", "index.html")
@@ -177,7 +208,26 @@ def api_cotacoes(): return jsonify(_cache)
 @app.route("/api/status")
 def api_status():
     total = sum(len(s.get("empresas",[])) for s in _cache.get("setores",{}).values())
-    return jsonify({"pronto":total>0,"atualizando":_atualizando,"total_ativos":total,"version":VERSION})
+    restante = max(0, int((_proximo_update or 0) - agora().timestamp())) if _proximo_update else None
+    return jsonify({
+        "pronto": total > 0,
+        "atualizando": _atualizando,
+        "total_ativos": total,
+        "version": VERSION,
+        "intervalo_segundos": _intervalo_segundos,
+        "segundos_para_proxima": restante,
+    })
+
+@app.route("/api/intervalo", methods=["GET", "POST"])
+def api_intervalo():
+    global _intervalo_segundos, _proximo_update
+    if request.method == "POST":
+        novo_intervalo = request.json.get("segundos", 3600)
+        _intervalo_segundos = int(novo_intervalo)
+        _proximo_update = agora().timestamp() + _intervalo_segundos
+        log(f"⏱️ Intervalo de atualização configurado para {_intervalo_segundos//60} minutos", "info")
+        return jsonify({"ok": True, "intervalo_segundos": _intervalo_segundos})
+    return jsonify({"intervalo_segundos": _intervalo_segundos})
 
 @app.route("/api/atualizar", methods=["POST"])
 def api_atualizar():
