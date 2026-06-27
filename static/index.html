@@ -412,37 +412,58 @@ async function abrirGrafico(ticker){
   document.getElementById('modal-logo').textContent=ticker.substring(0,4);
   document.getElementById('modal-name').textContent=co.nome;
   document.getElementById('modal-ticker').textContent=ticker;
+  // Mostra preço já conhecido e loading para o resto
   document.getElementById('modal-stats').innerHTML=`
     <div class="stat-box"><div class="stat-label">Preço</div><div class="stat-value">R$ ${co.preco?.toFixed(2)||'—'}</div></div>
-    <div class="stat-box"><div class="stat-label">Variação</div><div class="stat-value ${(co.variacao||0)>=0?'up':'dn'}">${(co.variacao||0)>=0?'+':''}${(co.variacao||0).toFixed(2)}</div></div>
-    <div class="stat-box"><div class="stat-label">Mínima</div><div class="stat-value">R$ ${co.minima_dia?.toFixed(2)||'—'}</div></div>
-    <div class="stat-box"><div class="stat-label">Máxima</div><div class="stat-value">R$ ${co.maxima_dia?.toFixed(2)||'—'}</div></div>`;
+    <div class="stat-box"><div class="stat-label">Variação</div><div class="stat-value" id="ms-var"><span style="color:#999;font-size:12px">buscando...</span></div></div>
+    <div class="stat-box"><div class="stat-label">Mínima</div><div class="stat-value" id="ms-min"><span style="color:#999;font-size:12px">buscando...</span></div></div>
+    <div class="stat-box"><div class="stat-label">Máxima</div><div class="stat-value" id="ms-max"><span style="color:#999;font-size:12px">buscando...</span></div></div>`;
   document.getElementById('modal').classList.add('open');
   document.getElementById('chart-loading').style.display='flex';
   if(chartInstance){chartInstance.destroy();chartInstance=null;}
-  // Reset notícias
   document.getElementById('noticias-grid').innerHTML=`
     <div class="noticia-col"><div class="noticia-loading">Carregando...</div></div>
     <div class="noticia-col"><div class="noticia-loading">Carregando...</div></div>
     <div class="noticia-col"><div class="noticia-loading">Carregando...</div></div>
     <div class="rec-col"><div class="rec-loading">Gerando recomendação com IA...</div></div>`;
 
-  // Busca histórico e notícias em paralelo
-  Promise.all([
-    fetch(`/api/historico/${ticker}`).then(r=>r.json()),
-    fetch(`/api/noticias/${ticker}`).then(r=>r.json())
-  ]).then(([hist,nots])=>{
-    // Gráfico
-    document.getElementById('chart-loading').style.display='none';
-    chartDataFull=hist.historico||[];
+  // Busca detalhes, histórico e notícias em paralelo
+  const [det, hist, nots] = await Promise.all([
+    fetch(`/api/detalhe/${ticker}`).then(r=>r.json()).catch(()=>null),
+    fetch(`/api/historico/${ticker}`).then(r=>r.json()).catch(()=>({historico:[]})),
+    fetch(`/api/noticias/${ticker}`).then(r=>r.json()).catch(()=>({noticias:{},recomendacao:{}})),
+  ]);
+
+  // Atualiza stats com dados reais
+  if(det && !det.erro){
+    const vr=det.variacao||0, vp=det.variacao_pct||0;
+    const cls=vr>=0?'up':'dn';
+    document.getElementById('ms-var').innerHTML=`<span class="${cls}">${vr>=0?'+':''}${vr.toFixed(2)} (${vp>=0?'+':''}${vp.toFixed(2)}%)</span>`;
+    document.getElementById('ms-min').textContent=det.minima_dia?`R$ ${det.minima_dia.toFixed(2)}`:'—';
+    document.getElementById('ms-max').textContent=det.maxima_dia?`R$ ${det.maxima_dia.toFixed(2)}`:'—';
+  } else {
+    // Usa dados do cache se disponível
+    const vr=co.variacao||0,vp=co.variacao_pct||0;
+    const cls=vr>=0?'up':'dn';
+    document.getElementById('ms-var').innerHTML=`<span class="${cls}">${vr>=0?'+':''}${vr.toFixed(2)} (${vp>=0?'+':''}${vp.toFixed(2)}%)</span>`;
+    document.getElementById('ms-min').textContent=co.minima_dia?`R$ ${co.minima_dia.toFixed(2)}`:'—';
+    document.getElementById('ms-max').textContent=co.maxima_dia?`R$ ${co.maxima_dia.toFixed(2)}`:'—';
+  }
+
+  // Gráfico
+  document.getElementById('chart-loading').style.display='none';
+  chartDataFull=hist.historico||[];
+  if(chartDataFull.length>0){
     document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.range-btn')[3].classList.add('active');
     renderChart(chartDataFull);
-    // Notícias + Recomendação
-    renderNoticias(nots);
-  }).catch(e=>{
-    document.getElementById('chart-loading').textContent='Erro ao carregar dados';
-  });
+  } else {
+    document.getElementById('chart-loading').style.display='flex';
+    document.getElementById('chart-loading').textContent='Histórico não disponível no plano atual da brapi.dev';
+  }
+
+  // Notícias
+  renderNoticias(nots);
 }
 
 function renderNoticias(data){
