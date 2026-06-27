@@ -3,7 +3,7 @@ from datetime import datetime
 from flask import Flask, jsonify, send_from_directory, request
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 app = Flask(__name__, static_folder="static")
 INTERVALO = int(os.getenv("INTERVALO_SEGUNDOS", "300"))
@@ -160,7 +160,14 @@ def loop_auto():
 
 # Inicia automaticamente — funciona com Gunicorn e direto
 log(f"🚀 App B3 v{VERSION} iniciado", "info")
-_t1 = threading.Thread(target=atualizar_cache, daemon=True)
+
+def iniciar_com_delay():
+    """Aguarda o servidor subir completamente antes de buscar."""
+    log("⏳ Aguardando servidor inicializar (10s)...", "info")
+    time.sleep(10)
+    atualizar_cache()
+
+_t1 = threading.Thread(target=iniciar_com_delay, daemon=True)
 _t2 = threading.Thread(target=loop_auto, daemon=True)
 _t1.start()
 _t2.start()
