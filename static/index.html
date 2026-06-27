@@ -269,19 +269,28 @@ let alerts=JSON.parse(localStorage.getItem('b3_alerts_v4')||'[]');
 let targets=JSON.parse(localStorage.getItem('b3_targets_v4')||'{}');
 let fontes=JSON.parse(localStorage.getItem('b3_fontes')||'null');
 let chartInstance=null, chartDataFull=[];
-let logLines=[], sseSource=null;
+let logLines=[], logOffset=0;
 
 function save(){localStorage.setItem('b3_alerts_v4',JSON.stringify(alerts));localStorage.setItem('b3_targets_v4',JSON.stringify(targets));}
 
-// ── SSE LOG ──────────────────────────────────────────────────
+// ── LOG (polling a cada 3s) ───────────────────────────────────
 function conectarLog(){
-  if(sseSource) sseSource.close();
-  sseSource=new EventSource('/api/logs/stream');
-  sseSource.onmessage=e=>{try{const d=JSON.parse(e.data);if(d.ping)return;adicionarLog(d);}catch(err){}};
-  sseSource.onopen=()=>{document.getElementById('log-conn').textContent='Ao vivo';document.getElementById('log-dot').style.background='#22c55e';};
-  sseSource.onerror=()=>{document.getElementById('log-conn').textContent='Reconectando...';document.getElementById('log-dot').style.background='#f59e0b';};
+  document.getElementById('log-conn').textContent='Ao vivo';
+  document.getElementById('log-dot').style.background='#22c55e';
+  setInterval(pollLogs, 3000);
 }
-function adicionarLog(e){logLines.push(e);if(logLines.length>200)logLines.shift();renderLog();}
+async function pollLogs(){
+  try{
+    const r=await fetch(`/api/logs?desde=${logOffset}`);
+    const novos=await r.json();
+    if(novos.length>0){
+      logOffset+=novos.length;
+      logLines.push(...novos);
+      if(logLines.length>500) logLines=logLines.slice(-500);
+      renderLog();
+    }
+  }catch(e){}
+}
 function renderLog(){
   const box=document.getElementById('log-box');
   const atBot=box.scrollHeight-box.scrollTop-box.clientHeight<40;
@@ -289,23 +298,22 @@ function renderLog(){
   box.innerHTML=logLines.map(e=>`<div class="log-line log-${e.tipo||'info'}"><span class="log-ts">${e.ts}</span><span class="log-msg">${e.msg}</span></div>`).join('');
   if(atBot) box.scrollTop=box.scrollHeight;
 }
-function limparLog(){logLines=[];renderLog();}
+function limparLog(){logLines=[];logOffset=0;renderLog();}
 
 // ── DADOS ────────────────────────────────────────────────────
+let dadosCarregados=false;
 async function carregarDados(){
   try{
     const r=await fetch('/api/cotacoes');
     const novo=await r.json();
-    const temSetores=novo.setores&&Object.keys(novo.setores).length>0;
-    const temEmpresas=temSetores&&Object.values(novo.setores).some(s=>s.empresas&&s.empresas.length>0);
+    const temEmpresas=novo.setores&&Object.values(novo.setores).some(s=>s.empresas&&s.empresas.length>0);
     if(!temEmpresas){
-      // Dados ainda não prontos — mostra loading e tenta de novo em 5s
       document.getElementById('status-txt').textContent='Buscando cotações...';
-      document.getElementById('sgrid').innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text2)"><div style="font-size:32px;margin-bottom:12px">⏳</div><div style="font-size:15px;font-weight:600;margin-bottom:6px">Buscando cotações da B3...</div><div style="font-size:13px">Aguarde, isso pode levar alguns minutos na primeira vez.</div><div style="font-size:12px;margin-top:8px;color:var(--text3)">Acompanhe o progresso na aba <strong>Log</strong></div></div>`;
-      setTimeout(carregarDados,5000);
+      document.getElementById('sgrid').innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text2)"><div style="font-size:32px;margin-bottom:12px">⏳</div><div style="font-size:15px;font-weight:600;margin-bottom:6px">Buscando cotações da B3...</div><div style="font-size:13px">Aguarde, isso pode levar alguns minutos.</div><div style="font-size:12px;margin-top:8px;color:var(--text3)">Acompanhe o progresso na aba <strong>Log</strong></div></div>`;
       return;
     }
     DADOS=novo;
+    dadosCarregados=true;
     document.getElementById('sdot').className='dot';
     document.getElementById('status-txt').textContent='Ao vivo · brapi.dev';
     if(DADOS.atualizado_em){const d=new Date(DADOS.atualizado_em);document.getElementById('last-upd').textContent='Atualizado às '+d.toLocaleTimeString('pt-BR');}
@@ -315,22 +323,21 @@ async function carregarDados(){
   }catch(e){
     document.getElementById('status-txt').textContent='Erro de conexão';
     document.getElementById('sdot').className='dot err';
-    setTimeout(carregarDados,10000);
   }
 }
 async function forcarAtualizacao(){
   document.getElementById('status-txt').textContent='Atualizando...';
-  document.getElementById('sgrid').innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text2)"><div style="font-size:32px;margin-bottom:12px">🔄</div><div style="font-size:15px;font-weight:600">Buscando cotações atualizadas...</div><div style="font-size:13px;margin-top:6px">Acompanhe o progresso na aba Log</div></div>`;
   try{await fetch('/api/atualizar',{method:'POST'});}catch(e){}
-  // Polling a cada 5s até os dados chegarem
-  setTimeout(carregarDados,5000);
-  setTimeout(carregarDados,15000);
-  setTimeout(carregarDados,30000);
-  setTimeout(carregarDados,60000);
-  setTimeout(carregarDados,120000);
 }
 async function carregarLogsIniciais(){
-  try{const r=await fetch('/api/logs');logLines=await r.json();renderLog();const b=document.getElementById('log-box');b.scrollTop=b.scrollHeight;}catch(e){}
+  try{
+    const r=await fetch('/api/logs?desde=0');
+    const todos=await r.json();
+    logLines=todos;
+    logOffset=todos.length;
+    renderLog();
+    const b=document.getElementById('log-box');b.scrollTop=b.scrollHeight;
+  }catch(e){}
 }
 async function carregarFontes(){
   try{const r=await fetch('/api/fontes');fontes=await r.json();renderFontes();}catch(e){}
@@ -567,7 +574,11 @@ carregarDados();
 carregarLogsIniciais();
 carregarFontes();
 conectarLog();
-setInterval(carregarDados,60000);
+// Polling de dados a cada 10s até carregar, depois a cada 60s
+const _pollDados=setInterval(async()=>{
+  if(!dadosCarregados) await carregarDados();
+  else{ clearInterval(_pollDados); setInterval(carregarDados,60000); }
+},10000);
 </script>
 </body>
 </html>
