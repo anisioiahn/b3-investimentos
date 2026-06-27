@@ -3,7 +3,7 @@ from datetime import datetime
 from flask import Flask, jsonify, send_from_directory, request
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 app = Flask(__name__, static_folder="static")
 INTERVALO = int(os.getenv("INTERVALO_SEGUNDOS", "300"))
@@ -16,7 +16,6 @@ _lock = threading.Lock()
 _log_entries = []
 _atualizando = False
 _cache = {"atualizado_em": None, "setores": {}, "version": VERSION}
-_iniciado = False  # garante que só inicia 1 vez mesmo com múltiplos workers
 
 FONTES = [
     {"nome": "Infomoney", "url": "https://www.infomoney.com.br/tudo-sobre/{ticker}/feed/", "cor": "#e53935"},
@@ -40,16 +39,21 @@ def req_get(url, tentativas=3):
                 log(f"⏳ Rate limit, aguardando {wait}s...", "aviso")
                 time.sleep(wait)
                 continue
-            log(f"⚠️ HTTP {r.status_code}", "aviso")
+            log(f"⚠️ HTTP {r.status_code} para {url[:60]}", "aviso")
             return None
+        except requests.Timeout:
+            log(f"⚠️ Timeout ({i+1}/{tentativas})", "aviso")
+            time.sleep(2)
         except Exception as e:
-            log(f"⚠️ Erro rede ({i+1}/{tentativas}): {e}", "aviso")
-            time.sleep(3)
+            log(f"⚠️ Erro ({i+1}/{tentativas}): {e}", "aviso")
+            time.sleep(2)
     return None
 
 def buscar_setores():
     r = req_get(f"{LIST_URL}?limit=1&token={TOKEN}")
-    if r: return r.json().get("availableSectors", list(SETOR_MAP.keys()))
+    if r:
+        setores = r.json().get("availableSectors", [])
+        if setores: return setores
     return list(SETOR_MAP.keys())
 
 def buscar_ativos_setor(setor):
@@ -81,36 +85,52 @@ def buscar_historico_ticker(ticker):
 
 def atualizar_cache():
     global _cache, _atualizando
-    if _atualizando:
-        log("⚠️ Atualização já em andamento", "aviso")
-        return
-    _atualizando = True
+    with _lock:
+        if _atualizando:
+            log("⚠️ Já atualizando, ignorando chamada duplicada", "aviso")
+            return
+        _atualizando = True
+
     try:
-        log(f"🔄 Iniciando busca — versão {VERSION}", "info")
-        setores_api = buscar_setores()
-        log(f"📋 {len(setores_api)} setores encontrados na B3", "info")
+        log(f"🔄 Buscando cotações — v{VERSION}", "info")
+
+        # Testa conexão primeiro
+        r = req_get(f"{LIST_URL}?limit=1&token={TOKEN}")
+        if not r:
+            log("❌ Sem conexão com brapi.dev. Tentando em 60s...", "erro")
+            time.sleep(60)
+            _atualizando = False
+            atualizar_cache()
+            return
+
+        setores_api = r.json().get("availableSectors", list(SETOR_MAP.keys()))
+        log(f"📋 {len(setores_api)} setores encontrados", "info")
+
         novo = {"atualizado_em": datetime.now().isoformat(), "setores": {}, "version": VERSION}
 
         for setor_api in setores_api:
             info = SETOR_MAP.get(setor_api, {"nome": setor_api, "icone": "📈", "cor_fundo": "#f5f5f5"})
             log(f"🔍 {info['nome']}", "setor")
             ativos = buscar_ativos_setor(setor_api)
+            log(f"   📊 {len(ativos)} ativos", "info")
             empresas = []
             for ativo in ativos:
                 ticker = ativo.get("stock", "")
                 if not ticker: continue
                 preco = ativo.get("close")
                 variacao_pct = ativo.get("change") or 0
-                variacao = ativo.get("change_abs") or 0
                 if preco:
                     sinal = "▲" if variacao_pct >= 0 else "▼"
                     log(f"   {sinal} {ticker}: R$ {preco} ({variacao_pct:+.2f}%)", "cotacao")
                 empresas.append({
                     "ticker": ticker, "nome": ativo.get("name", ticker),
                     "cor": cor_para_ticker(ticker), "preco": preco,
-                    "variacao": variacao, "variacao_pct": variacao_pct,
-                    "maxima_dia": ativo.get("high"), "minima_dia": ativo.get("low"),
-                    "volume": ativo.get("volume"), "logo": ativo.get("logourl", ""),
+                    "variacao": ativo.get("change_abs") or 0,
+                    "variacao_pct": variacao_pct,
+                    "maxima_dia": ativo.get("high"),
+                    "minima_dia": ativo.get("low"),
+                    "volume": ativo.get("volume"),
+                    "logo": ativo.get("logourl", ""),
                 })
                 time.sleep(0.1)
 
@@ -127,7 +147,7 @@ def atualizar_cache():
         log(f"✅ Concluído! {com_preco}/{total} ativos em {len(novo['setores'])} setores", "sucesso")
 
     except Exception as e:
-        log(f"❌ Erro geral: {e}", "erro")
+        log(f"❌ Erro: {e}", "erro")
     finally:
         _atualizando = False
 
@@ -138,19 +158,13 @@ def loop_auto():
         atualizar_cache()
         time.sleep(INTERVALO)
 
-def iniciar_background():
-    """Inicia threads — chamado tanto pelo __main__ quanto pelo Gunicorn."""
-    global _iniciado
-    if _iniciado: return
-    _iniciado = True
-    log(f"🚀 App B3 v{VERSION} iniciado", "info")
-    threading.Thread(target=atualizar_cache, daemon=True).start()
-    threading.Thread(target=loop_auto, daemon=True).start()
+# Inicia automaticamente — funciona com Gunicorn e direto
+log(f"🚀 App B3 v{VERSION} iniciado", "info")
+_t1 = threading.Thread(target=atualizar_cache, daemon=True)
+_t2 = threading.Thread(target=loop_auto, daemon=True)
+_t1.start()
+_t2.start()
 
-# ── Inicia automaticamente quando importado pelo Gunicorn ────
-iniciar_background()
-
-# ── Rotas ────────────────────────────────────────────────────
 @app.route("/")
 def index(): return send_from_directory("static", "index.html")
 
@@ -228,7 +242,7 @@ def gerar_recomendacao(ticker, nome, noticias):
         resp = requests.post("https://api.anthropic.com/v1/messages",
             headers={"Content-Type":"application/json","x-api-key":ANTHROPIC_KEY,"anthropic-version":"2023-06-01"},
             json={"model":"claude-sonnet-4-6","max_tokens":300,"messages":[{"role":"user","content":
-                f"Analise notícias sobre {ticker} ({nome}) e responda APENAS com JSON:\n{chr(10).join(todas[:6])}\nFormato: {{\"sinal\":\"COMPRAR\",\"justificativa\":\"2-3 frases.\",\"confianca\":\"Alta\"}}\nsinal: COMPRAR, VENDER ou NEUTRO."}]},
+                f"Analise notícias sobre {ticker} ({nome}) e responda APENAS com JSON:\n{chr(10).join(todas[:6])}\nFormato: {{\"sinal\":\"COMPRAR\",\"justificativa\":\"2-3 frases.\",\"confianca\":\"Alta\"}}"}]},
             timeout=30)
         if resp.status_code == 200:
             texto = resp.json()["content"][0]["text"].strip().replace("```json","").replace("```","").strip()
