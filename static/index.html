@@ -177,7 +177,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="hlogo">
       <div class="logo">B3</div>
       <div>
-        <div class="htitle">Investimentos B3</div>
+        <div class="htitle">Investimentos B3 <span id="app-version" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px"></span></div>
         <div class="hsub" id="last-upd">Carregando cotações...</div>
       </div>
     </div>
@@ -404,6 +404,16 @@ function checkTriggered(s){
 }
 
 // ── GRÁFICO ──────────────────────────────────────────────────
+async function fetchComTimeout(url, ms=25000){
+  const ctrl=new AbortController();
+  const id=setTimeout(()=>ctrl.abort(),ms);
+  try{
+    const r=await fetch(url,{signal:ctrl.signal});
+    clearTimeout(id);
+    return r.json();
+  }catch(e){clearTimeout(id);return null;}
+}
+
 async function abrirGrafico(ticker){
   let co=null;
   for(const s of Object.values(DADOS.setores)){co=s.empresas.find(e=>e.ticker===ticker);if(co)break;}
@@ -412,14 +422,18 @@ async function abrirGrafico(ticker){
   document.getElementById('modal-logo').textContent=ticker.substring(0,4);
   document.getElementById('modal-name').textContent=co.nome;
   document.getElementById('modal-ticker').textContent=ticker;
-  // Mostra preço já conhecido e loading para o resto
+
+  // Mostra dados já disponíveis do cache imediatamente
+  const vr=co.variacao||0,vp=co.variacao_pct||0,cls=vr>=0?'up':'dn';
   document.getElementById('modal-stats').innerHTML=`
     <div class="stat-box"><div class="stat-label">Preço</div><div class="stat-value">R$ ${co.preco?.toFixed(2)||'—'}</div></div>
-    <div class="stat-box"><div class="stat-label">Variação</div><div class="stat-value" id="ms-var"><span style="color:#999;font-size:12px">buscando...</span></div></div>
-    <div class="stat-box"><div class="stat-label">Mínima</div><div class="stat-value" id="ms-min"><span style="color:#999;font-size:12px">buscando...</span></div></div>
-    <div class="stat-box"><div class="stat-label">Máxima</div><div class="stat-value" id="ms-max"><span style="color:#999;font-size:12px">buscando...</span></div></div>`;
+    <div class="stat-box"><div class="stat-label">Variação</div><div class="stat-value"><span class="${cls}">${vr>=0?'+':''}${vr.toFixed(2)} (${vp>=0?'+':''}${vp.toFixed(2)}%)</span></div></div>
+    <div class="stat-box"><div class="stat-label">Mínima</div><div class="stat-value" id="ms-min">${co.minima_dia?`R$ ${co.minima_dia.toFixed(2)}`:'<span style="color:#999;font-size:11px">buscando...</span>'}</div></div>
+    <div class="stat-box"><div class="stat-label">Máxima</div><div class="stat-value" id="ms-max">${co.maxima_dia?`R$ ${co.maxima_dia.toFixed(2)}`:'<span style="color:#999;font-size:11px">buscando...</span>'}</div></div>`;
+
   document.getElementById('modal').classList.add('open');
   document.getElementById('chart-loading').style.display='flex';
+  document.getElementById('chart-loading').textContent='Carregando histórico...';
   if(chartInstance){chartInstance.destroy();chartInstance=null;}
   document.getElementById('noticias-grid').innerHTML=`
     <div class="noticia-col"><div class="noticia-loading">Carregando...</div></div>
@@ -427,33 +441,23 @@ async function abrirGrafico(ticker){
     <div class="noticia-col"><div class="noticia-loading">Carregando...</div></div>
     <div class="rec-col"><div class="rec-loading">Gerando recomendação com IA...</div></div>`;
 
-  // Busca detalhes, histórico e notícias em paralelo
+  // Busca detalhe (mín/máx), histórico e notícias em paralelo com timeout
   const [det, hist, nots] = await Promise.all([
-    fetch(`/api/detalhe/${ticker}`).then(r=>r.json()).catch(()=>null),
-    fetch(`/api/historico/${ticker}`).then(r=>r.json()).catch(()=>({historico:[]})),
-    fetch(`/api/noticias/${ticker}`).then(r=>r.json()).catch(()=>({noticias:{},recomendacao:{}})),
+    fetchComTimeout(`/api/detalhe/${ticker}`, 20000),
+    fetchComTimeout(`/api/historico/${ticker}`, 30000),
+    fetchComTimeout(`/api/noticias/${ticker}`, 40000),
   ]);
 
-  // Atualiza stats com dados reais
+  // Atualiza mín/máx se veio detalhe
   if(det && !det.erro){
-    const vr=det.variacao||0, vp=det.variacao_pct||0;
-    const cls=vr>=0?'up':'dn';
-    document.getElementById('ms-var').innerHTML=`<span class="${cls}">${vr>=0?'+':''}${vr.toFixed(2)} (${vp>=0?'+':''}${vp.toFixed(2)}%)</span>`;
-    document.getElementById('ms-min').textContent=det.minima_dia?`R$ ${det.minima_dia.toFixed(2)}`:'—';
-    document.getElementById('ms-max').textContent=det.maxima_dia?`R$ ${det.maxima_dia.toFixed(2)}`:'—';
-  } else {
-    // Usa dados do cache se disponível
-    const vr=co.variacao||0,vp=co.variacao_pct||0;
-    const cls=vr>=0?'up':'dn';
-    document.getElementById('ms-var').innerHTML=`<span class="${cls}">${vr>=0?'+':''}${vr.toFixed(2)} (${vp>=0?'+':''}${vp.toFixed(2)}%)</span>`;
-    document.getElementById('ms-min').textContent=co.minima_dia?`R$ ${co.minima_dia.toFixed(2)}`:'—';
-    document.getElementById('ms-max').textContent=co.maxima_dia?`R$ ${co.maxima_dia.toFixed(2)}`:'—';
+    if(det.minima_dia) document.getElementById('ms-min').textContent=`R$ ${det.minima_dia.toFixed(2)}`;
+    if(det.maxima_dia) document.getElementById('ms-max').textContent=`R$ ${det.maxima_dia.toFixed(2)}`;
   }
 
   // Gráfico
-  document.getElementById('chart-loading').style.display='none';
-  chartDataFull=hist.historico||[];
+  chartDataFull=(hist&&hist.historico)||[];
   if(chartDataFull.length>0){
+    document.getElementById('chart-loading').style.display='none';
     document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.range-btn')[3].classList.add('active');
     renderChart(chartDataFull);
@@ -463,7 +467,8 @@ async function abrirGrafico(ticker){
   }
 
   // Notícias
-  renderNoticias(nots);
+  if(nots) renderNoticias(nots);
+  else document.getElementById('noticias-grid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:1rem;color:var(--text2)">Não foi possível carregar notícias.</div>';
 }
 
 function renderNoticias(data){
@@ -595,6 +600,11 @@ carregarDados();
 carregarLogsIniciais();
 carregarFontes();
 conectarLog();
+// Busca versão do servidor
+fetch('/api/version').then(r=>r.json()).then(d=>{
+  const el=document.getElementById('app-version');
+  if(el) el.textContent=`v${d.version}`;
+}).catch(()=>{});
 // Polling de dados a cada 10s até carregar, depois a cada 60s
 const _pollDados=setInterval(async()=>{
   if(!dadosCarregados) await carregarDados();
