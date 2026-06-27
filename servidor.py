@@ -1,9 +1,16 @@
 import os, json, threading, time, requests, xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from flask import Flask, jsonify, send_from_directory, request
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 
-VERSION = "1.7.1"
+VERSION = "1.7.2"
+
+# Fuso horário de Brasília (UTC-3)
+TZ_BRASILIA = timezone(timedelta(hours=-3))
+
+def agora():
+    """Retorna datetime atual no horário de Brasília."""
+    return datetime.now(TZ_BRASILIA)
 
 app = Flask(__name__, static_folder="static")
 INTERVALO = int(os.getenv("INTERVALO_SEGUNDOS", "300"))
@@ -38,7 +45,7 @@ FONTES = [
 ]
 
 def log(msg, tipo="info"):
-    entry = {"ts": datetime.now().strftime("%H:%M:%S"), "msg": msg, "tipo": tipo}
+    entry = {"ts": agora().strftime("%H:%M:%S"), "msg": msg, "tipo": tipo}
     _log_entries.append(entry)
     if len(_log_entries) > 500: _log_entries.pop(0)
     print(f"[{entry['ts']}] {msg}", flush=True)
@@ -70,7 +77,7 @@ def atualizar_cache():
     _atualizando = True
     try:
         log(f"🔄 Buscando cotações v{VERSION}...", "info")
-        novo = {"atualizado_em": datetime.now().isoformat(), "setores": {}, "version": VERSION}
+        novo = {"atualizado_em": agora().isoformat(), "setores": {}, "version": VERSION}
 
         for sid, s in SETORES.items():
             log(f"🔍 {s['nome']}", "setor")
