@@ -3,18 +3,33 @@ from datetime import datetime
 from flask import Flask, jsonify, send_from_directory, request
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 app = Flask(__name__, static_folder="static")
 INTERVALO = int(os.getenv("INTERVALO_SEGUNDOS", "300"))
 TOKEN = os.getenv("BRAPI_TOKEN", "iSm92y2Qg4f9iapi1MuHhh")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-LIST_URL = "https://brapi.dev/api/quote/list"
 QUOTE_URL = "https://brapi.dev/api/quote"
 
 _cache = {"atualizado_em": None, "setores": {}, "version": VERSION}
 _log_entries = []
 _atualizando = False
+
+# Setores e tickers fixos — igual à versão que funcionava
+SETORES = {
+    "petroleo":         {"nome":"Petróleo, Gás e Biocombustíveis","icone":"🛢️","cor_fundo":"#e8f5e9","tickers":{"PETR4":{"nome":"Petrobras PN","cor":"#005a2b"},"PETR3":{"nome":"Petrobras ON","cor":"#007a3d"},"PRIO3":{"nome":"PetroRio","cor":"#1b5e20"},"RECV3":{"nome":"Petrorecôncavo","cor":"#2e7d32"},"RRRP3":{"nome":"3R Petroleum","cor":"#388e3c"}}},
+    "utilidade":        {"nome":"Utilidade Pública","icone":"⚡","cor_fundo":"#fff8e1","tickers":{"ENGI11":{"nome":"Energisa","cor":"#f9a825"},"CPFE3":{"nome":"CPFL Energia","cor":"#b71c1c"},"TAEE11":{"nome":"Taesa","cor":"#00695c"},"EQTL3":{"nome":"Equatorial","cor":"#1565c0"},"CMIG4":{"nome":"Cemig","cor":"#7b1fa2"},"EGIE3":{"nome":"Engie Brasil","cor":"#0d47a1"},"CPLE6":{"nome":"Copel","cor":"#283593"}}},
+    "materiais":        {"nome":"Materiais Básicos","icone":"🪨","cor_fundo":"#efebe9","tickers":{"VALE3":{"nome":"Vale","cor":"#1a5276"},"CSAN3":{"nome":"Cosan","cor":"#1a237e"},"SUZB3":{"nome":"Suzano","cor":"#1b5e20"},"KLBN11":{"nome":"Klabin","cor":"#33691e"},"DXCO3":{"nome":"Dexco","cor":"#5d4037"},"GGBR4":{"nome":"Gerdau","cor":"#37474f"},"CSNA3":{"nome":"CSN","cor":"#263238"},"GOAU4":{"nome":"Metalúrgica Gerdau","cor":"#455a64"}}},
+    "industriais":      {"nome":"Bens Industriais","icone":"🏗️","cor_fundo":"#fffde7","tickers":{"WEGE3":{"nome":"WEG","cor":"#003366"},"EMBR3":{"nome":"Embraer","cor":"#003a80"},"RAIL3":{"nome":"Rumo","cor":"#bf360c"},"UGPA3":{"nome":"Ultrapar","cor":"#e65100"},"CYRE3":{"nome":"Cyrela","cor":"#1565c0"},"MRVE3":{"nome":"MRV","cor":"#f57f17"},"EZTC3":{"nome":"EZTEC","cor":"#004d40"},"DIRR3":{"nome":"Direcional","cor":"#c62828"},"TEND3":{"nome":"Tenda","cor":"#1a237e"},"CCRO3":{"nome":"CCR","cor":"#0277bd"}}},
+    "financeiro":       {"nome":"Financeiro","icone":"🏦","cor_fundo":"#e3f2fd","tickers":{"ITUB4":{"nome":"Itaú Unibanco","cor":"#ff6600"},"BBDC4":{"nome":"Bradesco","cor":"#cc0000"},"BBAS3":{"nome":"Banco do Brasil","cor":"#003399"},"SANB11":{"nome":"Santander BR","cor":"#cc0000"},"B3SA3":{"nome":"B3 S.A.","cor":"#003a80"},"BPAC11":{"nome":"BTG Pactual","cor":"#1a1a2e"},"ITSA4":{"nome":"Itaúsa","cor":"#e65100"},"CIEL3":{"nome":"Cielo","cor":"#ffaa00"}}},
+    "consumo_nciclico": {"nome":"Consumo Não Cíclico","icone":"🌾","cor_fundo":"#f1f8e9","tickers":{"ABEV3":{"nome":"Ambev","cor":"#f9a825"},"JBSS3":{"nome":"JBS","cor":"#c62828"},"BEEF3":{"nome":"Minerva","cor":"#bf360c"},"SLCE3":{"nome":"SLC Agrícola","cor":"#33691e"},"SMTO3":{"nome":"São Martinho","cor":"#2e7d32"},"AGRO3":{"nome":"BrasilAgro","cor":"#1b5e20"},"MRFG3":{"nome":"Marfrig","cor":"#e53935"}}},
+    "consumo_ciclico":  {"nome":"Consumo Cíclico","icone":"🛍️","cor_fundo":"#f3e5f5","tickers":{"LREN3":{"nome":"Lojas Renner","cor":"#c62828"},"ASAI3":{"nome":"Assaí","cor":"#e53935"},"MGLU3":{"nome":"Magazine Luiza","cor":"#0000cc"},"SOMA3":{"nome":"Grupo Soma","cor":"#6a1b9a"},"ARZZ3":{"nome":"Arezzo","cor":"#880e4f"},"SBFG3":{"nome":"SBF Group","cor":"#e65100"},"ALPA4":{"nome":"Alpargatas","cor":"#0288d1"}}},
+    "saude":            {"nome":"Saúde","icone":"🏥","cor_fundo":"#ffebee","tickers":{"RDOR3":{"nome":"Rede D'Or","cor":"#c62828"},"HAPV3":{"nome":"Hapvida","cor":"#0277bd"},"FLRY3":{"nome":"Fleury","cor":"#1565c0"},"HYPE3":{"nome":"Hypera","cor":"#006064"},"DASA3":{"nome":"Dasa","cor":"#0288d1"},"QUAL3":{"nome":"Qualicorp","cor":"#00838f"}}},
+    "comunicacoes":     {"nome":"Comunicações","icone":"📡","cor_fundo":"#e0f2f1","tickers":{"VIVT3":{"nome":"Telefônica Vivo","cor":"#6200ea"},"TIMS3":{"nome":"TIM","cor":"#0000cc"},"OIBR3":{"nome":"Oi","cor":"#f57f17"}}},
+    "tecnologia":       {"nome":"Tecnologia da Informação","icone":"💻","cor_fundo":"#ede7f6","tickers":{"TOTS3":{"nome":"TOTVS","cor":"#e53935"},"LWSA3":{"nome":"Locaweb","cor":"#0033cc"},"INTB3":{"nome":"Intelbras","cor":"#1a237e"},"POSI3":{"nome":"Positivo","cor":"#1565c0"}}},
+    "imobiliario":      {"nome":"Imobiliário","icone":"🏢","cor_fundo":"#fce4ec","tickers":{"CYRE3":{"nome":"Cyrela","cor":"#1565c0"},"MULT3":{"nome":"Multiplan","cor":"#880e4f"}," IGTI11":{"nome":"Iguatemi","cor":"#4a148c"},"BRPR3":{"nome":"BR Properties","cor":"#37474f"}}},
+    "papel_celulose":   {"nome":"Papel e Celulose","icone":"🌲","cor_fundo":"#e8f5e9","tickers":{"SUZB3":{"nome":"Suzano","cor":"#1b5e20"},"KLBN11":{"nome":"Klabin","cor":"#33691e"},"DXCO3":{"nome":"Dexco","cor":"#5d4037"},"RANI3":{"nome":"Irani","cor":"#388e3c"}}},
+}
 
 FONTES = [
     {"nome": "Infomoney", "url": "https://www.infomoney.com.br/tudo-sobre/{ticker}/feed/", "cor": "#e53935"},
@@ -28,63 +43,62 @@ def log(msg, tipo="info"):
     if len(_log_entries) > 500: _log_entries.pop(0)
     print(f"[{entry['ts']}] {msg}", flush=True)
 
-def req_get(url):
-    try:
-        r = requests.get(url, timeout=15)
-        if r.status_code == 200: return r
-        if r.status_code == 429:
-            log("⏳ Rate limit, aguardando 20s...", "aviso")
-            time.sleep(20)
-            r2 = requests.get(url, timeout=15)
-            if r2.status_code == 200: return r2
-        log(f"⚠️ HTTP {r.status_code}", "aviso")
-    except Exception as e:
-        log(f"⚠️ Erro: {e}", "aviso")
+def buscar_ticker(ticker):
+    """Busca 1 ticker — exatamente como na versão que funcionava."""
+    for tentativa in range(3):
+        try:
+            r = requests.get(f"{QUOTE_URL}/{ticker}?token={TOKEN}", timeout=15)
+            if r.status_code == 200:
+                results = r.json().get("results", [])
+                return results[0] if results else None
+            elif r.status_code == 429:
+                wait = 15 * (tentativa + 1)
+                log(f"⏳ {ticker}: rate limit, aguardando {wait}s...", "aviso")
+                time.sleep(wait)
+                continue
+            else:
+                return None
+        except Exception as e:
+            log(f"⚠️ {ticker}: {e}", "aviso")
+            time.sleep(2)
     return None
-
-def buscar_ativos_setor(setor):
-    todos = []
-    for pg in range(1, 4):
-        r = req_get(f"{LIST_URL}?sector={setor}&type=stock&sortBy=market_cap_basic&sortOrder=desc&limit=50&page={pg}&token={TOKEN}")
-        if not r: break
-        data = r.json()
-        todos.extend(data.get("stocks", []))
-        if not data.get("hasNextPage"): break
-        time.sleep(0.3)
-    return todos
 
 def atualizar_cache():
     global _cache, _atualizando
     _atualizando = True
     try:
         log(f"🔄 Buscando cotações v{VERSION}...", "info")
-        r = req_get(f"{LIST_URL}?limit=1&token={TOKEN}")
-        if not r:
-            log("❌ Sem conexão com brapi.dev", "erro")
-            return
-        setores_api = r.json().get("availableSectors", list(SETOR_MAP.keys()))
-        log(f"📋 {len(setores_api)} setores encontrados", "info")
         novo = {"atualizado_em": datetime.now().isoformat(), "setores": {}, "version": VERSION}
-        for setor_api in setores_api:
-            info = SETOR_MAP.get(setor_api, {"nome": setor_api, "icone": "📈", "cor_fundo": "#f5f5f5"})
-            log(f"🔍 {info['nome']}", "setor")
-            ativos = buscar_ativos_setor(setor_api)
+
+        for sid, s in SETORES.items():
+            log(f"🔍 {s['nome']}", "setor")
             empresas = []
-            for a in ativos:
-                tk = a.get("stock","")
-                if not tk: continue
-                preco = a.get("close")
-                pct = a.get("change") or 0
-                if preco: log(f"   {'▲' if pct>=0 else '▼'} {tk}: R$ {preco} ({pct:+.2f}%)", "cotacao")
-                empresas.append({"ticker":tk,"nome":a.get("name",tk),"cor":cor_para_ticker(tk),
-                    "preco":preco,"variacao":a.get("change_abs") or 0,"variacao_pct":pct,
-                    "maxima_dia":a.get("high"),"minima_dia":a.get("low"),
-                    "volume":a.get("volume"),"logo":a.get("logourl","")})
-                time.sleep(0.05)
-            setor_id = setor_api.lower().replace(" ","_")
-            novo["setores"][setor_id] = {"nome":info["nome"],"icone":info["icone"],
-                "cor_fundo":info["cor_fundo"],
-                "empresas":sorted(empresas,key=lambda x:x.get("preco") or 0,reverse=True)}
+            for ticker, meta in s["tickers"].items():
+                d = buscar_ticker(ticker)
+                if d:
+                    preco = d.get("regularMarketPrice")
+                    pct = d.get("regularMarketChangePercent") or 0
+                    var = d.get("regularMarketChange") or 0
+                    sinal = "▲" if pct >= 0 else "▼"
+                    log(f"   {sinal} {ticker}: R$ {preco} ({pct:+.2f}%)", "cotacao")
+                    empresas.append({
+                        "ticker": ticker, "nome": meta["nome"], "cor": meta["cor"],
+                        "preco": preco, "variacao": var, "variacao_pct": pct,
+                        "maxima_dia": d.get("regularMarketDayHigh"),
+                        "minima_dia": d.get("regularMarketDayLow"),
+                        "volume": d.get("regularMarketVolume"),
+                        "logo": d.get("logourl", ""),
+                    })
+                else:
+                    log(f"   ❌ {ticker}: sem dados", "aviso")
+                    empresas.append({"ticker": ticker, "nome": meta["nome"], "cor": meta["cor"], "preco": None})
+                time.sleep(2)  # 2s entre cada ticker para respeitar rate limit
+
+            novo["setores"][sid] = {
+                "nome": s["nome"], "icone": s["icone"], "cor_fundo": s["cor_fundo"],
+                "empresas": sorted(empresas, key=lambda x: x.get("preco") or 0, reverse=True),
+            }
+
         _cache = novo
         total = sum(len(s["empresas"]) for s in novo["setores"].values())
         com_preco = sum(1 for s in novo["setores"].values() for e in s["empresas"] if e.get("preco"))
@@ -101,8 +115,8 @@ def loop_auto():
         time.sleep(INTERVALO)
 
 log(f"🚀 App B3 v{VERSION} iniciado", "info")
-threading.Thread(target=atualizar_cache, daemon=True).start()
 threading.Thread(target=loop_auto, daemon=True).start()
+# Não inicia busca automática — usuário clica em Atualizar
 
 @app.route("/")
 def index(): return send_from_directory("static", "index.html")
@@ -120,30 +134,28 @@ def api_status():
 
 @app.route("/api/atualizar", methods=["POST"])
 def api_atualizar():
-    # SEMPRE inicia nova thread — não bloqueia pelo flag
     threading.Thread(target=atualizar_cache, daemon=True).start()
     return jsonify({"ok": True})
 
 @app.route("/api/historico/<ticker>")
 def api_historico(ticker):
-    r = req_get(f"{QUOTE_URL}/{ticker}?range=1y&interval=1d&token={TOKEN}")
-    if r:
-        results = r.json().get("results", [])
-        if results and results[0].get("historicalDataPrice"):
-            hist = results[0]["historicalDataPrice"]
-            return jsonify({"ticker":ticker,"historico":[{"date":h.get("date"),"close":h.get("close")} for h in hist if h.get("close")]})
+    try:
+        r = requests.get(f"{QUOTE_URL}/{ticker}?range=1y&interval=1d&token={TOKEN}", timeout=15)
+        if r.status_code == 200:
+            results = r.json().get("results", [])
+            if results and results[0].get("historicalDataPrice"):
+                hist = results[0]["historicalDataPrice"]
+                return jsonify({"ticker":ticker,"historico":[{"date":h.get("date"),"close":h.get("close")} for h in hist if h.get("close")]})
+    except: pass
     return jsonify({"ticker": ticker, "historico": []})
 
 @app.route("/api/detalhe/<ticker>")
 def api_detalhe(ticker):
-    r = req_get(f"{QUOTE_URL}/{ticker}?token={TOKEN}")
-    if r:
-        results = r.json().get("results", [])
-        if results:
-            d = results[0]
-            return jsonify({"ticker":ticker,"preco":d.get("regularMarketPrice"),
-                "variacao":d.get("regularMarketChange"),"variacao_pct":d.get("regularMarketChangePercent"),
-                "minima_dia":d.get("regularMarketDayLow"),"maxima_dia":d.get("regularMarketDayHigh")})
+    d = buscar_ticker(ticker.upper())
+    if d:
+        return jsonify({"ticker":ticker,"preco":d.get("regularMarketPrice"),
+            "variacao":d.get("regularMarketChange"),"variacao_pct":d.get("regularMarketChangePercent"),
+            "minima_dia":d.get("regularMarketDayLow"),"maxima_dia":d.get("regularMarketDayHigh")})
     return jsonify({"erro":"não encontrado"}), 404
 
 @app.route("/api/noticias/<ticker>")
