@@ -3,7 +3,7 @@ from datetime import datetime
 from flask import Flask, jsonify, send_from_directory, request
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 
-VERSION = "1.6.0"
+VERSION = "1.6.1"
 
 app = Flask(__name__, static_folder="static")
 INTERVALO = int(os.getenv("INTERVALO_SEGUNDOS", "300"))
@@ -44,23 +44,18 @@ def log(msg, tipo="info"):
     print(f"[{entry['ts']}] {msg}", flush=True)
 
 def buscar_ticker(ticker):
-    """Busca 1 ticker — exatamente como na versão que funcionava."""
-    for tentativa in range(3):
-        try:
-            r = requests.get(f"{QUOTE_URL}/{ticker}?token={TOKEN}", timeout=15)
-            if r.status_code == 200:
-                results = r.json().get("results", [])
-                return results[0] if results else None
-            elif r.status_code == 429:
-                wait = 15 * (tentativa + 1)
-                log(f"⏳ {ticker}: rate limit, aguardando {wait}s...", "aviso")
-                time.sleep(wait)
-                continue
-            else:
-                return None
-        except Exception as e:
-            log(f"⚠️ {ticker}: {e}", "aviso")
-            time.sleep(2)
+    """Busca 1 ticker — sem retry em 429, intervalo controlado externamente."""
+    try:
+        r = requests.get(f"{QUOTE_URL}/{ticker}?token={TOKEN}", timeout=15)
+        if r.status_code == 200:
+            results = r.json().get("results", [])
+            return results[0] if results else None
+        elif r.status_code == 429:
+            log(f"   ⏳ {ticker}: rate limit — pulando", "aviso")
+        else:
+            log(f"   ⚠️ {ticker}: HTTP {r.status_code}", "aviso")
+    except Exception as e:
+        log(f"   ⚠️ {ticker}: {e}", "aviso")
     return None
 
 def atualizar_cache():
@@ -92,7 +87,7 @@ def atualizar_cache():
                 else:
                     log(f"   ❌ {ticker}: sem dados", "aviso")
                     empresas.append({"ticker": ticker, "nome": meta["nome"], "cor": meta["cor"], "preco": None})
-                time.sleep(2)  # 2s entre cada ticker para respeitar rate limit
+                time.sleep(5)  # 5s entre cada ticker para respeitar rate limit
 
             novo["setores"][sid] = {
                 "nome": s["nome"], "icone": s["icone"], "cor_fundo": s["cor_fundo"],
