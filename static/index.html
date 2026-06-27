@@ -316,7 +316,10 @@ async function carregarDados(){
     dadosCarregados=true;
     document.getElementById('sdot').className='dot';
     document.getElementById('status-txt').textContent='Ao vivo · brapi.dev';
-    if(DADOS.atualizado_em){const d=new Date(DADOS.atualizado_em);document.getElementById('last-upd').textContent='Atualizado às '+d.toLocaleTimeString('pt-BR');}
+    if(DADOS.atualizado_em){
+      const d=new Date(DADOS.atualizado_em);
+      document.getElementById('last-upd').textContent='Atualizado às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'America/Sao_Paulo'});
+    }
     renderSectors();
     if(currentSector) renderEmpresas(true);
     renderAlerts();updateAltCnt();
