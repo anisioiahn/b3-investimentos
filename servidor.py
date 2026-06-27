@@ -1,33 +1,20 @@
-import os, json, threading, time, queue, requests, xml.etree.ElementTree as ET
+import os, json, threading, time, requests, xml.etree.ElementTree as ET
 from datetime import datetime
-from flask import Flask, jsonify, send_from_directory, Response, request
-from buscar_cotacoes import buscar_historico, buscar_noticias_rss, OUTPUT_FILE, SETOR_MAP, cor_para_ticker
+from flask import Flask, jsonify, send_from_directory, request
+from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 
 app = Flask(__name__, static_folder="static")
 INTERVALO = int(os.getenv("INTERVALO_SEGUNDOS", "300"))
 TOKEN = os.getenv("BRAPI_TOKEN", "iSm92y2Qg4f9iapi1MuHhh")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 LIST_URL = "https://brapi.dev/api/quote/list"
+QUOTE_URL = "https://brapi.dev/api/quote"
+OUTPUT_FILE = "cotacoes.json"
 
 _lock = threading.Lock()
 _log_entries = []
 _atualizando = False
-
-# ── Carrega cache do disco ao iniciar ────────────────────────
-def carregar_cache_disco():
-    try:
-        if os.path.exists(OUTPUT_FILE):
-            with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
-                dados = json.load(f)
-            total = sum(len(s.get("empresas",[])) for s in dados.get("setores",{}).values())
-            if total > 0:
-                log(f"📂 Cache carregado do disco: {total} ativos em {len(dados['setores'])} setores", "sucesso")
-                return dados
-    except Exception as e:
-        log(f"⚠️ Erro ao carregar cache: {e}", "aviso")
-    return {"atualizado_em": None, "setores": {}}
-
-_cache = carregar_cache_disco()
+_cache = {"atualizado_em": None, "setores": {}}
 
 FONTES = [
     {"nome": "Infomoney", "url": "https://www.infomoney.com.br/tudo-sobre/{ticker}/feed/", "cor": "#e53935"},
@@ -41,41 +28,60 @@ def log(msg, tipo="info"):
     if len(_log_entries) > 500: _log_entries.pop(0)
     print(f"[{entry['ts']}] {msg}")
 
+def req_get(url, tentativas=3):
+    """GET com retry automático em 429."""
+    for i in range(tentativas):
+        try:
+            r = requests.get(url, timeout=20)
+            if r.status_code == 200: return r
+            if r.status_code == 429:
+                wait = 15 * (i+1)
+                log(f"⏳ Rate limit, aguardando {wait}s...", "aviso")
+                time.sleep(wait)
+                continue
+            return r
+        except Exception as e:
+            log(f"⚠️ Erro rede: {e}", "aviso")
+            time.sleep(3)
+    return None
+
 def buscar_setores():
-    try:
-        resp = requests.get(f"{LIST_URL}?limit=1&token={TOKEN}", timeout=15)
-        if resp.status_code == 200:
-            return resp.json().get("availableSectors", [])
-    except Exception as e:
-        log(f"❌ Erro ao buscar setores: {e}", "erro")
+    r = req_get(f"{LIST_URL}?limit=1&token={TOKEN}")
+    if r: return r.json().get("availableSectors", [])
     return list(SETOR_MAP.keys())
 
 def buscar_ativos_setor(setor):
     todos = []
-    for pagina in range(1, 4):
-        try:
-            url = f"{LIST_URL}?sector={setor}&type=stock&sortBy=market_cap_basic&sortOrder=desc&limit=50&page={pagina}&token={TOKEN}"
-            resp = requests.get(url, timeout=15)
-            if resp.status_code == 200:
-                data = resp.json()
-                stocks = data.get("stocks", [])
-                todos.extend(stocks)
-                if not data.get("hasNextPage"): break
-                time.sleep(0.5)
-            elif resp.status_code == 429:
-                log(f"⏳ Rate limit, aguardando 15s...", "aviso")
-                time.sleep(15)
-            else:
-                break
-        except Exception as e:
-            log(f"❌ Erro setor {setor}: {e}", "erro")
-            break
+    for pg in range(1, 4):
+        r = req_get(f"{LIST_URL}?sector={setor}&type=stock&sortBy=market_cap_basic&sortOrder=desc&limit=50&page={pg}&token={TOKEN}")
+        if not r: break
+        data = r.json()
+        todos.extend(data.get("stocks", []))
+        if not data.get("hasNextPage"): break
+        time.sleep(0.5)
     return todos
+
+def buscar_detalhe_ticker(ticker):
+    """Busca detalhes completos de 1 ticker (mín, máx, variação real)."""
+    r = req_get(f"{QUOTE_URL}/{ticker}?token={TOKEN}")
+    if r:
+        results = r.json().get("results", [])
+        return results[0] if results else None
+    return None
+
+def buscar_historico_ticker(ticker):
+    """Busca histórico de 1 ano."""
+    r = req_get(f"{QUOTE_URL}/{ticker}?range=1y&interval=1d&token={TOKEN}")
+    if r:
+        results = r.json().get("results", [])
+        if results and results[0].get("historicalDataPrice"):
+            hist = results[0]["historicalDataPrice"]
+            return [{"date": h.get("date"), "close": h.get("close")} for h in hist if h.get("close")]
+    return []
 
 def atualizar_cache():
     global _cache, _atualizando
-    if _atualizando:
-        return
+    if _atualizando: return
     _atualizando = True
     try:
         log("🔄 Iniciando busca de cotações...", "info")
@@ -93,15 +99,24 @@ def atualizar_cache():
                 if not ticker: continue
                 preco = ativo.get("close")
                 variacao_pct = ativo.get("change") or 0
+                variacao = ativo.get("change_abs") or 0
+                # Pega mín/máx da listagem (quando disponível)
+                minima = ativo.get("low")
+                maxima = ativo.get("high")
                 if preco:
                     sinal = "▲" if variacao_pct >= 0 else "▼"
                     log(f"   {sinal} {ticker}: R$ {preco} ({variacao_pct:+.2f}%)", "cotacao")
                 empresas.append({
-                    "ticker": ticker, "nome": ativo.get("name", ticker),
-                    "cor": cor_para_ticker(ticker), "preco": preco,
-                    "variacao": ativo.get("change_abs"), "variacao_pct": variacao_pct,
-                    "maxima_dia": ativo.get("high"), "minima_dia": ativo.get("low"),
-                    "volume": ativo.get("volume"), "logo": ativo.get("logourl", ""),
+                    "ticker": ticker,
+                    "nome": ativo.get("name", ticker),
+                    "cor": cor_para_ticker(ticker),
+                    "preco": preco,
+                    "variacao": variacao,
+                    "variacao_pct": variacao_pct,
+                    "maxima_dia": maxima,
+                    "minima_dia": minima,
+                    "volume": ativo.get("volume"),
+                    "logo": ativo.get("logourl", ""),
                 })
                 time.sleep(0.1)
 
@@ -113,11 +128,10 @@ def atualizar_cache():
             }
 
         with _lock: _cache = novo
-        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-            json.dump(novo, f, ensure_ascii=False, indent=2)
         total = sum(len(s["empresas"]) for s in novo["setores"].values())
         com_preco = sum(1 for s in novo["setores"].values() for e in s["empresas"] if e.get("preco"))
         log(f"✅ Concluído! {com_preco}/{total} ativos em {len(novo['setores'])} setores", "sucesso")
+
     except Exception as e:
         log(f"❌ Erro geral: {e}", "erro")
     finally:
@@ -145,20 +159,36 @@ def api_status():
             "pronto": total > 0,
             "atualizando": _atualizando,
             "total_ativos": total,
-            "total_setores": len(_cache.get("setores",{})),
-            "atualizado_em": _cache.get("atualizado_em"),
         })
 
 @app.route("/api/atualizar", methods=["POST"])
 def api_atualizar():
     if not _atualizando:
         threading.Thread(target=atualizar_cache, daemon=True).start()
-    return jsonify({"ok": True, "em_andamento": _atualizando})
+    return jsonify({"ok": True, "atualizando": _atualizando})
 
 @app.route("/api/historico/<ticker>")
 def api_historico(ticker):
-    dados = buscar_historico(ticker.upper())
+    """Busca histórico individual — usa endpoint /quote com range."""
+    dados = buscar_historico_ticker(ticker.upper())
     return jsonify({"ticker": ticker.upper(), "historico": dados})
+
+@app.route("/api/detalhe/<ticker>")
+def api_detalhe(ticker):
+    """Busca detalhes completos do ticker (mín, máx, variação real)."""
+    d = buscar_detalhe_ticker(ticker.upper())
+    if d:
+        return jsonify({
+            "ticker": ticker.upper(),
+            "preco": d.get("regularMarketPrice"),
+            "variacao": d.get("regularMarketChange"),
+            "variacao_pct": d.get("regularMarketChangePercent"),
+            "minima_dia": d.get("regularMarketDayLow"),
+            "maxima_dia": d.get("regularMarketDayHigh"),
+            "volume": d.get("regularMarketVolume"),
+            "nome": d.get("shortName") or d.get("longName"),
+        })
+    return jsonify({"erro": "ticker não encontrado"}), 404
 
 @app.route("/api/noticias/<ticker>")
 def api_noticias(ticker):
@@ -185,10 +215,10 @@ def gerar_recomendacao(ticker, nome, noticias):
         return {"sinal": "NEUTRO", "justificativa": "Sem notícias recentes para análise.", "confianca": "Baixa"}
     if not ANTHROPIC_KEY:
         return {"sinal": "NEUTRO", "justificativa": "Configure ANTHROPIC_API_KEY no Render para habilitar análise de IA.", "confianca": "Baixa"}
-    prompt = f"""Analise as notícias sobre {ticker} ({nome}) e responda APENAS com JSON:
+    prompt = f"""Analise as notícias sobre {ticker} ({nome}) e responda APENAS com JSON válido:
 {chr(10).join(todas[:6])}
-Formato: {{"sinal":"COMPRAR","justificativa":"2-3 frases.","confianca":"Alta"}}
-sinal: COMPRAR, VENDER ou NEUTRO. confianca: Alta, Média ou Baixa."""
+Formato exato: {{"sinal":"COMPRAR","justificativa":"2-3 frases.","confianca":"Alta"}}
+sinal deve ser: COMPRAR, VENDER ou NEUTRO. confianca: Alta, Média ou Baixa."""
     try:
         resp = requests.post("https://api.anthropic.com/v1/messages",
             headers={"Content-Type":"application/json","x-api-key":ANTHROPIC_KEY,"anthropic-version":"2023-06-01"},
@@ -203,12 +233,11 @@ sinal: COMPRAR, VENDER ou NEUTRO. confianca: Alta, Média ou Baixa."""
 
 @app.route("/api/logs")
 def api_logs():
-    """Retorna todos os logs — front-end faz polling a cada 3s."""
     desde = request.args.get("desde", 0, type=int)
     return jsonify(_log_entries[desde:])
 
 if __name__ == "__main__":
-    log("🚀 Servidor iniciado", "info")
+    log("🚀 Servidor iniciado — buscando cotações...", "info")
     threading.Thread(target=atualizar_cache, daemon=True).start()
     threading.Thread(target=loop_auto, daemon=True).start()
     print(f"\n🚀 Servidor rodando em http://localhost:5000")
