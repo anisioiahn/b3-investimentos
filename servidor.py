@@ -3,7 +3,7 @@ from datetime import datetime
 from flask import Flask, jsonify, send_from_directory, request
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 
-VERSION = "1.6.1"
+VERSION = "1.7.0"
 
 app = Flask(__name__, static_folder="static")
 INTERVALO = int(os.getenv("INTERVALO_SEGUNDOS", "300"))
@@ -43,20 +43,27 @@ def log(msg, tipo="info"):
     if len(_log_entries) > 500: _log_entries.pop(0)
     print(f"[{entry['ts']}] {msg}", flush=True)
 
-def buscar_ticker(ticker):
-    """Busca 1 ticker — sem retry em 429, intervalo controlado externamente."""
+def buscar_lote(tickers):
+    """Busca até 10 tickers de uma vez — plano Startup brapi.dev."""
     try:
-        r = requests.get(f"{QUOTE_URL}/{ticker}?token={TOKEN}", timeout=15)
+        symbols = ",".join(tickers)
+        r = requests.get(
+            f"{QUOTE_URL}/{symbols}",
+            headers={"Authorization": f"Bearer {TOKEN}"},
+            timeout=20
+        )
         if r.status_code == 200:
             results = r.json().get("results", [])
-            return results[0] if results else None
+            return {d["symbol"]: d for d in results}
         elif r.status_code == 429:
-            log(f"   ⏳ {ticker}: rate limit — pulando", "aviso")
+            log(f"⏳ Rate limit, aguardando 30s...", "aviso")
+            time.sleep(30)
+            return {}
         else:
-            log(f"   ⚠️ {ticker}: HTTP {r.status_code}", "aviso")
+            log(f"⚠️ HTTP {r.status_code}", "aviso")
     except Exception as e:
-        log(f"   ⚠️ {ticker}: {e}", "aviso")
-    return None
+        log(f"⚠️ Erro lote: {e}", "aviso")
+    return {}
 
 def atualizar_cache():
     global _cache, _atualizando
@@ -67,9 +74,20 @@ def atualizar_cache():
 
         for sid, s in SETORES.items():
             log(f"🔍 {s['nome']}", "setor")
+            tickers = list(s["tickers"].keys())
+            dados = {}
+
+            # Busca em lotes de 10
+            for i in range(0, len(tickers), 10):
+                lote = tickers[i:i+10]
+                resultado = buscar_lote(lote)
+                dados.update(resultado)
+                if i + 10 < len(tickers):
+                    time.sleep(1)  # 1s entre lotes — suficiente no plano Startup
+
             empresas = []
             for ticker, meta in s["tickers"].items():
-                d = buscar_ticker(ticker)
+                d = dados.get(ticker)
                 if d:
                     preco = d.get("regularMarketPrice")
                     pct = d.get("regularMarketChangePercent") or 0
@@ -87,7 +105,6 @@ def atualizar_cache():
                 else:
                     log(f"   ❌ {ticker}: sem dados", "aviso")
                     empresas.append({"ticker": ticker, "nome": meta["nome"], "cor": meta["cor"], "preco": None})
-                time.sleep(5)  # 5s entre cada ticker para respeitar rate limit
 
             novo["setores"][sid] = {
                 "nome": s["nome"], "icone": s["icone"], "cor_fundo": s["cor_fundo"],
@@ -135,23 +152,46 @@ def api_atualizar():
 @app.route("/api/historico/<ticker>")
 def api_historico(ticker):
     try:
-        r = requests.get(f"{QUOTE_URL}/{ticker}?range=1y&interval=1d&token={TOKEN}", timeout=15)
+        r = requests.get(
+            f"{QUOTE_URL}/{ticker}?range=1y&interval=1d",
+            headers={"Authorization": f"Bearer {TOKEN}"},
+            timeout=20
+        )
         if r.status_code == 200:
             results = r.json().get("results", [])
             if results and results[0].get("historicalDataPrice"):
                 hist = results[0]["historicalDataPrice"]
-                return jsonify({"ticker":ticker,"historico":[{"date":h.get("date"),"close":h.get("close")} for h in hist if h.get("close")]})
-    except: pass
+                return jsonify({"ticker": ticker, "historico": [
+                    {"date": h.get("date"), "close": h.get("close")}
+                    for h in hist if h.get("close")
+                ]})
+    except Exception as e:
+        log(f"⚠️ Histórico {ticker}: {e}", "aviso")
     return jsonify({"ticker": ticker, "historico": []})
 
 @app.route("/api/detalhe/<ticker>")
 def api_detalhe(ticker):
-    d = buscar_ticker(ticker.upper())
-    if d:
-        return jsonify({"ticker":ticker,"preco":d.get("regularMarketPrice"),
-            "variacao":d.get("regularMarketChange"),"variacao_pct":d.get("regularMarketChangePercent"),
-            "minima_dia":d.get("regularMarketDayLow"),"maxima_dia":d.get("regularMarketDayHigh")})
-    return jsonify({"erro":"não encontrado"}), 404
+    try:
+        r = requests.get(
+            f"{QUOTE_URL}/{ticker}",
+            headers={"Authorization": f"Bearer {TOKEN}"},
+            timeout=15
+        )
+        if r.status_code == 200:
+            results = r.json().get("results", [])
+            if results:
+                d = results[0]
+                return jsonify({
+                    "ticker": ticker,
+                    "preco": d.get("regularMarketPrice"),
+                    "variacao": d.get("regularMarketChange"),
+                    "variacao_pct": d.get("regularMarketChangePercent"),
+                    "minima_dia": d.get("regularMarketDayLow"),
+                    "maxima_dia": d.get("regularMarketDayHigh"),
+                })
+    except Exception as e:
+        log(f"⚠️ Detalhe {ticker}: {e}", "aviso")
+    return jsonify({"erro": "não encontrado"}), 404
 
 @app.route("/api/noticias/<ticker>")
 def api_noticias(ticker):
