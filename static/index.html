@@ -16,7 +16,7 @@
 :root{--green:#0066cc;--green-light:#e6f0ff;--bg:#f5f5f5;--card:#fff;--border:#e0e0e0;--text:#1a1a1a;--text2:#666;--text3:#999;--radius:14px;--shadow:0 2px 12px rgba(0,0,0,.07)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.app{max-width:960px;margin:0 auto;background:var(--card);min-height:100vh;box-shadow:var(--shadow)}
+.app{max-width:960px;margin:0 auto;background:var(--card);min-height:100vh;box-shadow:var(--shadow);overflow-x:hidden}
 
 /* HEADER */
 .header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid var(--border);background:#fff;position:sticky;top:0;z-index:10}
@@ -1122,13 +1122,12 @@ async function carregarCarteira(){
   try{
     const r = await fetch('/api/carteira');
     const novaCarteira = await r.json();
-    // Só re-renderiza se os dados mudaram
     const mudou = JSON.stringify(novaCarteira) !== JSON.stringify(_carteira);
     _carteira = novaCarteira;
-    if(mudou && document.getElementById('page-carteira').classList.contains('active')){
-      renderCarteira();
-    } else if(!_carteira.length){
-      renderCarteira(); // primeira vez sempre renderiza
+    if(document.getElementById('page-carteira').classList.contains('active')){
+      if(mudou || document.getElementById('carteira-tabela').innerHTML===''){
+        renderCarteira();
+      }
     }
   }catch(e){}
 }
@@ -1140,28 +1139,28 @@ function renderCarteira(){
 }
 
 async function renderResumoCarteira(){
-  try{
-    const r = await fetch('/api/carteira/resumo');
-    const resumo = await r.json();
-    const lucroPos = resumo.lucro_total >= 0;
-    const lucroClass = resumo.lucro_total > 0 ? 'lucro-pos' : resumo.lucro_total < 0 ? 'lucro-neg' : '';
-    document.getElementById('carteira-resumo').innerHTML = `
-      <div class="resumo-card">
-        <div class="resumo-label">Total Investido</div>
-        <div class="resumo-valor">R$ ${fmt(resumo.total_investido)}</div>
-        <div class="resumo-sub" style="color:var(--text3)">${resumo.total_posicoes} posição(ões)</div>
-      </div>
-      <div class="resumo-card">
-        <div class="resumo-label">Valor Atual</div>
-        <div class="resumo-valor">${resumo.total_atual ? `R$ ${fmt(resumo.total_atual)}` : '—'}</div>
-        <div class="resumo-sub" style="color:var(--text3)">com cotação atual</div>
-      </div>
-      <div class="resumo-card">
-        <div class="resumo-label">Lucro / Prejuízo</div>
-        <div class="resumo-valor ${lucroClass}">${resumo.lucro_total !== null ? `${resumo.lucro_total >= 0 ? '+' : ''}R$ ${fmt(resumo.lucro_total)}` : '—'}</div>
-        <div class="resumo-sub ${lucroClass}">${resumo.lucro_pct !== null ? `${resumo.lucro_pct >= 0 ? '+' : ''}${resumo.lucro_pct.toFixed(2)}%` : ''}</div>
-      </div>`;
-  }catch(e){}
+  // Calcula resumo localmente sem fetch ao servidor
+  const totalInvestido = _carteira.reduce((s,p)=>s+(p.valor_investido||0),0);
+  const totalAtual = _carteira.reduce((s,p)=>s+(p.valor_atual||p.valor_investido||0),0);
+  const lucro = totalAtual - totalInvestido;
+  const lucroP = totalInvestido>0 ? (lucro/totalInvestido*100) : 0;
+  const lucroClass = lucro>0?'lucro-pos':lucro<0?'lucro-neg':'';
+  document.getElementById('carteira-resumo').innerHTML = `
+    <div class="resumo-card">
+      <div class="resumo-label">Total Investido</div>
+      <div class="resumo-valor">R$ ${fmt(totalInvestido)}</div>
+      <div class="resumo-sub" style="color:var(--text3)">${_carteira.length} posição(ões)</div>
+    </div>
+    <div class="resumo-card">
+      <div class="resumo-label">Valor Atual</div>
+      <div class="resumo-valor">R$ ${fmt(totalAtual)}</div>
+      <div class="resumo-sub" style="color:var(--text3)">com cotação atual</div>
+    </div>
+    <div class="resumo-card">
+      <div class="resumo-label">Lucro / Prejuízo</div>
+      <div class="resumo-valor ${lucroClass}">${lucro>=0?'+':''}R$ ${fmt(lucro)}</div>
+      <div class="resumo-sub ${lucroClass}">${lucro>=0?'+':''}${lucroP.toFixed(2)}%</div>
+    </div>`;
 }
 
 function renderTabelaCarteira(){
