@@ -217,6 +217,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     </div>
     <div class="hright">
       <div class="status-pill"><span class="dot" id="sdot"></span><span id="status-txt">Conectando</span></div>
+      <button class="btn" id="btn-push" onclick="togglePush()" title="Ativar notificações push">🔔 Notificações</button>
       <button class="btn" onclick="forcarAtualizacao()">↻ Atualizar</button>
     </div>
   </div>
@@ -705,7 +706,77 @@ function renderChart(dados){
 }
 function fecharModal(e){if(!e||e.target===document.getElementById('modal')){document.getElementById('modal').classList.remove('open');}}
 
-// ── ALERTAS v2 (servidor) ────────────────────────────────────
+// ── PUSH NOTIFICATIONS ───────────────────────────────────────
+let _swRegistration = null;
+let _pushSubscription = null;
+
+async function initPush(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+    document.getElementById('btn-push').style.display='none';
+    return;
+  }
+  try{
+    _swRegistration = await navigator.serviceWorker.register('/sw.js');
+    _pushSubscription = await _swRegistration.pushManager.getSubscription();
+    atualizarBtnPush();
+  }catch(e){ console.warn('Push init:', e); }
+}
+
+function atualizarBtnPush(){
+  const btn = document.getElementById('btn-push');
+  if(!btn) return;
+  if(_pushSubscription){
+    btn.textContent = '🔔 Ativo';
+    btn.style.borderColor = '#16a34a';
+    btn.style.color = '#16a34a';
+  } else {
+    btn.textContent = '🔔 Notificações';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  }
+}
+
+async function togglePush(){
+  if(!_swRegistration){ await initPush(); }
+  if(_pushSubscription){
+    // Desativar
+    await _pushSubscription.unsubscribe();
+    await fetch('/api/push/unsubscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_pushSubscription)});
+    _pushSubscription = null;
+    atualizarBtnPush();
+    alert('Notificações push desativadas.');
+    return;
+  }
+  // Ativar — pede permissão
+  const perm = await Notification.requestPermission();
+  if(perm !== 'granted'){
+    alert('Permissão negada. Você precisa permitir notificações no navegador.');
+    return;
+  }
+  try{
+    const r = await fetch('/api/push/vapid-public-key');
+    const {publicKey} = await r.json();
+    const sub = await _swRegistration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey)
+    });
+    _pushSubscription = sub;
+    await fetch('/api/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub)});
+    atualizarBtnPush();
+    // Envia push de teste
+    await fetch('/api/push/test',{method:'POST'});
+    alert('✅ Notificações ativadas! Você recebeu um push de teste. A partir de agora será notificado quando seus alertas dispararem.');
+  }catch(e){
+    alert('Erro ao ativar notificações: ' + e.message);
+  }
+}
+
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw = window.atob(base64);
+  return new Uint8Array([...raw].map(c=>c.charCodeAt(0)));
+}
 let _alertasServidor = [];
 let _disparadosServidor = [];
 
@@ -842,8 +913,8 @@ carregarFontes();
 carregarStatus();
 carregarAlertas();
 conectarLog();
+initPush();
 setInterval(atualizarCountdown, 1000);
-// Recarrega alertas a cada 30s para pegar disparados
 setInterval(carregarAlertas, 30000);
 fetch('/api/version').then(r=>r.json()).then(d=>{
   const el=document.getElementById('app-version');
