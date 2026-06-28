@@ -258,6 +258,20 @@ threading.Thread(target=loop_auto, daemon=True).start()
 @app.route("/")
 def index(): return send_from_directory("static", "index.html")
 
+@app.route("/sw.js")
+def service_worker():
+    """Service Worker precisa estar na raiz para ter escopo total."""
+    response = send_from_directory("static", "sw.js")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Service-Worker-Allowed"] = "/"
+    return response
+
+@app.route("/icon-192.png")
+def icon192(): return send_from_directory("static", "icon-192.png")
+
+@app.route("/icon-72.png")
+def icon72(): return send_from_directory("static", "icon-72.png")
+
 @app.route("/api/version")
 def api_version(): return jsonify({"version": VERSION})
 
