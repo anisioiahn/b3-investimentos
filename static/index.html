@@ -584,6 +584,11 @@ async function carregarDados(){
     renderSectors();
     if(currentSector) renderEmpresas(true);
     renderAlerts();updateAltCnt();
+    // Atualiza carteira só se a aba estiver visível — sem recarregar do servidor
+    if(document.getElementById('page-carteira').classList.contains('active')){
+      renderTabelaCarteira(); // apenas re-renderiza com dados já em memória
+      renderResumoCarteira();
+    }
   }catch(e){
     document.getElementById('status-txt').textContent='Erro de conexão';
     document.getElementById('sdot').className='dot err';
@@ -1235,8 +1240,10 @@ function renderTabelaCarteira(){
 }
 
 function renderPizzaCarteira(){
-  if(!_carteira.length) return;
-  // Agrupa por setor
+  if(!_carteira.length){
+    if(_pizzaChart){ _pizzaChart.destroy(); _pizzaChart=null; }
+    return;
+  }
   const porSetor = {};
   _carteira.forEach(p => {
     const s = p.setor_nome || 'Outros';
@@ -1247,20 +1254,29 @@ function renderPizzaCarteira(){
   const valores = Object.values(porSetor);
   const cores = labels.map((_,i) => PIZZA_CORES[i % PIZZA_CORES.length]);
 
-  if(_pizzaChart) _pizzaChart.destroy();
-  const ctx = document.getElementById('pizzaChart').getContext('2d');
-  _pizzaChart = new Chart(ctx, {
-    type: 'doughnut',
-    data: { labels, datasets:[{ data: valores, backgroundColor: cores, borderWidth: 2, borderColor: '#fff' }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: c => ` ${c.label}: R$ ${fmt(c.parsed)} (${((c.parsed/valores.reduce((a,b)=>a+b,0))*100).toFixed(1)}%)` } }
+  // Atualiza dados sem destruir o gráfico se já existe
+  if(_pizzaChart){
+    _pizzaChart.data.labels = labels;
+    _pizzaChart.data.datasets[0].data = valores;
+    _pizzaChart.data.datasets[0].backgroundColor = cores;
+    _pizzaChart.update('none'); // sem animação para não piscar
+  } else {
+    const canvas = document.getElementById('pizzaChart');
+    if(!canvas) return;
+    const ctx = canvas.getContext('2d');
+    _pizzaChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels, datasets:[{ data: valores, backgroundColor: cores, borderWidth: 2, borderColor: '#fff' }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 500 },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: c => ` ${c.label}: R$ ${fmt(c.parsed)} (${((c.parsed/valores.reduce((a,b)=>a+b,0))*100).toFixed(1)}%)` } }
+        }
       }
-    }
-  });
-  // Legenda manual
+    });
+  }
   document.getElementById('pizza-legenda').innerHTML = labels.map((l,i) =>
     `<div class="pizza-item"><div class="pizza-dot" style="background:${cores[i]}"></div>${l}</div>`
   ).join('');
@@ -1390,7 +1406,6 @@ carregarLogsIniciais();
 carregarFontes();
 carregarStatus();
 carregarAlertas();
-carregarCarteira();
 conectarLog();
 initPush();
 setInterval(atualizarCountdown, 1000);
