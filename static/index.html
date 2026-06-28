@@ -585,11 +585,6 @@ async function carregarDados(){
     renderSectors();
     if(currentSector) renderEmpresas(true);
     renderAlerts();updateAltCnt();
-    // Atualiza carteira só se a aba estiver visível — sem recarregar do servidor
-    if(document.getElementById('page-carteira').classList.contains('active')){
-      renderTabelaCarteira(); // apenas re-renderiza com dados já em memória
-      renderResumoCarteira();
-    }
   }catch(e){
     document.getElementById('status-txt').textContent='Erro de conexão';
     document.getElementById('sdot').className='dot err';
@@ -598,15 +593,16 @@ async function carregarDados(){
 async function forcarAtualizacao(){
   document.getElementById('status-txt').textContent='Atualizando...';
   try{await fetch('/api/atualizar',{method:'POST'});}catch(e){}
-  // Recarrega dados progressivamente após disparar
-  setTimeout(carregarDados, 5000);
-  setTimeout(carregarDados, 15000);
-  setTimeout(carregarDados, 30000);
-  setTimeout(carregarDados, 60000);
-  // Reinicia o countdown a partir de agora
   if(_intervaloSegundos > 0){
     _proximoUpdate = Date.now() + _intervaloSegundos * 1000;
   }
+  // Polling simples sem acumular timeouts
+  let tentativas = 0;
+  const poll = setInterval(async()=>{
+    tentativas++;
+    await carregarDados();
+    if(dadosCarregados || tentativas >= 12) clearInterval(poll);
+  }, 5000);
 }
 async function carregarLogsIniciais(){
   try{
