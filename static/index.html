@@ -201,7 +201,66 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .save-btn:hover{background:#145a35}
 .save-msg{display:none;font-size:12px;color:var(--green);margin-top:8px}
 
-/* TIMER BAR */
+/* CARTEIRA */
+.carteira-resumo{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:1.5rem}
+.resumo-card{background:var(--bg);border-radius:12px;padding:14px;text-align:center;border:1px solid var(--border)}
+.resumo-label{font-size:11px;color:var(--text2);margin-bottom:4px}
+.resumo-valor{font-size:18px;font-weight:700}
+.resumo-sub{font-size:11px;margin-top:2px}
+.carteira-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px}
+.carteira-title{font-size:14px;font-weight:700}
+.btn-add-pos{padding:8px 16px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
+.btn-add-pos:hover{opacity:.9}
+.carteira-table{width:100%;border-collapse:collapse;font-size:13px}
+.carteira-table th{text-align:left;padding:8px 10px;font-size:11px;color:var(--text2);font-weight:600;border-bottom:2px solid var(--border);white-space:nowrap}
+.carteira-table th.num{text-align:right}
+.carteira-table td{padding:10px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.carteira-table td.num{text-align:right;font-family:monospace;font-size:13px}
+.carteira-table tr:hover td{background:var(--bg)}
+.ct-logo{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden}
+.ct-logo img{width:100%;height:100%;object-fit:cover;border-radius:8px}
+.ct-ticker{font-size:13px;font-weight:700}
+.ct-nome{font-size:11px;color:var(--text2)}
+.ct-setor{font-size:10px;color:var(--text3);margin-top:1px}
+.lucro-pos{color:#16a34a;font-weight:600}
+.lucro-neg{color:#e53935;font-weight:600}
+.lucro-zero{color:var(--text2)}
+.ct-alerta-tag{font-size:10px;padding:2px 6px;border-radius:4px;display:inline-block;margin:1px}
+.ct-alerta-acima{background:#e8f5e9;color:#16a34a}
+.ct-alerta-abaixo{background:#ffebee;color:#e53935}
+.ct-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:4px;border-radius:4px}
+.ct-del:hover{color:#e53935}
+.ct-edit{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:4px;border-radius:4px}
+.ct-edit:hover{color:var(--green)}
+.carteira-empty{text-align:center;padding:3rem;color:var(--text2)}
+.carteira-total{background:var(--green-light);border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;margin-top:1rem;flex-wrap:wrap;gap:8px}
+.ct-total-label{font-size:13px;font-weight:600;color:var(--green)}
+.ct-total-val{font-size:18px;font-weight:700}
+.pizza-wrap{max-width:340px;margin:1.5rem auto 0}
+.pizza-legenda{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px}
+.pizza-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
+.pizza-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* MODAL POSIÇÃO */
+.pos-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:1rem}
+.pos-modal-overlay.open{display:flex}
+.pos-modal{background:#fff;border-radius:var(--radius);width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.pos-modal-header{display:flex;align-items:center;justify-content:space-between;padding:1.2rem 1.5rem;border-bottom:1px solid var(--border)}
+.pos-modal-title{font-size:15px;font-weight:700}
+.pos-modal-body{padding:1.5rem;display:flex;flex-direction:column;gap:12px}
+.pos-field{display:flex;flex-direction:column;gap:4px}
+.pos-field label{font-size:12px;font-weight:600;color:var(--text2)}
+.pos-field input,.pos-field select{padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;width:100%}
+.pos-field input:focus,.pos-field select:focus{outline:none;border-color:var(--green)}
+.pos-field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pos-modal-footer{display:flex;gap:8px;padding:1rem 1.5rem;border-top:1px solid var(--border)}
+.pos-btn-cancel{flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-size:13px}
+.pos-btn-save{flex:2;padding:10px;border:none;border-radius:8px;background:var(--green);color:#fff;cursor:pointer;font-size:13px;font-weight:600}
+.pos-btn-save:hover{opacity:.9}
+.pos-ticker-search{position:relative}
+.pos-ticker-results{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);z-index:10;max-height:180px;overflow-y:auto}
+.pos-ticker-result-item{padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px}
+.pos-ticker-result-item:hover{background:var(--bg)}
 .timerbar{display:flex;align-items:center;gap:10px;padding:7px 1.5rem;border-bottom:1px solid var(--border);background:#fafafa;font-size:12px;color:var(--text2);flex-wrap:wrap}
 .timerbar-label{font-size:12px;color:var(--text2);white-space:nowrap}
 .iv-select{padding:4px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;color:var(--text)}
@@ -253,6 +312,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <div class="tabs">
     <div class="tab active" onclick="goPage('setores',this)">📊 Setores</div>
     <div class="tab" onclick="goPage('empresas',this)" id="tab-empresas" style="display:none">🏢 <span id="tab-sname">Empresas</span></div>
+    <div class="tab" onclick="goPage('carteira',this)">💼 Carteira</div>
     <div class="tab" onclick="goPage('alertas',this)">🔔 Alertas <span class="tab-badge" id="alt-cnt" style="display:none">0</span></div>
     <div class="tab" onclick="goPage('log',this)">🖥️ Log</div>
     <div class="tab" onclick="goPage('params',this)">⚙️ Parâmetros</div>
@@ -266,6 +326,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div id="narea"></div>
       <div class="companies" id="clist"></div>
     </div>
+
+    <!-- CARTEIRA -->
+    <div class="page" id="page-carteira">
+      <div class="carteira-resumo" id="carteira-resumo"></div>
+      <div class="carteira-toolbar">
+        <div class="carteira-title">💼 Minha Carteira</div>
+        <button class="btn-add-pos" onclick="abrirModalPosicao()">+ Adicionar posição</button>
+      </div>
+      <div id="carteira-tabela"></div>
+      <div class="pizza-wrap">
+        <canvas id="pizzaChart" height="280"></canvas>
+        <div class="pizza-legenda" id="pizza-legenda"></div>
+      </div>
+    </div>
+
     <div class="page" id="page-alertas"><div id="altbox"></div></div>
     <div class="page" id="page-log">
       <div class="log-toolbar">
@@ -309,6 +384,49 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <button class="save-btn" onclick="salvarFontes()">💾 Salvar configurações</button>
         <div class="save-msg" id="save-msg">✅ Configurações salvas!</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL POSIÇÃO CARTEIRA -->
+<div class="pos-modal-overlay" id="pos-modal" onclick="fecharModalPosicao(event)">
+  <div class="pos-modal" onclick="event.stopPropagation()">
+    <div class="pos-modal-header">
+      <div class="pos-modal-title" id="pos-modal-title">➕ Adicionar posição</div>
+      <button class="modal-close" onclick="fecharModalPosicao()">✕</button>
+    </div>
+    <div class="pos-modal-body">
+      <div class="pos-field pos-ticker-search">
+        <label>Ativo (ticker)</label>
+        <input id="pos-ticker" type="text" placeholder="Ex: PETR4, VALE3..." autocomplete="off"
+          oninput="buscarTickerCarteira(this.value)" style="text-transform:uppercase">
+        <div id="pos-ticker-results" class="pos-ticker-results" style="display:none"></div>
+      </div>
+      <div class="pos-field-row">
+        <div class="pos-field">
+          <label>Preço médio (R$)</label>
+          <input id="pos-preco" type="number" step="0.01" min="0" placeholder="0,00">
+        </div>
+        <div class="pos-field">
+          <label>Quantidade</label>
+          <input id="pos-qtd" type="number" step="1" min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="pos-field-row">
+        <div class="pos-field">
+          <label>Data de compra</label>
+          <input id="pos-data" type="date">
+        </div>
+        <div class="pos-field">
+          <label>Corretora</label>
+          <input id="pos-corretora" type="text" placeholder="Ex: XP, Rico, Clear...">
+        </div>
+      </div>
+      <div id="pos-preview" style="display:none;background:var(--bg);border-radius:8px;padding:10px;font-size:12px;color:var(--text2)"></div>
+    </div>
+    <div class="pos-modal-footer">
+      <button class="pos-btn-cancel" onclick="fecharModalPosicao()">Cancelar</button>
+      <button class="pos-btn-save" onclick="salvarPosicao()">💾 Salvar posição</button>
     </div>
   </div>
 </div>
@@ -506,6 +624,7 @@ function goPage(p,el){
   if(el) el.classList.add('active');
   if(p==='alertas') renderAlerts();
   if(p==='params') renderFontes();
+  if(p==='carteira'){ carregarCarteira().then(()=>renderCarteira()); }
 }
 function goBack(){currentSector=null;document.getElementById('tab-empresas').style.display='none';goPage('setores',document.querySelector('.tab'));}
 
@@ -985,12 +1104,293 @@ async function salvarFontes(){
   }catch(e){}
 }
 
-// ── INIT ─────────────────────────────────────────────────────
+// ── CARTEIRA ─────────────────────────────────────────────────
+let _carteira = [];
+let _carteiraTicker = null; // ticker sendo editado
+let _pizzaChart = null;
+
+// Cores para o gráfico de pizza
+const PIZZA_CORES = ['#0066cc','#16a34a','#e53935','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1','#14b8a6','#ef4444'];
+
+async function carregarCarteira(){
+  try{
+    const r = await fetch('/api/carteira');
+    _carteira = await r.json();
+    if(document.getElementById('page-carteira').classList.contains('active')){
+      renderCarteira();
+    }
+  }catch(e){}
+}
+
+function renderCarteira(){
+  renderResumoCarteira();
+  renderTabelaCarteira();
+  renderPizzaCarteira();
+}
+
+async function renderResumoCarteira(){
+  try{
+    const r = await fetch('/api/carteira/resumo');
+    const resumo = await r.json();
+    const lucroPos = resumo.lucro_total >= 0;
+    const lucroClass = resumo.lucro_total > 0 ? 'lucro-pos' : resumo.lucro_total < 0 ? 'lucro-neg' : '';
+    document.getElementById('carteira-resumo').innerHTML = `
+      <div class="resumo-card">
+        <div class="resumo-label">Total Investido</div>
+        <div class="resumo-valor">R$ ${fmt(resumo.total_investido)}</div>
+        <div class="resumo-sub" style="color:var(--text3)">${resumo.total_posicoes} posição(ões)</div>
+      </div>
+      <div class="resumo-card">
+        <div class="resumo-label">Valor Atual</div>
+        <div class="resumo-valor">${resumo.total_atual ? `R$ ${fmt(resumo.total_atual)}` : '—'}</div>
+        <div class="resumo-sub" style="color:var(--text3)">com cotação atual</div>
+      </div>
+      <div class="resumo-card">
+        <div class="resumo-label">Lucro / Prejuízo</div>
+        <div class="resumo-valor ${lucroClass}">${resumo.lucro_total !== null ? `${resumo.lucro_total >= 0 ? '+' : ''}R$ ${fmt(resumo.lucro_total)}` : '—'}</div>
+        <div class="resumo-sub ${lucroClass}">${resumo.lucro_pct !== null ? `${resumo.lucro_pct >= 0 ? '+' : ''}${resumo.lucro_pct.toFixed(2)}%` : ''}</div>
+      </div>`;
+  }catch(e){}
+}
+
+function renderTabelaCarteira(){
+  const el = document.getElementById('carteira-tabela');
+  if(!_carteira.length){
+    el.innerHTML = `<div class="carteira-empty">
+      <div style="font-size:40px;margin-bottom:12px">💼</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px">Carteira vazia</div>
+      <div style="font-size:13px">Clique em "+ Adicionar posição" para começar</div>
+    </div>`;
+    return;
+  }
+  // Ordenar por valor atual desc
+  const ordenada = [..._carteira].sort((a,b)=>(b.valor_atual||b.valor_investido)-(a.valor_atual||a.valor_investido));
+  let html = `<div style="overflow-x:auto"><table class="carteira-table">
+    <thead><tr>
+      <th>Ativo</th>
+      <th class="num">Preço Médio</th>
+      <th class="num">Qtd</th>
+      <th class="num">Investido</th>
+      <th class="num">Cotação</th>
+      <th class="num">Valor Atual</th>
+      <th class="num">Lucro/Prej.</th>
+      <th class="num">%</th>
+      <th>Alertas</th>
+      <th></th>
+    </tr></thead><tbody>`;
+
+  ordenada.forEach(p => {
+    const lucroClass = p.lucro > 0 ? 'lucro-pos' : p.lucro < 0 ? 'lucro-neg' : 'lucro-zero';
+    const logoHtml = p.logo ? `<img src="${p.logo}" onerror="this.parentElement.textContent='${p.ticker.substring(0,4)}'">` : p.ticker.substring(0,4);
+    // Alertas do ticker
+    const altAcima = _alertasServidor.find(a=>a.ticker===p.ticker&&a.direcao==='acima');
+    const altAbaixo = _alertasServidor.find(a=>a.ticker===p.ticker&&a.direcao==='abaixo');
+    const alertasHtml = [
+      altAcima ? `<span class="ct-alerta-tag ct-alerta-acima">▲ R$ ${altAcima.valor.toFixed(2)}</span>` : '',
+      altAbaixo ? `<span class="ct-alerta-tag ct-alerta-abaixo">▼ R$ ${altAbaixo.valor.toFixed(2)}</span>` : '',
+      !altAcima && !altAbaixo ? `<span style="font-size:11px;color:var(--text3)">—</span>` : ''
+    ].join('');
+
+    html += `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="ct-logo" style="background:${p.cor}">${logoHtml}</div>
+          <div>
+            <div class="ct-ticker">${p.ticker}</div>
+            <div class="ct-nome">${p.nome}</div>
+            <div class="ct-setor">${p.setor_nome||''}</div>
+          </div>
+        </div>
+      </td>
+      <td class="num">R$ ${p.preco_medio.toFixed(2)}</td>
+      <td class="num">${p.quantidade % 1 === 0 ? p.quantidade.toFixed(0) : p.quantidade.toFixed(2)}</td>
+      <td class="num">R$ ${fmt(p.valor_investido)}</td>
+      <td class="num">${p.preco_atual ? `R$ ${p.preco_atual.toFixed(2)}` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td class="num">${p.valor_atual ? `R$ ${fmt(p.valor_atual)}` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td class="num ${lucroClass}">${p.lucro !== null ? `${p.lucro >= 0 ? '+' : ''}R$ ${fmt(p.lucro)}` : '—'}</td>
+      <td class="num ${lucroClass}">${p.lucro_pct !== null ? `${p.lucro_pct >= 0 ? '+' : ''}${p.lucro_pct.toFixed(2)}%` : '—'}</td>
+      <td>${alertasHtml}</td>
+      <td>
+        <button class="ct-edit" onclick="editarPosicao('${p.ticker}')" title="Editar">✏️</button>
+        <button class="ct-del" onclick="removerPosicao('${p.ticker}')" title="Remover">🗑</button>
+      </td>
+    </tr>`;
+  });
+
+  // Total
+  const totalInv = ordenada.reduce((s,p)=>s+p.valor_investido,0);
+  const totalAtual = ordenada.reduce((s,p)=>s+(p.valor_atual||p.valor_investido),0);
+  const lucroTotal = totalAtual - totalInv;
+  const lucroTotalClass = lucroTotal > 0 ? 'lucro-pos' : lucroTotal < 0 ? 'lucro-neg' : '';
+  html += `</tbody></table></div>
+    <div class="carteira-total">
+      <div class="ct-total-label">💼 Total da Carteira</div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+        <div><span style="font-size:11px;color:var(--text2)">Investido: </span><span class="ct-total-val">R$ ${fmt(totalInv)}</span></div>
+        <div><span style="font-size:11px;color:var(--text2)">Atual: </span><span class="ct-total-val">R$ ${fmt(totalAtual)}</span></div>
+        <div><span style="font-size:11px;color:var(--text2)">Resultado: </span><span class="ct-total-val ${lucroTotalClass}">${lucroTotal>=0?'+':''}R$ ${fmt(lucroTotal)}</span></div>
+      </div>
+    </div>`;
+  el.innerHTML = html;
+}
+
+function renderPizzaCarteira(){
+  if(!_carteira.length) return;
+  // Agrupa por setor
+  const porSetor = {};
+  _carteira.forEach(p => {
+    const s = p.setor_nome || 'Outros';
+    if(!porSetor[s]) porSetor[s] = 0;
+    porSetor[s] += p.valor_atual || p.valor_investido;
+  });
+  const labels = Object.keys(porSetor);
+  const valores = Object.values(porSetor);
+  const cores = labels.map((_,i) => PIZZA_CORES[i % PIZZA_CORES.length]);
+
+  if(_pizzaChart) _pizzaChart.destroy();
+  const ctx = document.getElementById('pizzaChart').getContext('2d');
+  _pizzaChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets:[{ data: valores, backgroundColor: cores, borderWidth: 2, borderColor: '#fff' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ` ${c.label}: R$ ${fmt(c.parsed)} (${((c.parsed/valores.reduce((a,b)=>a+b,0))*100).toFixed(1)}%)` } }
+      }
+    }
+  });
+  // Legenda manual
+  document.getElementById('pizza-legenda').innerHTML = labels.map((l,i) =>
+    `<div class="pizza-item"><div class="pizza-dot" style="background:${cores[i]}"></div>${l}</div>`
+  ).join('');
+}
+
+function fmt(v){ return v === null || v === undefined ? '—' : Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+// ── Modal de posição ─────────────────────────────────────────
+function abrirModalPosicao(ticker=''){
+  _carteiraTicker = ticker || null;
+  document.getElementById('pos-modal-title').textContent = ticker ? '✏️ Editar posição' : '➕ Adicionar posição';
+  document.getElementById('pos-ticker').value = ticker;
+  document.getElementById('pos-ticker').disabled = !!ticker;
+  document.getElementById('pos-preco').value = '';
+  document.getElementById('pos-qtd').value = '';
+  document.getElementById('pos-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('pos-corretora').value = '';
+  document.getElementById('pos-preview').style.display = 'none';
+  document.getElementById('pos-ticker-results').style.display = 'none';
+
+  if(ticker){
+    const pos = _carteira.find(p=>p.ticker===ticker);
+    if(pos){
+      document.getElementById('pos-preco').value = pos.preco_medio;
+      document.getElementById('pos-qtd').value = pos.quantidade;
+      document.getElementById('pos-data').value = pos.data_compra || '';
+      document.getElementById('pos-corretora').value = pos.corretora || '';
+    }
+  }
+  document.getElementById('pos-modal').classList.add('open');
+  setTimeout(()=> document.getElementById('pos-ticker').focus(), 100);
+}
+
+function fecharModalPosicao(e){
+  if(!e || e.target === document.getElementById('pos-modal')){
+    document.getElementById('pos-modal').classList.remove('open');
+    document.getElementById('pos-ticker-results').style.display = 'none';
+  }
+}
+
+function buscarTickerCarteira(val){
+  const res = document.getElementById('pos-ticker-results');
+  if(!val || val.length < 1){ res.style.display='none'; return; }
+  const upper = val.toUpperCase();
+  const matches = [];
+  for(const s of Object.values(DADOS.setores||{})){
+    for(const e of s.empresas){
+      if(e.ticker.startsWith(upper) || e.nome.toUpperCase().includes(upper)){
+        matches.push({ticker:e.ticker, nome:e.nome, cor:e.cor, preco:e.preco, logo:e.logo});
+        if(matches.length >= 8) break;
+      }
+    }
+    if(matches.length >= 8) break;
+  }
+  if(!matches.length){ res.style.display='none'; return; }
+  res.innerHTML = matches.map(m=>`
+    <div class="pos-ticker-result-item" onclick="selecionarTickerCarteira('${m.ticker}','${m.nome}')">
+      <div class="ct-logo" style="background:${m.cor};width:26px;height:26px;font-size:8px">${m.ticker.substring(0,4)}</div>
+      <div><div style="font-weight:600">${m.ticker}</div><div style="font-size:11px;color:var(--text2)">${m.nome}</div></div>
+      ${m.preco?`<div style="margin-left:auto;font-size:12px;font-family:monospace">R$ ${m.preco.toFixed(2)}</div>`:''}
+    </div>`).join('');
+  res.style.display = 'block';
+}
+
+function selecionarTickerCarteira(ticker, nome){
+  document.getElementById('pos-ticker').value = ticker;
+  document.getElementById('pos-ticker-results').style.display = 'none';
+  document.getElementById('pos-preco').focus();
+  atualizarPreviewPosicao();
+}
+
+function atualizarPreviewPosicao(){
+  const ticker = document.getElementById('pos-ticker').value.toUpperCase();
+  const preco = parseFloat(document.getElementById('pos-preco').value);
+  const qtd = parseFloat(document.getElementById('pos-qtd').value);
+  const prev = document.getElementById('pos-preview');
+  if(ticker && preco > 0 && qtd > 0){
+    const total = preco * qtd;
+    prev.style.display = 'block';
+    prev.innerHTML = `💰 Total investido: <strong>R$ ${fmt(total)}</strong>`;
+  } else {
+    prev.style.display = 'none';
+  }
+}
+
+// Adicionar listeners de preview
+document.addEventListener('DOMContentLoaded', ()=>{
+  ['pos-preco','pos-qtd'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', atualizarPreviewPosicao);
+  });
+});
+
+async function salvarPosicao(){
+  const ticker = document.getElementById('pos-ticker').value.toUpperCase().trim();
+  const preco = parseFloat(document.getElementById('pos-preco').value);
+  const qtd = parseFloat(document.getElementById('pos-qtd').value);
+  if(!ticker){ alert('Informe o ticker do ativo'); return; }
+  if(!preco || preco <= 0){ alert('Informe o preço médio'); return; }
+  if(!qtd || qtd <= 0){ alert('Informe a quantidade'); return; }
+  try{
+    await fetch('/api/carteira', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+      ticker, preco_medio: preco, quantidade: qtd,
+      data_compra: document.getElementById('pos-data').value,
+      corretora: document.getElementById('pos-corretora').value,
+    })});
+    fecharModalPosicao();
+    await carregarCarteira();
+    renderCarteira();
+  }catch(e){ alert('Erro ao salvar: '+e.message); }
+}
+
+function editarPosicao(ticker){
+  abrirModalPosicao(ticker);
+}
+
+async function removerPosicao(ticker){
+  if(!confirm(`Remover ${ticker} da carteira?`)) return;
+  try{
+    await fetch(`/api/carteira/${ticker}`, {method:'DELETE'});
+    await carregarCarteira();
+    renderCarteira();
+  }catch(e){}
+}
 carregarDados();
 carregarLogsIniciais();
 carregarFontes();
 carregarStatus();
 carregarAlertas();
+carregarCarteira();
 conectarLog();
 initPush();
 setInterval(atualizarCountdown, 1000);
