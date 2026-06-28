@@ -736,15 +736,36 @@ let _swRegistration = null;
 let _pushSubscription = null;
 
 async function initPush(){
-  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
-    document.getElementById('btn-push').style.display='none';
+  const statusTxt = document.getElementById('push-status-txt');
+  const statusSub = document.getElementById('push-status-sub');
+  const btn = document.getElementById('btn-push');
+
+  // Verifica suporte
+  if(!('serviceWorker' in navigator)){
+    if(statusTxt) statusTxt.textContent = '❌ Não suportado';
+    if(statusSub) statusSub.textContent = 'Este navegador não suporta notificações push';
+    if(btn) btn.style.display = 'none';
+    return;
+  }
+  if(!('PushManager' in window)){
+    if(statusTxt) statusTxt.textContent = '⚠️ Instale o app primeiro';
+    if(statusSub) statusSub.textContent = 'No iPhone: Compartilhar ↑ → "Adicionar à Tela de Início" → abra pelo ícone';
+    if(btn){ btn.textContent = '📲 Como instalar?'; btn.onclick = mostrarInstrucoes; }
     return;
   }
   try{
     _swRegistration = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
     _pushSubscription = await _swRegistration.pushManager.getSubscription();
     atualizarBtnPush();
-  }catch(e){ console.warn('Push init:', e); }
+  }catch(e){
+    if(statusTxt) statusTxt.textContent = '⚠️ Erro ao inicializar';
+    if(statusSub) statusSub.textContent = e.message;
+  }
+}
+
+function mostrarInstrucoes(){
+  alert('Para ativar notificações no iPhone:\n\n1. Toque no ícone ↑ (compartilhar) na barra do Safari\n2. Toque em "Adicionar à Tela de Início"\n3. Toque em "Adicionar"\n4. Feche o Safari\n5. Abra o app pelo ícone na tela inicial\n6. Volte em Parâmetros e ative as notificações');
 }
 
 function atualizarBtnPush(){
@@ -781,22 +802,32 @@ async function testarPush(){
 }
 
 async function togglePush(){
-  if(!_swRegistration){ await initPush(); }
+  if(!_swRegistration){
+    await initPush();
+    if(!_swRegistration) return;
+  }
+  if(!_swRegistration.pushManager){
+    mostrarInstrucoes();
+    return;
+  }
   if(_pushSubscription){
-    await _pushSubscription.unsubscribe();
-    await fetch('/api/push/unsubscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_pushSubscription)});
+    try{
+      await _pushSubscription.unsubscribe();
+      await fetch('/api/push/unsubscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_pushSubscription)});
+    }catch(e){}
     _pushSubscription = null;
     atualizarBtnPush();
     return;
   }
-  const perm = await Notification.requestPermission();
-  if(perm !== 'granted'){
-    alert('Permissão negada. Você precisa permitir notificações no navegador.');
-    return;
-  }
   try{
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted'){
+      alert('Permissão negada. Toque em "Permitir" quando o sistema perguntar.');
+      return;
+    }
     const r = await fetch('/api/push/vapid-public-key');
     const {publicKey} = await r.json();
+    await navigator.serviceWorker.ready;
     const sub = await _swRegistration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(publicKey)
@@ -806,7 +837,7 @@ async function togglePush(){
     atualizarBtnPush();
     await fetch('/api/push/test',{method:'POST'});
   }catch(e){
-    alert('Erro ao ativar notificações: ' + e.message);
+    alert('Erro: ' + e.message + '\n\nSe estiver no iPhone, certifique-se de abrir o app pelo ícone na tela inicial (não pelo Safari).');
   }
 }
 
