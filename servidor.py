@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 from flask import Flask, jsonify, send_from_directory, request
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 
-VERSION = "1.9.0"
+VERSION = "2.0.0"
 
 # Fuso horário de Brasília (UTC-3)
 TZ_BRASILIA = timezone(timedelta(hours=-3))
@@ -16,6 +16,62 @@ TOKEN = os.getenv("BRAPI_TOKEN", "iSm92y2Qg4f9iapi1MuHhh")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 QUOTE_URL = "https://brapi.dev/api/quote"
 OUTPUT_FILE = "cotacoes.json"
+
+# Chaves VAPID para Web Push
+VAPID_PUBLIC_KEY  = os.getenv("VAPID_PUBLIC_KEY",  "BGj1V_-3OXoV8pKBwAiMYeeB6x9puemJlK3KUT_qlXiBLiUwzJUU3AMx55lxCfn4MhDpmgw3SnOUnREVZLSir_Q")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgQ8Bz9ldEae2wkEujDtHyxmtbBSd4-4fArPDGXRx-nPGhRANCAARo9Vf_tzl6FfKSgcAIjGHngesfabnpiZStylE_6pV4gS4lMMyVFNwDMeeZcQn5-DIQ6ZoMN0pzlJ0RFWS0oq_0")
+VAPID_EMAIL = os.getenv("VAPID_EMAIL", "mailto:b3app@investimentos.com")
+
+_push_subscriptions = []   # lista de subscriptions do browser
+PUSH_FILE = "push_subscriptions.json"
+
+def _carregar_subscriptions():
+    global _push_subscriptions
+    try:
+        if os.path.exists(PUSH_FILE):
+            with open(PUSH_FILE, "r", encoding="utf-8") as f:
+                _push_subscriptions = json.load(f)
+            print(f"[PUSH] {len(_push_subscriptions)} subscription(s) carregada(s)", flush=True)
+    except Exception as e:
+        print(f"[PUSH] Erro ao carregar subscriptions: {e}", flush=True)
+
+def _salvar_subscriptions():
+    try:
+        with open(PUSH_FILE, "w", encoding="utf-8") as f:
+            json.dump(_push_subscriptions, f)
+    except: pass
+
+def enviar_push(titulo, corpo, url="/"):
+    """Envia push para todos os dispositivos registrados."""
+    if not _push_subscriptions:
+        return
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        log("⚠️ pywebpush não instalado", "aviso")
+        return
+    payload = json.dumps({"title": titulo, "body": corpo, "url": url, "tag": "b3-alerta"})
+    mortos = []
+    for sub in _push_subscriptions:
+        try:
+            webpush(
+                subscription_info=sub,
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_EMAIL}
+            )
+        except Exception as e:
+            err = str(e)
+            if "410" in err or "404" in err:
+                mortos.append(sub)  # subscription expirada
+            else:
+                log(f"⚠️ Push falhou: {err[:80]}", "aviso")
+    # Remove subscriptions expiradas
+    if mortos:
+        for m in mortos:
+            if m in _push_subscriptions:
+                _push_subscriptions.remove(m)
+        _salvar_subscriptions()
 
 _log_entries = []
 _atualizando = False
@@ -339,12 +395,10 @@ def verificar_alertas(novo_cache):
     """Verifica alertas após cada atualização de cotações."""
     global _alertas, _disparados
     if not _alertas: return
-    disparados_agora = []
     for alerta in _alertas:
         ticker = alerta["ticker"]
         valor_alvo = alerta["valor"]
-        direcao = alerta["direcao"]  # "acima" ou "abaixo"
-        # Busca preço atual no cache
+        direcao = alerta["direcao"]
         preco_atual = None
         for s in novo_cache.get("setores", {}).values():
             for e in s["empresas"]:
@@ -357,14 +411,15 @@ def verificar_alertas(novo_cache):
                    (direcao == "abaixo" and preco_atual <= valor_alvo)
         if disparou:
             seta = "▲" if direcao == "acima" else "▼"
-            msg = f"🚨 ALERTA: {ticker} {seta} R$ {preco_atual:.2f} {'≥' if direcao=='acima' else '≤'} alvo R$ {valor_alvo:.2f}"
-            log(msg, "alerta")
+            msg_log = f"🚨 ALERTA: {ticker} {seta} R$ {preco_atual:.2f} ({'≥' if direcao=='acima' else '≤'} alvo R$ {valor_alvo:.2f})"
+            log(msg_log, "alerta")
             entrada = {**alerta, "preco_no_disparo": preco_atual, "disparado_em": agora().isoformat()}
             _disparados.insert(0, entrada)
-            disparados_agora.append(entrada)
-    if disparados_agora:
-        _salvar_alertas()
-    return disparados_agora
+            # 🔔 Envia push notification
+            titulo = f"🚨 Alerta B3: {ticker}"
+            corpo = f"{alerta['nome']}\n{seta} Preço: R$ {preco_atual:.2f} ({'≥' if direcao=='acima' else '≤'} alvo R$ {valor_alvo:.2f})"
+            enviar_push(titulo, corpo)
+    _salvar_alertas()
 
 @app.route("/api/alertas", methods=["GET"])
 def api_alertas_get():
@@ -411,11 +466,42 @@ def api_alertas_limpar_disparados():
     _salvar_alertas()
     return jsonify({"ok": True})
 
+@app.route("/api/push/vapid-public-key")
+def api_vapid_key():
+    return jsonify({"publicKey": VAPID_PUBLIC_KEY})
+
+@app.route("/api/push/subscribe", methods=["POST"])
+def api_push_subscribe():
+    sub = request.json
+    if sub and sub not in _push_subscriptions:
+        _push_subscriptions.append(sub)
+        _salvar_subscriptions()
+        log(f"📱 Novo dispositivo registrado para push ({len(_push_subscriptions)} total)", "info")
+    return jsonify({"ok": True, "total": len(_push_subscriptions)})
+
+@app.route("/api/push/unsubscribe", methods=["POST"])
+def api_push_unsubscribe():
+    sub = request.json
+    if sub in _push_subscriptions:
+        _push_subscriptions.remove(sub)
+        _salvar_subscriptions()
+    return jsonify({"ok": True})
+
+@app.route("/api/push/test", methods=["POST"])
+def api_push_test():
+    enviar_push("🧪 Teste B3", "Notificação push funcionando! Você receberá alertas assim quando uma ação atingir seu valor alvo.")
+    return jsonify({"ok": True, "dispositivos": len(_push_subscriptions)})
+
+@app.route("/api/push/status")
+def api_push_status():
+    return jsonify({"dispositivos": len(_push_subscriptions), "ativo": len(_push_subscriptions) > 0})
+
 @app.route("/api/logs")
 def api_logs():
     return jsonify(_log_entries[request.args.get("desde",0,type=int):])
 
 _carregar_alertas()
+_carregar_subscriptions()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
