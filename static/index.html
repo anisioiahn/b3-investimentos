@@ -217,7 +217,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     </div>
     <div class="hright">
       <div class="status-pill"><span class="dot" id="sdot"></span><span id="status-txt">Conectando</span></div>
-      <button class="btn" id="btn-push" onclick="togglePush()" title="Ativar notificações push">🔔 Notificações</button>
       <button class="btn" onclick="forcarAtualizacao()">↻ Atualizar</button>
     </div>
   </div>
@@ -268,6 +267,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div class="log-box" id="log-box"><div style="color:#555;text-align:center;padding:2rem">Aguardando eventos...</div></div>
     </div>
     <div class="page" id="page-params">
+      <!-- NOTIFICAÇÕES PUSH -->
+      <div class="params-section">
+        <div class="params-title">🔔 Notificações Push</div>
+        <div class="params-desc">Receba alertas no seu celular quando uma ação atingir o valor configurado — mesmo com o app fechado.</div>
+        <div style="background:var(--bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border);margin-bottom:1rem">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem">
+            <div style="font-size:32px">📱</div>
+            <div>
+              <div style="font-size:14px;font-weight:600" id="push-status-txt">Verificando...</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:2px" id="push-status-sub">Carregando status das notificações</div>
+            </div>
+          </div>
+          <button id="btn-push" onclick="togglePush()"
+            style="width:100%;padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer;background:var(--green);color:#fff">
+            🔔 Ativar Notificações
+          </button>
+          <button onclick="testarPush()" id="btn-push-test" style="display:none;width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--border);font-size:13px;cursor:pointer;background:#fff;color:var(--text2)">
+            🧪 Enviar notificação de teste
+          </button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);line-height:1.6">
+          💡 <strong>Dica iPhone:</strong> Para receber push no iOS, instale o app na tela inicial primeiro:<br>
+          Toque em <strong>Compartilhar ↑</strong> → <strong>"Adicionar à Tela de Início"</strong> → abra pela tela inicial → ative as notificações aqui.
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:1.5rem 0"></div>
       <div class="params-section">
         <div class="params-title">⚙️ Fontes de Notícias</div>
         <div class="params-desc">Configure as 3 fontes de notícias que aparecerão no painel de análise de cada ativo. Use <code>{ticker}</code> na URL para substituição automática pelo ticker da ação.</div>
@@ -724,30 +749,46 @@ async function initPush(){
 
 function atualizarBtnPush(){
   const btn = document.getElementById('btn-push');
+  const sub = document.getElementById('push-status-sub');
+  const txt = document.getElementById('push-status-txt');
+  const btnTest = document.getElementById('btn-push-test');
   if(!btn) return;
   if(_pushSubscription){
-    btn.textContent = '🔔 Ativo';
-    btn.style.borderColor = '#16a34a';
-    btn.style.color = '#16a34a';
+    if(txt) txt.textContent = '✅ Notificações ativadas';
+    if(sub) sub.textContent = 'Você receberá alertas neste dispositivo';
+    btn.textContent = '🔕 Desativar Notificações';
+    btn.style.background = '#e53935';
+    if(btnTest) btnTest.style.display = 'block';
   } else {
-    btn.textContent = '🔔 Notificações';
-    btn.style.borderColor = '';
-    btn.style.color = '';
+    if(txt) txt.textContent = '🔔 Notificações desativadas';
+    if(sub) sub.textContent = 'Ative para receber alertas no celular';
+    btn.textContent = '🔔 Ativar Notificações';
+    btn.style.background = 'var(--green)';
+    if(btnTest) btnTest.style.display = 'none';
   }
+}
+
+async function testarPush(){
+  try{
+    const r = await fetch('/api/push/test', {method:'POST'});
+    const d = await r.json();
+    if(d.dispositivos === 0){
+      alert('Nenhum dispositivo registrado. Ative as notificações primeiro.');
+    } else {
+      alert('✅ Notificação de teste enviada! Verifique seu celular.');
+    }
+  }catch(e){ alert('Erro ao enviar teste: ' + e.message); }
 }
 
 async function togglePush(){
   if(!_swRegistration){ await initPush(); }
   if(_pushSubscription){
-    // Desativar
     await _pushSubscription.unsubscribe();
     await fetch('/api/push/unsubscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_pushSubscription)});
     _pushSubscription = null;
     atualizarBtnPush();
-    alert('Notificações push desativadas.');
     return;
   }
-  // Ativar — pede permissão
   const perm = await Notification.requestPermission();
   if(perm !== 'granted'){
     alert('Permissão negada. Você precisa permitir notificações no navegador.');
@@ -763,9 +804,7 @@ async function togglePush(){
     _pushSubscription = sub;
     await fetch('/api/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub)});
     atualizarBtnPush();
-    // Envia push de teste
     await fetch('/api/push/test',{method:'POST'});
-    alert('✅ Notificações ativadas! Você recebeu um push de teste. A partir de agora será notificado quando seus alertas dispararem.');
   }catch(e){
     alert('Erro ao ativar notificações: ' + e.message);
   }
