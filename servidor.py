@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 from flask import Flask, jsonify, send_from_directory, request
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 
 # Fuso horário de Brasília (UTC-3)
 TZ_BRASILIA = timezone(timedelta(hours=-3))
@@ -489,6 +489,148 @@ def api_alertas_limpar_disparados():
     _salvar_alertas()
     return jsonify({"ok": True})
 
+# ── CARTEIRA DO INVESTIDOR ────────────────────────────────────
+CARTEIRA_FILE = "carteira.json"
+_carteira = []  # lista de posições
+
+def _carregar_carteira():
+    global _carteira
+    try:
+        if os.path.exists(CARTEIRA_FILE):
+            with open(CARTEIRA_FILE, "r", encoding="utf-8") as f:
+                _carteira = json.load(f)
+            log(f"💼 Carteira carregada: {len(_carteira)} posição(ões)", "info")
+    except Exception as e:
+        log(f"⚠️ Erro ao carregar carteira: {e}", "aviso")
+
+def _salvar_carteira():
+    try:
+        with open(CARTEIRA_FILE, "w", encoding="utf-8") as f:
+            json.dump(_carteira, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        log(f"⚠️ Erro ao salvar carteira: {e}", "aviso")
+
+def _enriquecer_carteira():
+    """Adiciona cotação atual a cada posição da carteira."""
+    resultado = []
+    for pos in _carteira:
+        ticker = pos["ticker"]
+        preco_atual = None
+        nome = pos.get("nome", ticker)
+        cor = pos.get("cor", "#1a5f3f")
+        setor_nome = pos.get("setor_nome", "")
+        # Busca no cache
+        for s in _cache.get("setores", {}).values():
+            for e in s["empresas"]:
+                if e["ticker"] == ticker:
+                    preco_atual = e.get("preco")
+                    nome = e.get("nome", nome)
+                    cor = e.get("cor", cor)
+                    setor_nome = s.get("nome", setor_nome)
+                    break
+            if preco_atual: break
+        qtd = pos.get("quantidade", 0)
+        preco_medio = pos.get("preco_medio", 0)
+        valor_investido = qtd * preco_medio
+        valor_atual = qtd * preco_atual if preco_atual else None
+        lucro = (valor_atual - valor_investido) if valor_atual else None
+        lucro_pct = ((preco_atual - preco_medio) / preco_medio * 100) if preco_atual and preco_medio else None
+        resultado.append({
+            **pos,
+            "nome": nome,
+            "cor": cor,
+            "setor_nome": setor_nome,
+            "preco_atual": preco_atual,
+            "valor_investido": round(valor_investido, 2),
+            "valor_atual": round(valor_atual, 2) if valor_atual else None,
+            "lucro": round(lucro, 2) if lucro is not None else None,
+            "lucro_pct": round(lucro_pct, 2) if lucro_pct is not None else None,
+        })
+    return resultado
+
+@app.route("/api/carteira", methods=["GET"])
+def api_carteira_get():
+    return jsonify(_enriquecer_carteira())
+
+@app.route("/api/carteira", methods=["POST"])
+def api_carteira_post():
+    """Adiciona ou atualiza uma posição na carteira."""
+    dados = request.json
+    ticker = dados.get("ticker", "").upper().strip()
+    if not ticker:
+        return jsonify({"erro": "ticker obrigatório"}), 400
+    # Busca nome e cor no cache
+    nome = ticker
+    cor = "#1a5f3f"
+    setor_id = ""
+    setor_nome = ""
+    for sid, s in _cache.get("setores", {}).items():
+        for e in s["empresas"]:
+            if e["ticker"] == ticker:
+                nome = e.get("nome", ticker)
+                cor = e.get("cor", cor)
+                setor_id = sid
+                setor_nome = s.get("nome", "")
+                break
+        if nome != ticker: break
+    nova_pos = {
+        "ticker": ticker,
+        "nome": nome,
+        "cor": cor,
+        "setor_id": setor_id,
+        "setor_nome": setor_nome,
+        "preco_medio": float(dados.get("preco_medio", 0)),
+        "quantidade": float(dados.get("quantidade", 0)),
+        "data_compra": dados.get("data_compra", ""),
+        "corretora": dados.get("corretora", ""),
+        "adicionado_em": agora().isoformat(),
+    }
+    # Atualiza se já existe, senão adiciona
+    global _carteira
+    idx = next((i for i, p in enumerate(_carteira) if p["ticker"] == ticker), None)
+    if idx is not None:
+        _carteira[idx] = nova_pos
+        log(f"💼 Posição atualizada: {ticker}", "info")
+    else:
+        _carteira.append(nova_pos)
+        log(f"💼 Posição adicionada: {ticker} ({nova_pos['quantidade']}x R$ {nova_pos['preco_medio']})", "info")
+    _salvar_carteira()
+    return jsonify({"ok": True, "posicao": nova_pos})
+
+@app.route("/api/carteira/<ticker>", methods=["DELETE"])
+def api_carteira_delete(ticker):
+    global _carteira
+    antes = len(_carteira)
+    _carteira = [p for p in _carteira if p["ticker"] != ticker.upper()]
+    _salvar_carteira()
+    log(f"🗑️ Posição removida: {ticker.upper()}", "info")
+    return jsonify({"ok": True, "removidos": antes - len(_carteira)})
+
+@app.route("/api/carteira/resumo", methods=["GET"])
+def api_carteira_resumo():
+    """Resumo consolidado da carteira."""
+    posicoes = _enriquecer_carteira()
+    total_investido = sum(p["valor_investido"] for p in posicoes)
+    total_atual = sum(p["valor_atual"] for p in posicoes if p["valor_atual"])
+    lucro_total = total_atual - total_investido if total_atual else None
+    lucro_pct = (lucro_total / total_investido * 100) if lucro_total and total_investido else None
+    # Agrupa por setor para o gráfico de pizza
+    por_setor = {}
+    for p in posicoes:
+        s = p.get("setor_nome") or "Outros"
+        if s not in por_setor:
+            por_setor[s] = {"nome": s, "valor_atual": 0, "valor_investido": 0}
+        por_setor[s]["valor_atual"] += p["valor_atual"] or p["valor_investido"]
+        por_setor[s]["valor_investido"] += p["valor_investido"]
+    return jsonify({
+        "total_posicoes": len(posicoes),
+        "total_investido": round(total_investido, 2),
+        "total_atual": round(total_atual, 2) if total_atual else None,
+        "lucro_total": round(lucro_total, 2) if lucro_total is not None else None,
+        "lucro_pct": round(lucro_pct, 2) if lucro_pct is not None else None,
+        "por_setor": list(por_setor.values()),
+    })
+
 @app.route("/api/push/vapid-public-key")
 def api_vapid_key():
     return jsonify({"publicKey": VAPID_PUBLIC_KEY})
@@ -525,6 +667,7 @@ def api_logs():
 
 _carregar_alertas()
 _carregar_subscriptions()
+_carregar_carteira()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
