@@ -335,7 +335,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <button class="btn-add-pos" onclick="abrirModalPosicao()">+ Adicionar posição</button>
       </div>
       <div id="carteira-tabela"></div>
-      <div class="pizza-wrap">
+      <!-- Pizza em div separada para não ser re-renderizada -->
+      <div class="pizza-wrap" id="pizza-wrap" style="display:none">
         <canvas id="pizzaChart" height="280"></canvas>
         <div class="pizza-legenda" id="pizza-legenda"></div>
       </div>
@@ -629,7 +630,7 @@ function goPage(p,el){
   if(el) el.classList.add('active');
   if(p==='alertas') renderAlerts();
   if(p==='params') renderFontes();
-  if(p==='carteira'){ carregarCarteira().then(()=>renderCarteira()); }
+  if(p==='carteira') carregarCarteira(); // carrega do servidor e renderiza UMA vez
 }
 function goBack(){currentSector=null;document.getElementById('tab-empresas').style.display='none';goPage('setores',document.querySelector('.tab'));}
 
@@ -1120,9 +1121,14 @@ const PIZZA_CORES = ['#0066cc','#16a34a','#e53935','#f59e0b','#8b5cf6','#06b6d4'
 async function carregarCarteira(){
   try{
     const r = await fetch('/api/carteira');
-    _carteira = await r.json();
-    if(document.getElementById('page-carteira').classList.contains('active')){
+    const novaCarteira = await r.json();
+    // Só re-renderiza se os dados mudaram
+    const mudou = JSON.stringify(novaCarteira) !== JSON.stringify(_carteira);
+    _carteira = novaCarteira;
+    if(mudou && document.getElementById('page-carteira').classList.contains('active')){
       renderCarteira();
+    } else if(!_carteira.length){
+      renderCarteira(); // primeira vez sempre renderiza
     }
   }catch(e){}
 }
@@ -1240,10 +1246,13 @@ function renderTabelaCarteira(){
 }
 
 function renderPizzaCarteira(){
+  const wrap = document.getElementById('pizza-wrap');
   if(!_carteira.length){
+    if(wrap) wrap.style.display='none';
     if(_pizzaChart){ _pizzaChart.destroy(); _pizzaChart=null; }
     return;
   }
+  if(wrap) wrap.style.display='block';
   const porSetor = {};
   _carteira.forEach(p => {
     const s = p.setor_nome || 'Outros';
@@ -1253,23 +1262,20 @@ function renderPizzaCarteira(){
   const labels = Object.keys(porSetor);
   const valores = Object.values(porSetor);
   const cores = labels.map((_,i) => PIZZA_CORES[i % PIZZA_CORES.length]);
-
-  // Atualiza dados sem destruir o gráfico se já existe
   if(_pizzaChart){
     _pizzaChart.data.labels = labels;
     _pizzaChart.data.datasets[0].data = valores;
     _pizzaChart.data.datasets[0].backgroundColor = cores;
-    _pizzaChart.update('none'); // sem animação para não piscar
+    _pizzaChart.update('none');
   } else {
     const canvas = document.getElementById('pizzaChart');
     if(!canvas) return;
-    const ctx = canvas.getContext('2d');
-    _pizzaChart = new Chart(ctx, {
+    _pizzaChart = new Chart(canvas.getContext('2d'), {
       type: 'doughnut',
       data: { labels, datasets:[{ data: valores, backgroundColor: cores, borderWidth: 2, borderColor: '#fff' }] },
       options: {
         responsive: true, maintainAspectRatio: false,
-        animation: { duration: 500 },
+        animation: { duration: 400 },
         plugins: {
           legend: { display: false },
           tooltip: { callbacks: { label: c => ` ${c.label}: R$ ${fmt(c.parsed)} (${((c.parsed/valores.reduce((a,b)=>a+b,0))*100).toFixed(1)}%)` } }
