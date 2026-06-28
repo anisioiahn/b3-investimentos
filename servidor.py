@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 from flask import Flask, jsonify, send_from_directory, request
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 # Fuso horário de Brasília (UTC-3)
 TZ_BRASILIA = timezone(timedelta(hours=-3))
@@ -266,11 +266,20 @@ def service_worker():
     response.headers["Service-Worker-Allowed"] = "/"
     return response
 
+@app.route("/manifest.json")
+def manifest(): return send_from_directory("static", "manifest.json")
+
+@app.route("/apple-touch-icon.png")
+def apple_icon(): return send_from_directory("static", "apple-touch-icon.png")
+
 @app.route("/icon-192.png")
 def icon192(): return send_from_directory("static", "icon-192.png")
 
 @app.route("/icon-72.png")
 def icon72(): return send_from_directory("static", "icon-72.png")
+
+@app.route("/icon-512.png")
+def icon512(): return send_from_directory("static", "icon-512.png")
 
 @app.route("/api/version")
 def api_version(): return jsonify({"version": VERSION})
