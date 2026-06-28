@@ -1,0 +1,15 @@
+{
+  "name": "Janus · Investimentos B3",
+  "short_name": "Janus",
+  "description": "Passado e Futuro. Melhores Escolhas.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e1a",
+  "theme_color": "#0066cc",
+  "orientation": "portrait",
+  "icons": [
+    {"src": "/icon-72.png", "sizes": "72x72", "type": "image/png"},
+    {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
