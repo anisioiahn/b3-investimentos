@@ -1,4 +1,6 @@
 import os, json, threading, time, requests, xml.etree.ElementTree as ET
+from janus_routes import registrar_rotas_janus
+from janus_cron import iniciar_cron_janus
 from datetime import datetime, timezone, timedelta
 from flask import Flask, jsonify, send_from_directory, request, redirect
 from functools import wraps
