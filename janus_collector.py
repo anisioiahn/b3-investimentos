@@ -133,18 +133,34 @@ def upsert_asset(stock):
 
 # ── STEP 3: Dados completos do ativo na Brapi ────────────────
 def buscar_dados_ativo(ticker):
-    url = f"{BRAPI_BASE}/quote/{ticker}?modules={BRAPI_MODULES}&token={TOKEN_BRAPI}"
+    dados = None
     try:
-        r = requests.get(url, timeout=20)
+        r = requests.get(f"{BRAPI_BASE}/quote/{ticker}?token={TOKEN_BRAPI}", timeout=20)
         if r.status_code == 200:
             results = r.json().get("results", [])
-            return results[0] if results else None
-        if r.status_code == 429:
+            dados = results[0] if results else None
+        elif r.status_code == 429:
             print("[COLLECTOR] ⏳ Rate limit, aguardando 30s...")
             time.sleep(30)
     except Exception as e:
-        print(f"[COLLECTOR] ⚠️ Erro dados {ticker}: {e}")
-    return None
+        print(f"[COLLECTOR] ⚠️ Erro cotação {ticker}: {e}")
+
+    if not dados:
+        return None
+
+    try:
+        time.sleep(0.3)
+        r2 = requests.get(f"{BRAPI_BASE}/quote/{ticker}?modules={BRAPI_MODULES}&token={TOKEN_BRAPI}", timeout=20)
+        if r2.status_code == 200:
+            results2 = r2.json().get("results", [])
+            if results2:
+                for k, v in results2[0].items():
+                    if v is not None and dados.get(k) is None:
+                        dados[k] = v
+    except Exception as e:
+        print(f"[COLLECTOR] ⚠️ Módulos indisponíveis para {ticker}")
+
+    return dados
 
 # ── STEP 4: Market snapshot ───────────────────────────────────
 def salvar_market_snapshot(asset_id, dados, source_id):
