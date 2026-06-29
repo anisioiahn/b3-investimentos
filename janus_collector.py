@@ -114,7 +114,7 @@ def upsert_asset(stock):
                         sector=EXCLUDED.sector,
                         updated_at=EXCLUDED.updated_at
                     RETURNING company_id
-                    """, (nome, nome, setor, agora_str()))
+                """, (nome, nome, setor, agora_str()))
                 company_id = cur.fetchone()[0]
 
             # Upsert asset
@@ -133,6 +133,7 @@ def upsert_asset(stock):
 
 # ── STEP 3: Dados completos do ativo na Brapi ────────────────
 def buscar_dados_ativo(ticker):
+    # Chamada 1: cotação básica (sempre funciona)
     dados = None
     try:
         r = requests.get(f"{BRAPI_BASE}/quote/{ticker}?token={TOKEN_BRAPI}", timeout=20)
@@ -148,17 +149,21 @@ def buscar_dados_ativo(ticker):
     if not dados:
         return None
 
+    # Chamada 2: módulos fundamentalistas (quando disponível no plano)
     try:
         time.sleep(0.3)
         r2 = requests.get(f"{BRAPI_BASE}/quote/{ticker}?modules={BRAPI_MODULES}&token={TOKEN_BRAPI}", timeout=20)
         if r2.status_code == 200:
             results2 = r2.json().get("results", [])
             if results2:
-                for k, v in results2[0].items():
-                    if v is not None and dados.get(k) is None:
-                        dados[k] = v
+                # Sobrescreve sempre os módulos fundamentalistas (não checa None)
+                for modulo in ["defaultKeyStatistics", "financialData", "balanceSheetHistory", "cashflowStatementHistory"]:
+                    if modulo in results2[0]:
+                        dados[modulo] = results2[0][modulo]
+        else:
+            print(f"[COLLECTOR] ⚠️ Módulos status {r2.status_code} para {ticker}")
     except Exception as e:
-        print(f"[COLLECTOR] ⚠️ Módulos indisponíveis para {ticker}")
+        print(f"[COLLECTOR] ⚠️ Módulos indisponíveis para {ticker}: {e}")
 
     return dados
 
@@ -240,19 +245,20 @@ def salvar_indicadores(asset_id, dados, source_id):
     fin = dados.get("financialData") or {}
 
     indicadores = [
-        ("FIN_ROE",            fin.get("returnOnEquity"),     "%"),
-        ("FIN_ROIC",           fin.get("returnOnAssets"),     "%"),
-        ("FIN_NET_MARGIN",     fin.get("profitMargins"),      "%"),
-        ("FIN_FCO",            fin.get("operatingCashflow"),  "R$"),
-        ("FIN_REVENUE",        fin.get("totalRevenue"),       "R$"),
-        ("FIN_REVENUE_GROWTH", fin.get("revenueGrowth"),      "%"),
-        ("FIN_GROSS_MARGIN",   fin.get("grossMargins"),       "%"),
-        ("FIN_EBITDA_MARGIN",  fin.get("ebitdaMargins"),      "%"),
-        ("VAL_PE",             ks.get("trailingPE"),          "x"),
-        ("VAL_PVP",            ks.get("priceToBook"),         "x"),
-        ("VAL_EV_EBITDA",      ks.get("enterpriseToEbitda"),  "x"),
-        ("VAL_DIVIDEND_YIELD", ks.get("dividendYield"),       "%"),
+        ("FIN_ROE",            (ks.get("returnOnEquity")       or {}).get("raw"), "%"),
+        ("FIN_ROIC",           (ks.get("returnOnCapital")      or {}).get("raw"), "%"),
+        ("FIN_NET_MARGIN",     (fin.get("profitMargins")       or {}).get("raw"), "%"),
+        ("FIN_FCO",            (fin.get("operatingCashflow")   or {}).get("raw"), "R$"),
+        ("FIN_REVENUE",        (fin.get("totalRevenue")        or {}).get("raw"), "R$"),
+        ("FIN_REVENUE_GROWTH", (fin.get("revenueGrowth")       or {}).get("raw"), "%"),
+        ("FIN_GROSS_MARGIN",   (fin.get("grossMargins")        or {}).get("raw"), "%"),
+        ("FIN_EBITDA_MARGIN",  (fin.get("ebitdaMargins")       or {}).get("raw"), "%"),
+        ("VAL_PE",             (ks.get("forwardPE")            or {}).get("raw"), "x"),
+        ("VAL_PVP",            (ks.get("priceToBook")          or {}).get("raw"), "x"),
+        ("VAL_EV_EBITDA",      (ks.get("enterpriseToEbitda")   or {}).get("raw"), "x"),
+        ("VAL_DIVIDEND_YIELD", (ks.get("dividendYield")        or {}).get("raw"), "%"),
     ]
+
     for code, value, unit in indicadores:
         if value is None: continue
         try:
@@ -439,15 +445,12 @@ def run_collector():
                 ks  = dados.get("defaultKeyStatistics") or {}
                 fin = dados.get("financialData") or {}
 
-                # DEBUG temporário
-                print(f"[DEBUG] {ticker} | ROE={fin.get('returnOnEquity')} | MARGIN={fin.get('profitMargins')} | FCO={fin.get('operatingCashflow')} | GROWTH={fin.get('revenueGrowth')}")
-
                 ind_map = {
-                    "FIN_ROE":            safe_num(fin.get("returnOnEquity")),
-                    "FIN_ROIC":           safe_num(fin.get("returnOnAssets")),
-                    "FIN_NET_MARGIN":     safe_num(fin.get("profitMargins")),
-                    "FIN_FCO":            safe_num(fin.get("operatingCashflow")),
-                    "FIN_REVENUE_GROWTH": safe_num(fin.get("revenueGrowth")),
+                    "FIN_ROE":            safe_num((ks.get("returnOnEquity")     or {}).get("raw")),
+                    "FIN_ROIC":           safe_num((ks.get("returnOnCapital")    or {}).get("raw")),
+                    "FIN_NET_MARGIN":     safe_num((fin.get("profitMargins")     or {}).get("raw")),
+                    "FIN_FCO":            safe_num((fin.get("operatingCashflow") or {}).get("raw")),
+                    "FIN_REVENUE_GROWTH": safe_num((fin.get("revenueGrowth")     or {}).get("raw")),
                 }
 
                 score = salvar_scores(asset_id, ind_map)
