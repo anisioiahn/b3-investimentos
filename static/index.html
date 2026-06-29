@@ -1281,23 +1281,20 @@ function renderPizzaCarteira(){
     return;
   }
   if(wrap) wrap.style.display='block';
-  const porSetor = {};
-  _carteira.forEach(p => {
-    const s = p.setor_nome || 'Outros';
-    if(!porSetor[s]) porSetor[s] = 0;
-    porSetor[s] += p.valor_atual || p.valor_investido;
-  });
-  const labels = Object.keys(porSetor);
-  const valores = Object.values(porSetor);
-  const cores = labels.map((_,i) => PIZZA_CORES[i % PIZZA_CORES.length]);
-  if(_pizzaChart){
-    _pizzaChart.data.labels = labels;
-    _pizzaChart.data.datasets[0].data = valores;
-    _pizzaChart.data.datasets[0].backgroundColor = cores;
-    _pizzaChart.update('none');
-  } else {
+  // Aguarda o browser aplicar display:block antes de criar o canvas
+  setTimeout(()=>{
+    const porSetor = {};
+    _carteira.forEach(p => {
+      const s = p.setor_nome || 'Outros';
+      if(!porSetor[s]) porSetor[s] = 0;
+      porSetor[s] += p.valor_atual || p.valor_investido;
+    });
+    const labels = Object.keys(porSetor);
+    const valores = Object.values(porSetor);
+    const cores = labels.map((_,i) => PIZZA_CORES[i % PIZZA_CORES.length]);
     const canvas = document.getElementById('pizzaChart');
     if(!canvas) return;
+    if(_pizzaChart){ _pizzaChart.destroy(); _pizzaChart=null; }
     _pizzaChart = new Chart(canvas.getContext('2d'), {
       type: 'doughnut',
       data: { labels, datasets:[{ data: valores, backgroundColor: cores, borderWidth: 2, borderColor: '#fff' }] },
@@ -1310,10 +1307,11 @@ function renderPizzaCarteira(){
         }
       }
     });
-  }
-  document.getElementById('pizza-legenda').innerHTML = labels.map((l,i) =>
-    `<div class="pizza-item"><div class="pizza-dot" style="background:${cores[i]}"></div>${l}</div>`
-  ).join('');
+    const leg = document.getElementById('pizza-legenda');
+    if(leg) leg.innerHTML = labels.map((l,i) =>
+      `<div class="pizza-item"><div class="pizza-dot" style="background:${cores[i]}"></div>${l}</div>`
+    ).join('');
+  }, 100);
 }
 
 function fmt(v){ return v === null || v === undefined ? '—' : Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
