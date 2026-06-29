@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Janus B3 — Painel Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f0f1a;color:#e0e0e0;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a0a2e,#0d1b3e);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.1)}
+.header h1{color:#fff;font-size:18px;display:flex;align-items:center;gap:10px}
+.btn-logout{padding:8px 16px;background:rgba(229,57,53,.2);border:1px solid rgba(229,57,53,.4);border-radius:8px;color:#ff6b6b;cursor:pointer;font-size:13px}
+.tabs{display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,.1);background:#13131f;padding:0 24px;overflow-x:auto}
+.tab{padding:14px 20px;cursor:pointer;font-size:13px;font-weight:600;color:rgba(255,255,255,.4);border-bottom:2px solid transparent;white-space:nowrap}
+.tab.active{color:#a855f7;border-bottom-color:#a855f7}
+.content{padding:24px;max-width:1100px;margin:0 auto}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.stat-card{background:#1a1a2e;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px;text-align:center}
+.stat-val{font-size:28px;font-weight:700;color:#a855f7}
+.stat-lbl{font-size:12px;color:rgba(255,255,255,.4);margin-top:4px}
+.section{background:#1a1a2e;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:20px;margin-bottom:20px}
+.section h2{font-size:15px;font-weight:700;margin-bottom:16px;color:#fff;display:flex;align-items:center;gap:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 12px;color:rgba(255,255,255,.4);font-size:11px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.08)}
+td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+tr:hover td{background:rgba(255,255,255,.02)}
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-free{background:rgba(100,100,100,.2);color:#aaa}
+.badge-pro{background:rgba(168,85,247,.2);color:#a855f7}
+.badge-ok{background:rgba(22,163,74,.2);color:#4caf50}
+.badge-no{background:rgba(229,57,53,.2);color:#ff6b6b}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:5px;font-weight:600;text-transform:uppercase}
+.field input,.field select{width:100%;padding:10px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:13px;outline:none}
+.field input:focus,.field select:focus{border-color:#a855f7}
+.field input::placeholder{color:rgba(255,255,255,.25)}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{padding:9px 18px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+.btn-primary{background:#7c3aed;color:#fff}
+.btn-primary:hover{background:#6d28d9}
+.btn-sm{padding:5px 12px;font-size:11px;border-radius:6px;border:none;cursor:pointer;font-weight:600}
+.btn-edit{background:rgba(0,102,204,.2);color:#64b5f6}
+.btn-del{background:rgba(229,57,53,.2);color:#ff6b6b}
+.sucesso{background:rgba(22,163,74,.15);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:10px;color:#4caf50;font-size:13px;display:none;margin-bottom:10px}
+.page{display:none}.page.active{display:block}
+select option{background:#1a1a2e}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>⚙️ Janus B3 — Painel Admin</h1>
+  <button class="btn-logout" onclick="logout()">Sair</button>
+</div>
+<div class="tabs">
+  <div class="tab active" onclick="goPage('dashboard',this)">📊 Dashboard</div>
+  <div class="tab" onclick="goPage('usuarios',this)">👥 Usuários</div>
+  <div class="tab" onclick="goPage('planos',this)">💎 Planos</div>
+  <div class="tab" onclick="goPage('fontes',this)">📰 Fontes de Notícias</div>
+</div>
+<div class="content">
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="page-dashboard">
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card"><div class="stat-val">—</div><div class="stat-lbl">Total usuários</div></div>
+    </div>
+  </div>
+
+  <!-- USUÁRIOS -->
+  <div class="page" id="page-usuarios">
+    <div class="section">
+      <h2>👥 Usuários cadastrados</h2>
+      <div id="tabela-usuarios"><div style="color:rgba(255,255,255,.3);text-align:center;padding:2rem">Carregando...</div></div>
+    </div>
+  </div>
+
+  <!-- PLANOS -->
+  <div class="page" id="page-planos">
+    <div class="section">
+      <h2>💎 Configurar planos</h2>
+      <div class="sucesso" id="plano-suc"></div>
+      <div id="lista-planos"></div>
+      <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,.08);padding-top:16px">
+        <h3 style="color:#fff;font-size:14px;margin-bottom:12px">Editar plano</h3>
+        <div class="field-row">
+          <div class="field">
+            <label>Plano</label>
+            <select id="p-nome">
+              <option value="free">Free</option>
+              <option value="pro">Pro</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Descrição</label>
+            <input id="p-desc" placeholder="Ex: Plano gratuito">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Preço mensal (R$)</label>
+            <input id="p-mensal" type="number" step="0.01" placeholder="0.00">
+          </div>
+          <div class="field">
+            <label>Preço anual (R$)</label>
+            <input id="p-anual" type="number" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Desconto anual (%)</label>
+            <input id="p-desconto" type="number" placeholder="0">
+          </div>
+          <div class="field">
+            <label>Max alertas (-1 = ilimitado)</label>
+            <input id="p-alertas" type="number" placeholder="-1">
+          </div>
+        </div>
+        <div class="field">
+          <label>Max ativos na carteira (-1 = ilimitado)</label>
+          <input id="p-carteira" type="number" placeholder="-1">
+        </div>
+        <button class="btn btn-primary" onclick="salvarPlano()">💾 Salvar plano</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FONTES -->
+  <div class="page" id="page-fontes">
+    <div class="section">
+      <h2>📰 Fontes de notícias</h2>
+      <div class="sucesso" id="fonte-suc"></div>
+      <div id="lista-fontes"></div>
+      <button class="btn btn-primary" onclick="salvarFontes()" style="margin-top:12px">💾 Salvar fontes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function goPage(p,el){
+  document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  if(el) el.classList.add('active');
+  if(p==='dashboard') carregarStats();
+  if(p==='usuarios') carregarUsuarios();
+  if(p==='planos') carregarPlanos();
+  if(p==='fontes') carregarFontes();
+}
+
+async function api(url, opts={}){
+  const r = await fetch(url, {headers:{'Content-Type':'application/json'},...opts});
+  return r.json();
+}
+
+async function logout(){
+  await fetch('/api/admin/logout',{method:'POST'});
+  window.location.href='/admin/login';
+}
+
+async function carregarStats(){
+  const d = await api('/api/admin/stats');
+  document.getElementById('stats-grid').innerHTML=`
+    <div class="stat-card"><div class="stat-val">${d.total_usuarios||0}</div><div class="stat-lbl">Total usuários</div></div>
+    <div class="stat-card"><div class="stat-val">${d.verificados||0}</div><div class="stat-lbl">Verificados</div></div>
+    <div class="stat-card"><div class="stat-val">${d.plano_free||0}</div><div class="stat-lbl">Plano Free</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:#a855f7">${d.plano_pro||0}</div><div class="stat-lbl">Plano Pró</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:#4caf50">${d.ativos||0}</div><div class="stat-lbl">Contas ativas</div></div>`;
+}
+
+async function carregarUsuarios(){
+  const usuarios = await api('/api/admin/usuarios');
+  if(!usuarios.length){
+    document.getElementById('tabela-usuarios').innerHTML='<div style="text-align:center;padding:2rem;color:rgba(255,255,255,.3)">Nenhum usuário cadastrado</div>';
+    return;
+  }
+  document.getElementById('tabela-usuarios').innerHTML=`
+    <table><thead><tr>
+      <th>Nome</th><th>E-mail</th><th>Plano</th><th>Verificado</th><th>Cadastro</th><th>Ação</th>
+    </tr></thead><tbody>
+    ${usuarios.map(u=>`<tr>
+      <td>${u.nome||'—'}</td>
+      <td>${u.email}</td>
+      <td><span class="badge badge-${u.plano==='pro'?'pro':'free'}">${u.plano||'free'}</span></td>
+      <td><span class="badge ${u.email_verificado?'badge-ok':'badge-no'}">${u.email_verificado?'✓ Sim':'✗ Não'}</span></td>
+      <td style="font-size:11px;color:rgba(255,255,255,.4)">${u.criado_em?u.criado_em.substring(0,10):'—'}</td>
+      <td>
+        <select onchange="alterarPlano(${u.id},this.value)" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#fff;padding:4px 8px;font-size:11px;cursor:pointer">
+          <option value="free" ${u.plano==='free'?'selected':''}>Free</option>
+          <option value="pro" ${u.plano==='pro'?'selected':''}>Pro</option>
+        </select>
+      </td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+async function alterarPlano(uid, plano){
+  await api(`/api/admin/usuarios/${uid}/plano`,{method:'PUT',body:JSON.stringify({plano})});
+  carregarUsuarios();
+}
+
+async function carregarPlanos(){
+  const planos = await api('/api/admin/planos');
+  document.getElementById('lista-planos').innerHTML=`
+    <table><thead><tr>
+      <th>Plano</th><th>Mensal</th><th>Anual</th><th>Desconto</th><th>Max Alertas</th><th>Max Carteira</th>
+    </tr></thead><tbody>
+    ${planos.map(p=>`<tr>
+      <td><strong>${p.nome}</strong><div style="font-size:11px;color:rgba(255,255,255,.4)">${p.descricao||''}</div></td>
+      <td>R$ ${(p.preco_mensal||0).toFixed(2)}</td>
+      <td>R$ ${(p.preco_anual||0).toFixed(2)}</td>
+      <td>${p.desconto_anual_pct||0}%</td>
+      <td>${p.max_alertas===-1?'Ilimitado':p.max_alertas}</td>
+      <td>${p.max_carteira===-1?'Ilimitado':p.max_carteira}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+async function salvarPlano(){
+  const d={
+    nome:document.getElementById('p-nome').value,
+    desc:document.getElementById('p-desc').value,
+    preco_mensal:parseFloat(document.getElementById('p-mensal').value)||0,
+    preco_anual:parseFloat(document.getElementById('p-anual').value)||0,
+    desconto_anual_pct:parseInt(document.getElementById('p-desconto').value)||0,
+    max_alertas:parseInt(document.getElementById('p-alertas').value)||(-1),
+    max_carteira:parseInt(document.getElementById('p-carteira').value)||(-1),
+    descricao:document.getElementById('p-desc').value,
+  };
+  await api('/api/admin/planos',{method:'POST',body:JSON.stringify(d)});
+  const el=document.getElementById('plano-suc');
+  el.textContent='✅ Plano salvo!'; el.style.display='block';
+  setTimeout(()=>el.style.display='none',3000);
+  carregarPlanos();
+}
+
+async function carregarFontes(){
+  const cfg = await api('/api/admin/config');
+  document.getElementById('lista-fontes').innerHTML=[1,2,3].map(i=>`
+    <div style="border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.5);margin-bottom:10px">FONTE ${i}</div>
+      <div class="field-row">
+        <div class="field"><label>Nome</label><input id="f${i}-nome" value="${cfg['fonte_'+i+'_nome']||''}" placeholder="Nome da fonte"></div>
+        <div class="field"><label>URL (use {ticker})</label><input id="f${i}-url" value="${cfg['fonte_'+i+'_url']||''}" placeholder="https://.../{ticker}/feed/"></div>
+      </div>
+    </div>`).join('');
+}
+
+async function salvarFontes(){
+  const cfg={};
+  [1,2,3].forEach(i=>{
+    cfg['fonte_'+i+'_nome']=document.getElementById('f'+i+'-nome').value;
+    cfg['fonte_'+i+'_url']=document.getElementById('f'+i+'-url').value;
+  });
+  await api('/api/admin/config',{method:'POST',body:JSON.stringify(cfg)});
+  const el=document.getElementById('fonte-suc');
+  el.textContent='✅ Fontes salvas!'; el.style.display='block';
+  setTimeout(()=>el.style.display='none',3000);
+}
+
+// Init
+carregarStats();
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Janus B3 — Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:linear-gradient(135deg,#0a0e1a,#1a0a2e);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
+.card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:2.5rem;width:100%;max-width:380px}
+.logo{text-align:center;margin-bottom:2rem}
+.logo .icon{font-size:40px;margin-bottom:8px}
+.logo h1{color:#fff;font-size:20px;font-weight:700}
+.logo p{color:rgba(255,255,255,.4);font-size:12px;margin-top:4px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:600;color:rgba(255,255,255,.5);text-transform:uppercase;margin-bottom:6px}
+.field input{width:100%;padding:12px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:14px;outline:none}
+.field input:focus{border-color:#7c3aed}
+.field input::placeholder{color:rgba(255,255,255,.3)}
+.btn{width:100%;padding:13px;border:none;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:14px;font-weight:700;cursor:pointer;margin-top:6px}
+.erro{background:rgba(229,57,53,.15);border:1px solid rgba(229,57,53,.3);border-radius:8px;padding:10px;color:#ff6b6b;font-size:13px;display:none;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="icon">⚙️</div>
+    <h1>Janus B3 Admin</h1>
+    <p>Painel Administrativo</p>
+  </div>
+  <div class="erro" id="erro"></div>
+  <div class="field"><label>E-mail admin</label><input type="email" id="email" placeholder="admin@janus-b3.com"></div>
+  <div class="field"><label>Senha</label><input type="password" id="senha" placeholder="••••••••" onkeydown="if(event.key==='Enter')login()"></div>
+  <button class="btn" onclick="login()">Entrar no painel</button>
+</div>
+<script>
+async function login(){
+  const email=document.getElementById('email').value;
+  const senha=document.getElementById('senha').value;
+  document.getElementById('erro').style.display='none';
+  const r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,senha})});
+  const d=await r.json();
+  if(d.ok) window.location.href='/admin';
+  else{document.getElementById('erro').textContent=d.erro||'Credenciais inválidas';document.getElementById('erro').style.display='block';}
+}
+</script>
+</body>
+</html>

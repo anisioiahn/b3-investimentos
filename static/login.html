@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Janus B3 — Entrar</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:linear-gradient(135deg,#0a0e1a 0%,#0d1b3e 50%,#0a1628 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
+.card{background:rgba(255,255,255,.05);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:2.5rem;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.logo{display:flex;align-items:center;gap:12px;margin-bottom:2rem;justify-content:center}
+.logo img{width:52px;height:52px;border-radius:12px}
+.logo-text h1{font-size:22px;font-weight:700;color:#fff}
+.logo-text p{font-size:11px;color:#64b5f6;letter-spacing:1px;text-transform:uppercase}
+.tabs{display:flex;gap:4px;background:rgba(255,255,255,.05);border-radius:10px;padding:4px;margin-bottom:1.5rem}
+.tab{flex:1;padding:9px;text-align:center;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;color:rgba(255,255,255,.5);transition:all .2s}
+.tab.active{background:#0066cc;color:#fff}
+.form{display:flex;flex-direction:column;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:12px;font-weight:600;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.5px}
+.field input,.field select{padding:12px 14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-size:14px;outline:none;transition:all .2s}
+.field input:focus{border-color:#0066cc;background:rgba(0,102,204,.1)}
+.field input::placeholder{color:rgba(255,255,255,.3)}
+.lang-select{padding:10px 14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-size:13px;width:100%;cursor:pointer}
+.lang-select option{background:#0d1b3e;color:#fff}
+.btn{padding:13px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;width:100%}
+.btn-primary{background:linear-gradient(135deg,#0066cc,#0099ff);color:#fff}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.erro{background:rgba(229,57,53,.15);border:1px solid rgba(229,57,53,.3);border-radius:8px;padding:10px 14px;color:#ff6b6b;font-size:13px;display:none}
+.sucesso{background:rgba(22,163,74,.15);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:10px 14px;color:#4caf50;font-size:13px;display:none}
+.link{color:#64b5f6;cursor:pointer;font-size:13px;text-decoration:underline;background:none;border:none}
+.link:hover{color:#90caf9}
+.forgot{text-align:right;margin-top:-6px}
+.separator{text-align:center;color:rgba(255,255,255,.3);font-size:12px;margin:4px 0}
+.code-input{display:flex;gap:8px;justify-content:center}
+.code-input input{width:48px;height:56px;text-align:center;font-size:22px;font-weight:700;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;outline:none}
+.code-input input:focus{border-color:#0066cc}
+.plano-badge{display:inline-block;padding:3px 10px;background:rgba(0,102,204,.2);color:#64b5f6;border-radius:20px;font-size:11px;font-weight:600;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <img src="/icon-192.png" alt="Janus">
+    <div class="logo-text">
+      <h1>Janus B3</h1>
+      <p>Passado e Futuro. Melhores Escolhas.</p>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs" id="tabs-auth">
+    <div class="tab active" onclick="mostrarTela('login')">Entrar</div>
+    <div class="tab" onclick="mostrarTela('cadastro')">Criar conta</div>
+  </div>
+
+  <!-- LOGIN -->
+  <div id="tela-login">
+    <div class="form">
+      <div class="field">
+        <label>E-mail</label>
+        <input type="email" id="l-email" placeholder="seu@email.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Senha</label>
+        <input type="password" id="l-senha" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <div class="forgot">
+        <button class="link" onclick="mostrarTela('esqueci')">Esqueci minha senha</button>
+      </div>
+      <div class="erro" id="l-erro"></div>
+      <button class="btn btn-primary" onclick="fazerLogin()" id="btn-login">Entrar</button>
+    </div>
+  </div>
+
+  <!-- CADASTRO -->
+  <div id="tela-cadastro" style="display:none">
+    <div class="form">
+      <div class="field">
+        <label>Nome completo</label>
+        <input type="text" id="c-nome" placeholder="Seu nome">
+      </div>
+      <div class="field">
+        <label>E-mail</label>
+        <input type="email" id="c-email" placeholder="seu@email.com">
+      </div>
+      <div class="field">
+        <label>Senha (mínimo 8 caracteres)</label>
+        <input type="password" id="c-senha" placeholder="••••••••">
+      </div>
+      <div class="field">
+        <label>Idioma dos e-mails</label>
+        <select class="lang-select" id="c-lang">
+          <option value="pt">🇧🇷 Português</option>
+          <option value="en">🇺🇸 English</option>
+          <option value="es">🇪🇸 Español</option>
+        </select>
+      </div>
+      <div class="erro" id="c-erro"></div>
+      <button class="btn btn-primary" onclick="fazerCadastro()" id="btn-cadastro">Criar conta grátis</button>
+    </div>
+  </div>
+
+  <!-- VERIFICAÇÃO DE EMAIL -->
+  <div id="tela-verificacao" style="display:none">
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <div style="font-size:40px;margin-bottom:10px">📧</div>
+      <div style="color:#fff;font-size:16px;font-weight:600;margin-bottom:6px">Verifique seu e-mail</div>
+      <div style="color:rgba(255,255,255,.5);font-size:13px">Enviamos um código de 6 dígitos para <strong id="v-email-exib" style="color:#64b5f6"></strong></div>
+    </div>
+    <div class="code-input" id="code-inputs">
+      <input type="text" maxlength="1" oninput="nextCode(this,0)">
+      <input type="text" maxlength="1" oninput="nextCode(this,1)">
+      <input type="text" maxlength="1" oninput="nextCode(this,2)">
+      <input type="text" maxlength="1" oninput="nextCode(this,3)">
+      <input type="text" maxlength="1" oninput="nextCode(this,4)">
+      <input type="text" maxlength="1" oninput="nextCode(this,5)">
+    </div>
+    <div class="erro" id="v-erro" style="margin-top:14px"></div>
+    <div class="sucesso" id="v-suc" style="margin-top:14px"></div>
+    <button class="btn btn-primary" onclick="verificarCodigo()" style="margin-top:14px">Verificar código</button>
+    <div class="separator" style="margin-top:14px">Não recebeu?</div>
+    <button class="link" onclick="reenviarCodigo()" style="width:100%;text-align:center;padding:8px">Reenviar código</button>
+  </div>
+
+  <!-- ESQUECI SENHA -->
+  <div id="tela-esqueci" style="display:none">
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <div style="font-size:36px;margin-bottom:8px">🔐</div>
+      <div style="color:#fff;font-size:15px;font-weight:600">Recuperar senha</div>
+      <div style="color:rgba(255,255,255,.5);font-size:13px;margin-top:4px">Enviaremos um link para seu e-mail</div>
+    </div>
+    <div class="form">
+      <div class="field">
+        <label>E-mail cadastrado</label>
+        <input type="email" id="e-email" placeholder="seu@email.com">
+      </div>
+      <div class="field">
+        <label>Idioma do e-mail</label>
+        <select class="lang-select" id="e-lang">
+          <option value="pt">🇧🇷 Português</option>
+          <option value="en">🇺🇸 English</option>
+          <option value="es">🇪🇸 Español</option>
+        </select>
+      </div>
+      <div class="sucesso" id="e-suc"></div>
+      <div class="erro" id="e-erro"></div>
+      <button class="btn btn-primary" onclick="esqueceuSenha()">Enviar link de recuperação</button>
+      <button class="link" onclick="mostrarTela('login')" style="text-align:center;padding:8px">← Voltar ao login</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _emailCadastro = '';
+let _langCadastro = 'pt';
+
+const TEXTOS = {
+  pt: { login:'Entrar', cadastro:'Criar conta', verificacao:'Verificar e-mail', esqueci:'Recuperar senha' },
+  en: { login:'Sign In', cadastro:'Sign Up', verificacao:'Verify Email', esqueci:'Recover Password' },
+  es: { login:'Ingresar', cadastro:'Registrarse', verificacao:'Verificar correo', esqueci:'Recuperar contraseña' }
+};
+
+function mostrarTela(tela){
+  ['login','cadastro','verificacao','esqueci'].forEach(t=>{
+    const el = document.getElementById('tela-'+t);
+    if(el) el.style.display = t===tela?'block':'none';
+  });
+  const tabs = document.getElementById('tabs-auth');
+  if(tela==='login'||tela==='cadastro'){
+    tabs.style.display='flex';
+    document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===(tela==='login'?0:1)));
+  } else {
+    tabs.style.display='none';
+  }
+}
+
+function mostrarErro(id, msg){ const el=document.getElementById(id); el.textContent=msg; el.style.display='block'; }
+function esconderErro(id){ document.getElementById(id).style.display='none'; }
+function mostrarSucesso(id, msg){ const el=document.getElementById(id); el.textContent=msg; el.style.display='block'; }
+
+async function fazerLogin(){
+  const email=document.getElementById('l-email').value.trim();
+  const senha=document.getElementById('l-senha').value;
+  esconderErro('l-erro');
+  if(!email||!senha){ mostrarErro('l-erro','Preencha todos os campos'); return; }
+  const btn=document.getElementById('btn-login');
+  btn.disabled=true; btn.textContent='Entrando...';
+  try{
+    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,senha})});
+    const d=await r.json();
+    if(d.ok){ window.location.href='/'; }
+    else if(d.nao_verificado){
+      _emailCadastro=email;
+      document.getElementById('v-email-exib').textContent=email;
+      mostrarTela('verificacao');
+    } else {
+      mostrarErro('l-erro', d.erro||'Erro ao entrar');
+    }
+  }catch(e){ mostrarErro('l-erro','Erro de conexão'); }
+  btn.disabled=false; btn.textContent='Entrar';
+}
+
+async function fazerCadastro(){
+  const nome=document.getElementById('c-nome').value.trim();
+  const email=document.getElementById('c-email').value.trim();
+  const senha=document.getElementById('c-senha').value;
+  const lang=document.getElementById('c-lang').value;
+  esconderErro('c-erro');
+  if(!nome||!email||!senha){ mostrarErro('c-erro','Preencha todos os campos'); return; }
+  const btn=document.getElementById('btn-cadastro');
+  btn.disabled=true; btn.textContent='Criando conta...';
+  try{
+    const r=await fetch('/api/auth/cadastro',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,email,senha,lang})});
+    const d=await r.json();
+    if(d.ok){
+      _emailCadastro=email;
+      _langCadastro=lang;
+      document.getElementById('v-email-exib').textContent=email;
+      mostrarTela('verificacao');
+    } else {
+      mostrarErro('c-erro', d.erro||'Erro ao criar conta');
+    }
+  }catch(e){ mostrarErro('c-erro','Erro de conexão'); }
+  btn.disabled=false; btn.textContent='Criar conta grátis';
+}
+
+function nextCode(input, idx){
+  const inputs = document.querySelectorAll('#code-inputs input');
+  input.value = input.value.replace(/\D/g,'');
+  if(input.value && idx<5) inputs[idx+1].focus();
+  if(idx===5 && input.value) verificarCodigo();
+}
+
+function getCodigo(){
+  return Array.from(document.querySelectorAll('#code-inputs input')).map(i=>i.value).join('');
+}
+
+async function verificarCodigo(){
+  const codigo=getCodigo();
+  esconderErro('v-erro');
+  if(codigo.length!==6){ mostrarErro('v-erro','Digite o código completo'); return; }
+  try{
+    const r=await fetch('/api/auth/verificar-email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:_emailCadastro,codigo})});
+    const d=await r.json();
+    if(d.ok){ mostrarSucesso('v-suc','✅ E-mail verificado! Redirecionando...'); setTimeout(()=>window.location.href='/',1500); }
+    else mostrarErro('v-erro', d.erro||'Código inválido');
+  }catch(e){ mostrarErro('v-erro','Erro de conexão'); }
+}
+
+async function reenviarCodigo(){
+  try{
+    await fetch('/api/auth/reenviar-codigo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:_emailCadastro,lang:_langCadastro})});
+    mostrarSucesso('v-suc','Código reenviado!');
+  }catch(e){}
+}
+
+async function esqueceuSenha(){
+  const email=document.getElementById('e-email').value.trim();
+  const lang=document.getElementById('e-lang').value;
+  esconderErro('e-erro');
+  if(!email){ mostrarErro('e-erro','Informe seu e-mail'); return; }
+  try{
+    await fetch('/api/auth/esqueci-senha',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,lang})});
+    mostrarSucesso('e-suc','Se o e-mail estiver cadastrado, você receberá um link em breve.');
+  }catch(e){ mostrarErro('e-erro','Erro de conexão'); }
+}
+
+// Enter para submeter
+document.addEventListener('keydown', e=>{
+  if(e.key==='Enter'){
+    if(document.getElementById('tela-login').style.display!=='none') fazerLogin();
+    else if(document.getElementById('tela-cadastro').style.display!=='none') fazerCadastro();
+  }
+});
+</script>
+</body>
+</html>
