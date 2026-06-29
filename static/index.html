@@ -1025,11 +1025,17 @@ async function carregarAlertas(){
 async function salvarAlerta(ticker, valor, direcao){
   if(!valor||parseFloat(valor)<=0) return;
   try{
-    await fetch('/api/alertas',{method:'POST',headers:{'Content-Type':'application/json'},
+    const r = await fetch('/api/alertas',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({ticker,valor:parseFloat(valor),direcao})});
+    const d = await r.json();
+    if(!r.ok){
+      if(d.limite) alert(`⚠️ ${d.erro}`);
+      else alert(`Erro: ${d.erro||'Não foi possível salvar o alerta'}`);
+      return;
+    }
     await carregarAlertas();
     renderEmpresas(true);
-  }catch(e){}
+  }catch(e){ alert('Erro de conexão ao salvar alerta'); }
 }
 
 async function removerAlerta(ticker, direcao){
@@ -1433,15 +1439,21 @@ async function salvarPosicao(){
   if(!preco || preco <= 0){ alert('Informe o preço médio'); return; }
   if(!qtd || qtd <= 0){ alert('Informe a quantidade'); return; }
   try{
-    await fetch('/api/carteira', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+    const r = await fetch('/api/carteira', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
       ticker, preco_medio: preco, quantidade: qtd,
       data_compra: document.getElementById('pos-data').value,
       corretora: document.getElementById('pos-corretora').value,
     })});
+    const d = await r.json();
+    if(!r.ok){
+      if(d.limite) alert(`⚠️ ${d.erro}`);
+      else alert(`Erro: ${d.erro||'Não foi possível salvar'}`);
+      return;
+    }
     fecharModalPosicao();
     await carregarCarteira();
     renderCarteira();
-  }catch(e){ alert('Erro ao salvar: '+e.message); }
+  }catch(e){ alert('Erro de conexão ao salvar posição'); }
 }
 
 function editarPosicao(ticker){
