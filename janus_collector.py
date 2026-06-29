@@ -240,20 +240,19 @@ def salvar_indicadores(asset_id, dados, source_id):
     fin = dados.get("financialData") or {}
 
     indicadores = [
-        ("FIN_ROE",            (ks.get("returnOnEquity")       or {}).get("raw"), "%"),
-        ("FIN_ROIC",           (ks.get("returnOnCapital")      or {}).get("raw"), "%"),
-        ("FIN_NET_MARGIN",     (fin.get("profitMargins")       or {}).get("raw"), "%"),
-        ("FIN_FCO",            (fin.get("operatingCashflow")   or {}).get("raw"), "R$"),
-        ("FIN_REVENUE",        (fin.get("totalRevenue")        or {}).get("raw"), "R$"),
-        ("FIN_REVENUE_GROWTH", (fin.get("revenueGrowth")       or {}).get("raw"), "%"),
-        ("FIN_GROSS_MARGIN",   (fin.get("grossMargins")        or {}).get("raw"), "%"),
-        ("FIN_EBITDA_MARGIN",  (fin.get("ebitdaMargins")       or {}).get("raw"), "%"),
-        ("VAL_PE",             (ks.get("forwardPE")            or {}).get("raw"), "x"),
-        ("VAL_PVP",            (ks.get("priceToBook")          or {}).get("raw"), "x"),
-        ("VAL_EV_EBITDA",      (ks.get("enterpriseToEbitda")   or {}).get("raw"), "x"),
-        ("VAL_DIVIDEND_YIELD", (ks.get("dividendYield")        or {}).get("raw"), "%"),
+        ("FIN_ROE",            fin.get("returnOnEquity"),     "%"),
+        ("FIN_ROIC",           fin.get("returnOnAssets"),     "%"),
+        ("FIN_NET_MARGIN",     fin.get("profitMargins"),      "%"),
+        ("FIN_FCO",            fin.get("operatingCashflow"),  "R$"),
+        ("FIN_REVENUE",        fin.get("totalRevenue"),       "R$"),
+        ("FIN_REVENUE_GROWTH", fin.get("revenueGrowth"),      "%"),
+        ("FIN_GROSS_MARGIN",   fin.get("grossMargins"),       "%"),
+        ("FIN_EBITDA_MARGIN",  fin.get("ebitdaMargins"),      "%"),
+        ("VAL_PE",             ks.get("trailingPE"),          "x"),
+        ("VAL_PVP",            ks.get("priceToBook"),         "x"),
+        ("VAL_EV_EBITDA",      ks.get("enterpriseToEbitda"),  "x"),
+        ("VAL_DIVIDEND_YIELD", ks.get("dividendYield"),       "%"),
     ]
-
     for code, value, unit in indicadores:
         if value is None: continue
         try:
@@ -441,11 +440,11 @@ def run_collector():
                 fin = dados.get("financialData") or {}
 
                 ind_map = {
-                    "FIN_ROE":            safe_num((ks.get("returnOnEquity")     or {}).get("raw")),
-                    "FIN_ROIC":           safe_num((ks.get("returnOnCapital")    or {}).get("raw")),
-                    "FIN_NET_MARGIN":     safe_num((fin.get("profitMargins")     or {}).get("raw")),
-                    "FIN_FCO":            safe_num((fin.get("operatingCashflow") or {}).get("raw")),
-                    "FIN_REVENUE_GROWTH": safe_num((fin.get("revenueGrowth")     or {}).get("raw")),
+                    "FIN_ROE":            safe_num(fin.get("returnOnEquity")),
+                    "FIN_ROIC":           safe_num(fin.get("returnOnAssets")),
+                    "FIN_NET_MARGIN":     safe_num(fin.get("profitMargins")),
+                    "FIN_FCO":            safe_num(fin.get("operatingCashflow")),
+                    "FIN_REVENUE_GROWTH": safe_num(fin.get("revenueGrowth")),
                 }
 
                 score = salvar_scores(asset_id, ind_map)
