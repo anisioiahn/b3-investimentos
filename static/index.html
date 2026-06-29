@@ -1017,13 +1017,13 @@ let _disparadosServidor = [];
 async function carregarAlertas(){
   try{
     const r=await fetch('/api/alertas');
+    if(!r.ok) return;
     const d=await r.json();
     _alertasServidor=d.alertas||[];
     _disparadosServidor=d.disparados||[];
-    if(_paginaAtiva !== 'carteira'){
-      updateAltCnt();
-      if(_paginaAtiva === 'alertas') renderAlerts();
-    }
+    updateAltCnt();
+    if(_paginaAtiva === 'alertas') renderAlerts();
+    if(_paginaAtiva === 'empresas' && currentSector) renderEmpresas(true);
   }catch(e){}
 }
 
@@ -1038,8 +1038,8 @@ async function salvarAlerta(ticker, valor, direcao){
       else alert(`Erro: ${d.erro||'Não foi possível salvar o alerta'}`);
       return;
     }
+    // Recarrega alertas e atualiza tela
     await carregarAlertas();
-    renderEmpresas(true);
   }catch(e){ alert('Erro de conexão ao salvar alerta'); }
 }
 
