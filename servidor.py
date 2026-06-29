@@ -5,7 +5,7 @@ from functools import wraps
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 import db, auth
 
-VERSION = "3.0.2"
+VERSION = "3.0.3"
 TZ_BRASILIA = timezone(timedelta(hours=-3))
 def agora(): return datetime.now(TZ_BRASILIA)
 
