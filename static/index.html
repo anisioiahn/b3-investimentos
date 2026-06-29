@@ -38,8 +38,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .tab-badge{background:#e53935;color:#fff;font-size:10px;font-weight:600;border-radius:10px;padding:1px 6px}
 
 /* CONTENT */
-.content{padding:1.5rem}
-.page{display:none}.page.active{display:block}
+.content{padding:1.5rem;overflow-x:hidden}
+.page{display:none}.page.active{display:block;min-height:200px}
 
 /* SECTORS */
 .sectors-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
@@ -1126,14 +1126,40 @@ async function carregarCarteira(){
   try{
     const r = await fetch('/api/carteira');
     const novaCarteira = await r.json();
-    const mudou = JSON.stringify(novaCarteira) !== JSON.stringify(_carteira);
+    // Compara apenas campos que o usuário editou (não preço_atual que muda sempre)
+    const chaveAntes = _carteira.map(p=>p.ticker+p.preco_medio+p.quantidade).join(',');
+    const chaveDepois = novaCarteira.map(p=>p.ticker+p.preco_medio+p.quantidade).join(',');
+    const mudou = chaveAntes !== chaveDepois;
     _carteira = novaCarteira;
-    if(document.getElementById('page-carteira').classList.contains('active')){
+    if(_paginaAtiva === 'carteira'){
       if(mudou || document.getElementById('carteira-tabela').innerHTML===''){
         renderCarteira();
+      } else {
+        // Apenas atualiza preços sem re-renderizar tudo
+        atualizarPrecosCarteira();
       }
     }
   }catch(e){}
+}
+
+function atualizarPrecosCarteira(){
+  // Atualiza apenas as células de preço atual, valor atual e lucro sem piscar
+  _carteira.forEach(p => {
+    const el = document.getElementById(`ct-preco-${p.ticker}`);
+    const elva = document.getElementById(`ct-va-${p.ticker}`);
+    const ellucro = document.getElementById(`ct-lucro-${p.ticker}`);
+    const elpct = document.getElementById(`ct-pct-${p.ticker}`);
+    if(el) el.textContent = p.preco_atual ? `R$ ${p.preco_atual.toFixed(2)}` : '—';
+    if(elva) elva.textContent = p.valor_atual ? `R$ ${fmt(p.valor_atual)}` : '—';
+    if(ellucro){
+      ellucro.textContent = p.lucro !== null ? `${p.lucro>=0?'+':''}R$ ${fmt(p.lucro)}` : '—';
+      ellucro.className = `num ${p.lucro>0?'lucro-pos':p.lucro<0?'lucro-neg':'lucro-zero'}`;
+    }
+    if(elpct){
+      elpct.textContent = p.lucro_pct !== null ? `${p.lucro_pct>=0?'+':''}${p.lucro_pct.toFixed(2)}%` : '—';
+      elpct.className = `num ${p.lucro_pct>0?'lucro-pos':p.lucro_pct<0?'lucro-neg':'lucro-zero'}`;
+    }
+  });
 }
 
 function renderCarteira(){
@@ -1219,10 +1245,10 @@ function renderTabelaCarteira(){
       <td class="num">R$ ${p.preco_medio.toFixed(2)}</td>
       <td class="num">${p.quantidade % 1 === 0 ? p.quantidade.toFixed(0) : p.quantidade.toFixed(2)}</td>
       <td class="num">R$ ${fmt(p.valor_investido)}</td>
-      <td class="num">${p.preco_atual ? `R$ ${p.preco_atual.toFixed(2)}` : '<span style="color:var(--text3)">—</span>'}</td>
-      <td class="num">${p.valor_atual ? `R$ ${fmt(p.valor_atual)}` : '<span style="color:var(--text3)">—</span>'}</td>
-      <td class="num ${lucroClass}">${p.lucro !== null ? `${p.lucro >= 0 ? '+' : ''}R$ ${fmt(p.lucro)}` : '—'}</td>
-      <td class="num ${lucroClass}">${p.lucro_pct !== null ? `${p.lucro_pct >= 0 ? '+' : ''}${p.lucro_pct.toFixed(2)}%` : '—'}</td>
+      <td class="num" id="ct-preco-${p.ticker}">${p.preco_atual ? `R$ ${p.preco_atual.toFixed(2)}` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td class="num" id="ct-va-${p.ticker}">${p.valor_atual ? `R$ ${fmt(p.valor_atual)}` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td class="num ${lucroClass}" id="ct-lucro-${p.ticker}">${p.lucro !== null ? `${p.lucro >= 0 ? '+' : ''}R$ ${fmt(p.lucro)}` : '—'}</td>
+      <td class="num ${lucroClass}" id="ct-pct-${p.ticker}">${p.lucro_pct !== null ? `${p.lucro_pct >= 0 ? '+' : ''}${p.lucro_pct.toFixed(2)}%` : '—'}</td>
       <td>${alertasHtml}</td>
       <td>
         <button class="ct-edit" onclick="editarPosicao('${p.ticker}')" title="Editar">✏️</button>
