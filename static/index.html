@@ -335,10 +335,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <button class="btn-add-pos" onclick="abrirModalPosicao()">+ Adicionar posição</button>
       </div>
       <div id="carteira-tabela"></div>
-      <div class="pizza-wrap" id="pizza-wrap" style="display:none">
-        <canvas id="pizzaChart" height="280"></canvas>
-        <div class="pizza-legenda" id="pizza-legenda"></div>
-      </div>
     </div>
 
     <div class="page" id="page-alertas"><div id="altbox"></div></div>
@@ -1164,7 +1160,6 @@ function atualizarPrecosCarteira(){
 function renderCarteira(){
   renderResumoCarteira();
   renderTabelaCarteira();
-  renderPizzaCarteira();
 }
 
 async function renderResumoCarteira(){
