@@ -439,6 +439,9 @@ def run_collector():
                 ks  = dados.get("defaultKeyStatistics") or {}
                 fin = dados.get("financialData") or {}
 
+                # DEBUG temporário
+                print(f"[DEBUG] {ticker} | ROE={fin.get('returnOnEquity')} | MARGIN={fin.get('profitMargins')} | FCO={fin.get('operatingCashflow')} | GROWTH={fin.get('revenueGrowth')}")
+
                 ind_map = {
                     "FIN_ROE":            safe_num(fin.get("returnOnEquity")),
                     "FIN_ROIC":           safe_num(fin.get("returnOnAssets")),
