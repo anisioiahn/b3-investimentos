@@ -5,7 +5,7 @@ from functools import wraps
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 import db, auth
 
-VERSION = "3.0.0"
+VERSION = "3.0.1"
 TZ_BRASILIA = timezone(timedelta(hours=-3))
 def agora(): return datetime.now(TZ_BRASILIA)
 
@@ -559,9 +559,19 @@ def api_push_status():
     return jsonify({"dispositivos":len(db.db_listar_push(uid()))})
 
 # ── LOGS ──────────────────────────────────────────────────────
-@app.route("/api/logs")
+@app.route("/api/fontes", methods=["GET"])
 @requer_auth
-def api_logs():
+def api_fontes_get():
+    return jsonify(get_fontes())
+
+@app.route("/api/fontes", methods=["POST"])
+@requer_admin
+def api_fontes_post():
+    fontes = request.json.get("fontes", [])
+    for i, f in enumerate(fontes[:3], 1):
+        db.db_set_config(f"fonte_{i}_nome", f.get("nome",""))
+        db.db_set_config(f"fonte_{i}_url", f.get("url",""))
+    return jsonify({"ok": True})
     desde = request.args.get("desde",0,type=int)
     return jsonify(_log_entries[desde:])
 
