@@ -719,16 +719,21 @@ function toggleDirAlerta(ticker, direcao, btn){
     </div>`;
   document.body.appendChild(modal);
   setTimeout(()=>document.getElementById('alerta-modal-val')?.focus(),50);
-  // Fecha clicando fora
+  // Fecha clicando FORA do modal com delay maior para não interceptar botões
   setTimeout(()=>document.addEventListener('click',function fechar(e){
-    if(!modal.contains(e.target)){modal.remove();document.removeEventListener('click',fechar);}
-  }),100);
+    if(!modal.contains(e.target) && !e.target.closest('.alerta-dir-btn')){
+      modal.remove();
+      document.removeEventListener('click',fechar);
+    }
+  }),300);
 }
 
 async function confirmarAlerta(){
-  const val=document.getElementById('alerta-modal-val')?.value;
+  const val = document.getElementById('alerta-modal-val')?.value;
+  const ticker = _alertaModalTicker;
+  const direcao = _alertaModalDirecao;
   document.querySelectorAll('.alerta-modal-inline').forEach(el=>el.remove());
-  if(val&&_alertaModalTicker) await salvarAlerta(_alertaModalTicker, val, _alertaModalDirecao);
+  if(val && ticker) await salvarAlerta(ticker, val, direcao);
 }
 function checkTriggered(s){
   const hits=alerts.filter(a=>{const co=s.empresas.find(e=>e.ticker===a.ticker);return co&&co.preco!=null&&co.preco>=a.target;});
