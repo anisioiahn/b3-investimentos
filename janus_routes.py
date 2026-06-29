@@ -1,55 +1,59 @@
 # ============================================================
-# JANUS INDEX – ROTAS FLASK v1.0
-# Cole as importações e chame registrar_rotas_janus(app) no servidor.py
+# JANUS INDEX – ROTAS FLASK v1.1
+# Segue o padrão do projeto: psycopg2 + get_conn()
+# Chame no servidor.py:
+#   from janus_routes import registrar_rotas_janus
+#   registrar_rotas_janus(app, requer_auth)
 # ============================================================
 
-import db
+import psycopg2, psycopg2.extras, os
 from flask import jsonify, request
 from datetime import datetime, timezone, timedelta
 
 TZ_BRASILIA = timezone(timedelta(hours=-3))
-def agora(): return datetime.now(TZ_BRASILIA)
-def hoje():  return agora().strftime("%Y-%m-%d")
+def agora():    return datetime.now(TZ_BRASILIA)
+def hoje():     return agora().strftime("%Y-%m-%d")
+
+def get_conn():
+    url = os.getenv("DATABASE_URL", "")
+    if not url: raise Exception("DATABASE_URL não configurada")
+    return psycopg2.connect(url, sslmode="require")
 
 
 def registrar_rotas_janus(app, requer_auth):
-    """
-    Registra todas as rotas do Janus Index no app Flask.
-    Chame no servidor.py assim:
-        from janus_routes import registrar_rotas_janus
-        registrar_rotas_janus(app, requer_auth)
-    """
 
     # ── GET /api/janus/status ─────────────────────────────────
-    # Saúde do sistema: última coleta, total de ativos e scores
     @app.route("/api/janus/status")
     @requer_auth
     def api_janus_status():
         try:
-            total_ativos = db.supabase.table("assets") \
-                .select("asset_id", count="exact") \
-                .eq("status", "ATIVO").execute().count
+            conn = get_conn()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT COUNT(*) as total FROM assets WHERE status='ATIVO'")
+                total_ativos = cur.fetchone()["total"]
 
-            total_scores = db.supabase.table("janus_scores") \
-                .select("janus_score_id", count="exact").execute().count
+                cur.execute("SELECT COUNT(*) as total FROM janus_scores")
+                total_scores = cur.fetchone()["total"]
 
-            ultima_coleta = db.supabase.table("data_ingestion_logs") \
-                .select("started_at,finished_at,status,records_processed") \
-                .eq("job_name", "janus-data-collector") \
-                .order("started_at", desc=True) \
-                .limit(1).execute().data
+                cur.execute("""
+                    SELECT started_at, finished_at, status, records_processed
+                    FROM data_ingestion_logs
+                    WHERE job_name='janus-data-collector'
+                    ORDER BY started_at DESC LIMIT 1
+                """)
+                ultima = cur.fetchone()
+            conn.close()
 
             return jsonify({
                 "status":        "online",
                 "total_ativos":  total_ativos,
                 "total_scores":  total_scores,
-                "ultima_coleta": ultima_coleta[0] if ultima_coleta else None
+                "ultima_coleta": dict(ultima) if ultima else None
             })
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
 
     # ── GET /api/janus/ranking ────────────────────────────────
-    # Ranking geral com Janus Score — usado na tela principal do Janus
     @app.route("/api/janus/ranking")
     @requer_auth
     def api_janus_ranking():
@@ -57,76 +61,90 @@ def registrar_rotas_janus(app, requer_auth):
             limite = int(request.args.get("limit", 50))
             tipo   = request.args.get("tipo", "GERAL")
 
-            # Data mais recente disponível
-            ultima = db.supabase.table("ranking_snapshots") \
-                .select("reference_date") \
-                .eq("ranking_type", tipo) \
-                .order("reference_date", desc=True) \
-                .limit(1).execute().data
+            conn = get_conn()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT MAX(reference_date) as ultima
+                    FROM ranking_snapshots WHERE ranking_type=%s
+                """, (tipo,))
+                row = cur.fetchone()
+                if not row or not row["ultima"]:
+                    conn.close()
+                    return jsonify({"ranking": [], "mensagem": "Nenhum dado disponível ainda"})
 
-            if not ultima:
-                return jsonify({"ranking": [], "mensagem": "Nenhum dado disponível ainda"})
+                ref_date = row["ultima"]
 
-            ref_date = ultima[0]["reference_date"]
-
-            ranking = db.supabase.table("ranking_snapshots") \
-                .select("general_position,sector_position,janus_score,quality_score,reference_date,assets(ticker,asset_type,companies(trading_name,sector))") \
-                .eq("reference_date", ref_date) \
-                .eq("ranking_type", tipo) \
-                .order("general_position") \
-                .limit(limite).execute().data
+                cur.execute("""
+                    SELECT r.general_position, r.sector_position, r.janus_score,
+                           r.quality_score, r.reference_date,
+                           a.ticker, a.asset_type,
+                           c.trading_name, c.sector
+                    FROM ranking_snapshots r
+                    JOIN assets a ON a.asset_id = r.asset_id
+                    LEFT JOIN companies c ON c.company_id = a.company_id
+                    WHERE r.reference_date=%s AND r.ranking_type=%s
+                    ORDER BY r.general_position
+                    LIMIT %s
+                """, (ref_date, tipo, limite))
+                rows = [dict(r) for r in cur.fetchall()]
+            conn.close()
 
             return jsonify({
-                "reference_date": ref_date,
+                "reference_date": str(ref_date),
                 "ranking_type":   tipo,
-                "total":          len(ranking),
-                "ranking":        ranking
+                "total":          len(rows),
+                "ranking":        rows
             })
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
 
     # ── GET /api/janus/score/<ticker> ─────────────────────────
-    # Score completo de um ativo com indicadores e engine scores
     @app.route("/api/janus/score/<ticker>")
     @requer_auth
     def api_janus_score(ticker):
         try:
             ticker = ticker.upper()
+            conn = get_conn()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT a.asset_id, a.ticker, c.trading_name, c.sector
+                    FROM assets a
+                    LEFT JOIN companies c ON c.company_id = a.company_id
+                    WHERE a.ticker=%s
+                """, (ticker,))
+                asset = cur.fetchone()
+                if not asset:
+                    conn.close()
+                    return jsonify({"erro": f"Ativo {ticker} não encontrado"}), 404
 
-            asset = db.supabase.table("assets") \
-                .select("asset_id,ticker,companies(trading_name,sector)") \
-                .eq("ticker", ticker).execute().data
+                asset_id = asset["asset_id"]
 
-            if not asset:
-                return jsonify({"erro": f"Ativo {ticker} não encontrado"}), 404
+                cur.execute("""
+                    SELECT * FROM janus_scores
+                    WHERE asset_id=%s ORDER BY reference_date DESC LIMIT 1
+                """, (asset_id,))
+                score = cur.fetchone()
 
-            asset_id = asset[0]["asset_id"]
+                cur.execute("""
+                    SELECT engine_name, score, confidence, trend, reference_date
+                    FROM engine_scores WHERE asset_id=%s
+                    ORDER BY reference_date DESC LIMIT 10
+                """, (asset_id,))
+                engine_scores = [dict(r) for r in cur.fetchall()]
 
-            score = db.supabase.table("janus_scores") \
-                .select("*") \
-                .eq("asset_id", asset_id) \
-                .order("reference_date", desc=True) \
-                .limit(1).execute().data
-
-            engine_scores = db.supabase.table("engine_scores") \
-                .select("engine_name,score,confidence,trend,reference_date") \
-                .eq("asset_id", asset_id) \
-                .order("reference_date", desc=True) \
-                .limit(10).execute().data
-
-            indicadores = db.supabase.table("indicator_values") \
-                .select("indicator_code,raw_value,unit,reference_date") \
-                .eq("asset_id", asset_id) \
-                .order("reference_date", desc=True) \
-                .limit(20).execute().data
-
-            empresa = asset[0].get("companies") or {}
+                cur.execute("""
+                    SELECT indicator_code, raw_value, unit, reference_date
+                    FROM indicator_values WHERE asset_id=%s
+                    ORDER BY reference_date DESC LIMIT 20
+                """, (asset_id,))
+                indicadores = [dict(r) for r in cur.fetchall()]
+            conn.close()
 
             return jsonify({
                 "ticker":        ticker,
-                "empresa":       empresa.get("trading_name"),
-                "setor":         empresa.get("sector"),
-                "janus_score":   score[0] if score else None,
+                "empresa":       asset["trading_name"],
+                "setor":         asset["sector"],
+                "janus_score":   dict(score) if score else None,
                 "engine_scores": engine_scores,
                 "indicadores":   indicadores
             })
@@ -134,58 +152,64 @@ def registrar_rotas_janus(app, requer_auth):
             return jsonify({"erro": str(e)}), 500
 
     # ── GET /api/janus/evidence/<ticker> ──────────────────────
-    # Evidências que explicam o score — transparência do Janus
     @app.route("/api/janus/evidence/<ticker>")
     @requer_auth
     def api_janus_evidence(ticker):
         try:
             ticker = ticker.upper()
+            conn = get_conn()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT asset_id FROM assets WHERE ticker=%s", (ticker,))
+                asset = cur.fetchone()
+                if not asset:
+                    conn.close()
+                    return jsonify({"erro": f"Ativo {ticker} não encontrado"}), 404
 
-            asset = db.supabase.table("assets") \
-                .select("asset_id") \
-                .eq("ticker", ticker).execute().data
-
-            if not asset:
-                return jsonify({"erro": f"Ativo {ticker} não encontrado"}), 404
-
-            evidencias = db.supabase.table("evidences") \
-                .select("evidence_code,engine_name,score,confidence,trend,weight,explanation,reference_date") \
-                .eq("asset_id", asset[0]["asset_id"]) \
-                .order("reference_date", desc=True) \
-                .limit(20).execute().data
+                cur.execute("""
+                    SELECT evidence_code, engine_name, score, confidence,
+                           trend, weight, explanation, reference_date
+                    FROM evidences WHERE asset_id=%s
+                    ORDER BY reference_date DESC LIMIT 20
+                """, (asset["asset_id"],))
+                evidencias = [dict(r) for r in cur.fetchall()]
+            conn.close()
 
             return jsonify({
-                "ticker":    ticker,
-                "total":     len(evidencias),
+                "ticker":     ticker,
+                "total":      len(evidencias),
                 "evidencias": evidencias
             })
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
 
     # ── GET /api/janus/assets ─────────────────────────────────
-    # Lista todos os ativos cobertos pelo Janus
     @app.route("/api/janus/assets")
     @requer_auth
     def api_janus_assets():
         try:
-            assets = db.supabase.table("assets") \
-                .select("ticker,asset_type,status,companies(trading_name,sector)") \
-                .eq("status", "ATIVO") \
-                .order("ticker").execute().data
-
+            conn = get_conn()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT a.ticker, a.asset_type, a.status,
+                           c.trading_name, c.sector
+                    FROM assets a
+                    LEFT JOIN companies c ON c.company_id = a.company_id
+                    WHERE a.status='ATIVO'
+                    ORDER BY a.ticker
+                """)
+                assets = [dict(r) for r in cur.fetchall()]
+            conn.close()
             return jsonify({"total": len(assets), "assets": assets})
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
 
     # ── POST /api/admin/janus/coletar ─────────────────────────
-    # Dispara coleta manual via painel admin
     @app.route("/api/admin/janus/coletar", methods=["POST"])
     def api_janus_coletar_manual():
-        # Verifica token admin
+        import auth
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
         if not token:
             token = request.cookies.get("janus_admin_token", "")
-        import auth
         if not auth.verificar_jwt_admin(token):
             return jsonify({"erro": "Acesso negado"}), 403
 
