@@ -107,11 +107,14 @@ def upsert_asset(stock):
             setor = stock.get("sector")
             if nome or setor:
                 cur.execute("""
-                    INSERT INTO companies (trading_name, sector, updated_at)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (trading_name) DO UPDATE SET sector=EXCLUDED.sector, updated_at=EXCLUDED.updated_at
+                    INSERT INTO companies (corporate_name, trading_name, sector, updated_at)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (trading_name) DO UPDATE SET
+                        corporate_name=EXCLUDED.corporate_name,
+                        sector=EXCLUDED.sector,
+                        updated_at=EXCLUDED.updated_at
                     RETURNING company_id
-                """, (nome, setor, agora_str()))
+                    """, (nome, nome, setor, agora_str()))
                 company_id = cur.fetchone()[0]
 
             # Upsert asset
