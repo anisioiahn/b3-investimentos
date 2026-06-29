@@ -284,8 +284,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       </div>
     </div>
     <div class="hright">
+      <span id="user-nome" style="font-size:12px;color:var(--text2);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
       <div class="status-pill"><span class="dot" id="sdot"></span><span id="status-txt">Conectando</span></div>
       <button class="btn" onclick="forcarAtualizacao()">↻ Atualizar</button>
+      <button class="btn" onclick="fazerLogout()" style="border-color:#e53935;color:#e53935" title="Sair">Sair</button>
     </div>
   </div>
 
@@ -862,7 +864,33 @@ function renderChart(dados){
 }
 function fecharModal(e){if(!e||e.target===document.getElementById('modal')){document.getElementById('modal').classList.remove('open');}}
 
-// ── PUSH NOTIFICATIONS ───────────────────────────────────────
+// ── AUTH ──────────────────────────────────────────────────────
+async function fazerLogout(){
+  await fetch('/api/auth/logout', {method:'POST'});
+  window.location.href='/login';
+}
+
+async function carregarUsuario(){
+  try{
+    const r = await fetch('/api/auth/me');
+    if(r.status===401){ window.location.href='/login'; return; }
+    const d = await r.json();
+    const el = document.getElementById('user-nome');
+    if(el) el.textContent = d.nome || d.email;
+  }catch(e){}
+}
+
+// Intercepta 401 em qualquer fetch
+const _fetchOriginal = window.fetch;
+window.fetch = async (...args) => {
+  const r = await _fetchOriginal(...args);
+  if(r.status === 401){
+    const clone = r.clone();
+    const d = await clone.json().catch(()=>({}));
+    if(d.redirect){ window.location.href = d.redirect; }
+  }
+  return r;
+};
 let _swRegistration = null;
 let _pushSubscription = null;
 
@@ -1428,6 +1456,7 @@ async function removerPosicao(ticker){
     renderCarteira();
   }catch(e){}
 }
+carregarUsuario();
 carregarDados();
 carregarLogsIniciais();
 carregarFontes();
