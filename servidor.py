@@ -4,7 +4,7 @@ from flask import Flask, jsonify, send_from_directory, request
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 import db
 
-VERSION = "2.3.4"
+VERSION = "2.3.5"
 TZ_BRASILIA = timezone(timedelta(hours=-3))
 def agora(): return datetime.now(TZ_BRASILIA)
 
