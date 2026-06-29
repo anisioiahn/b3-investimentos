@@ -665,6 +665,8 @@ def gerar_recomendacao(ticker, nome, noticias):
 INTERVALO_INICIAL = 5
 log(f"🚀 Janus v{VERSION} iniciado", "info")
 _db_ok = db.init_db()
+registrar_rotas_janus(app, requer_auth)
+iniciar_cron_janus()
 if _db_ok:
     cache_db = db.db_carregar_cache()
     if cache_db:
