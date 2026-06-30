@@ -1706,8 +1706,8 @@ async function carregarJanusRanking(){
       empresa: item.trading_name || item.ticker,
       setor: item.sector || '',
       asset_type: item.asset_type || 'ACAO',
-      score: item.janus_score,
-      quality_score: item.quality_score,
+      score: item.janus_score !== null && item.janus_score !== undefined ? parseFloat(item.janus_score) : null,
+      quality_score: item.quality_score !== null && item.quality_score !== undefined ? parseFloat(item.quality_score) : null,
       general_position: item.general_position,
       reference_date: item.reference_date
     }));
