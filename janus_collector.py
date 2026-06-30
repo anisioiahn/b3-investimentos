@@ -1,6 +1,8 @@
 # ============================================================
-# JANUS INDEX – DATA COLLECTOR v1.1 (Python)
-# Segue o padrão do projeto: psycopg2 + get_conn()
+# JANUS INDEX – DATA COLLECTOR v1.2 (Python)
+# Adaptado aos módulos do plano Brapi Startup:
+#   defaultKeyStatistics, balanceSheetHistory, incomeStatementHistory, summaryProfile
+# (financialData e cashflowStatementHistory NÃO disponíveis no plano)
 # ============================================================
 
 import os, time, json, requests
@@ -9,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 
 TOKEN_BRAPI   = os.getenv("BRAPI_TOKEN", "")
 BRAPI_BASE    = "https://brapi.dev/api"
-BRAPI_MODULES = "defaultKeyStatistics,financialData,balanceSheetHistory,cashflowStatementHistory"
+BRAPI_MODULES = "defaultKeyStatistics,balanceSheetHistory,incomeStatementHistory,summaryProfile"
 DELAY_MS      = 0.5
 MAX_ATIVOS    = 100
 
@@ -101,7 +103,6 @@ def upsert_asset(stock):
     try:
         conn = get_conn()
         with conn.cursor() as cur:
-            # Upsert company
             company_id = None
             nome = stock.get("name", ticker)
             setor = stock.get("sector")
@@ -117,7 +118,6 @@ def upsert_asset(stock):
                 """, (nome, nome, setor, agora_str()))
                 company_id = cur.fetchone()[0]
 
-            # Upsert asset
             cur.execute("""
                 INSERT INTO assets (ticker, company_id, asset_type, currency, country, status, updated_at)
                 VALUES (%s, %s, 'ACAO', 'BRL', 'BR', 'ATIVO', %s)
@@ -133,7 +133,6 @@ def upsert_asset(stock):
 
 # ── STEP 3: Dados completos do ativo na Brapi ────────────────
 def buscar_dados_ativo(ticker):
-    # Token via query param + User-Agent de navegador (servidor pode ser bloqueado sem isso)
     url = f"{BRAPI_BASE}/quote/{ticker}?modules={BRAPI_MODULES}&token={TOKEN_BRAPI}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -176,19 +175,22 @@ def salvar_market_snapshot(asset_id, dados, source_id):
                 safe_num(dados.get("regularMarketPrice")),
                 safe_num(dados.get("regularMarketVolume")),
                 safe_num(dados.get("marketCap")),
-                safe_num(dados.get("beta")),
+                safe_num((dados.get("defaultKeyStatistics") or {}).get("beta")),
                 source_id
             ))
         conn.commit(); conn.close()
     except Exception as e:
         print(f"[COLLECTOR] ⚠️ Erro market_snapshot: {e}")
 
-# ── STEP 5: Financial snapshot ────────────────────────────────
+# ── STEP 5: Financial snapshot (a partir de incomeStatementHistory + balanceSheetHistory) ─
 def salvar_financial_snapshot(asset_id, dados, source_id):
     try:
-        fin = dados.get("financialData") or {}
-        bal = ((dados.get("balanceSheetHistory") or {}).get("balanceSheetStatements") or [{}])[0]
-        cf  = ((dados.get("cashflowStatementHistory") or {}).get("cashflowStatements") or [{}])[0]
+        ks = dados.get("defaultKeyStatistics") or {}
+        inc_hist = dados.get("incomeStatementHistory") or []
+        bal_hist = dados.get("balanceSheetHistory") or []
+
+        inc = inc_hist[0] if inc_hist else {}
+        bal = bal_hist[0] if bal_hist else {}
 
         conn = get_conn()
         with conn.cursor() as cur:
@@ -197,27 +199,25 @@ def salvar_financial_snapshot(asset_id, dados, source_id):
                     (asset_id, reference_date, period_type, revenue, gross_profit, ebitda,
                      net_income, equity, total_assets, total_debt, cash_and_equivalents,
                      operating_cash_flow, free_cash_flow, capex, source_id, data_version)
-                VALUES (%s,%s,'TTM',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'1.0')
+                VALUES (%s,%s,'ANUAL',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'1.0')
                 ON CONFLICT (asset_id, reference_date, period_type) DO UPDATE SET
                     revenue=EXCLUDED.revenue, gross_profit=EXCLUDED.gross_profit,
                     ebitda=EXCLUDED.ebitda, net_income=EXCLUDED.net_income,
                     equity=EXCLUDED.equity, total_assets=EXCLUDED.total_assets,
-                    total_debt=EXCLUDED.total_debt, cash_and_equivalents=EXCLUDED.cash_and_equivalents,
-                    operating_cash_flow=EXCLUDED.operating_cash_flow,
-                    free_cash_flow=EXCLUDED.free_cash_flow, capex=EXCLUDED.capex
+                    total_debt=EXCLUDED.total_debt, cash_and_equivalents=EXCLUDED.cash_and_equivalents
             """, (
                 asset_id, hoje(),
-                safe_num((fin.get("totalRevenue") or {}).get("raw")),
-                safe_num((fin.get("grossProfits") or {}).get("raw")),
-                safe_num((fin.get("ebitda") or {}).get("raw")),
-                safe_num((fin.get("netIncomeToCommon") or {}).get("raw")),
-                safe_num((bal.get("totalStockholderEquity") or {}).get("raw")),
-                safe_num((bal.get("totalAssets") or {}).get("raw")),
-                safe_num((bal.get("totalDebt") or fin.get("totalDebt") or {}).get("raw")),
-                safe_num((bal.get("cash") or fin.get("totalCash") or {}).get("raw")),
-                safe_num((fin.get("operatingCashflow") or cf.get("totalCashFromOperatingActivities") or {}).get("raw")),
-                safe_num((fin.get("freeCashflow") or {}).get("raw")),
-                safe_num((cf.get("capitalExpenditures") or {}).get("raw")),
+                safe_num(inc.get("totalRevenue")),
+                safe_num(inc.get("grossProfit")),
+                safe_num(inc.get("cleanEbitda") or inc.get("ebit")),
+                safe_num(inc.get("netIncome")),
+                safe_num(bal.get("totalStockholderEquity")),
+                safe_num(bal.get("totalAssets")),
+                safe_num(bal.get("totalLiab") or bal.get("totalDebt")),
+                safe_num(bal.get("cash")),
+                None,  # operating_cash_flow indisponível no plano atual
+                None,  # free_cash_flow indisponível no plano atual
+                None,  # capex indisponível no plano atual
                 source_id
             ))
         conn.commit(); conn.close()
@@ -225,23 +225,60 @@ def salvar_financial_snapshot(asset_id, dados, source_id):
         print(f"[COLLECTOR] ⚠️ Erro financial_snapshot: {e}")
 
 # ── STEP 6: Indicadores ───────────────────────────────────────
+def calcular_indicadores_derivados(dados):
+    """Calcula ROE, Margem Líquida e Crescimento de Receita a partir
+    dos módulos disponíveis no plano (sem financialData)."""
+    ks = dados.get("defaultKeyStatistics") or {}
+    inc_hist = dados.get("incomeStatementHistory") or []
+
+    resultado = {}
+
+    # Margem líquida: já vem pronta no defaultKeyStatistics
+    resultado["FIN_NET_MARGIN"] = safe_num(ks.get("profitMargins"))
+
+    # ROE = Lucro Líquido / Patrimônio Líquido
+    net_income = safe_num(ks.get("netIncomeToCommon"))
+    book_value = safe_num(ks.get("bookValue"))
+    shares     = safe_num(ks.get("sharesOutstanding"))
+    if net_income is not None and book_value and shares:
+        equity = book_value * shares
+        resultado["FIN_ROE"] = net_income / equity if equity else None
+    else:
+        resultado["FIN_ROE"] = None
+
+    # Crescimento de Receita = (receita atual - receita anterior) / receita anterior
+    if len(inc_hist) >= 2:
+        rev_atual    = safe_num(inc_hist[0].get("totalRevenue"))
+        rev_anterior = safe_num(inc_hist[1].get("totalRevenue"))
+        if rev_atual is not None and rev_anterior:
+            resultado["FIN_REVENUE_GROWTH"] = (rev_atual - rev_anterior) / rev_anterior
+        else:
+            resultado["FIN_REVENUE_GROWTH"] = None
+    else:
+        resultado["FIN_REVENUE_GROWTH"] = None
+
+    # ROIC aproximado: usamos ROE como proxy por ora (sem dívida detalhada confiável)
+    resultado["FIN_ROIC"] = resultado["FIN_ROE"]
+
+    return resultado
+
+
 def salvar_indicadores(asset_id, dados, source_id):
-    ks  = dados.get("defaultKeyStatistics") or {}
-    fin = dados.get("financialData") or {}
+    ks = dados.get("defaultKeyStatistics") or {}
+    inc_hist = dados.get("incomeStatementHistory") or []
+    inc = inc_hist[0] if inc_hist else {}
+    derivados = calcular_indicadores_derivados(dados)
 
     indicadores = [
-        ("FIN_ROE",            (ks.get("returnOnEquity")       or {}).get("raw"), "%"),
-        ("FIN_ROIC",           (ks.get("returnOnCapital")      or {}).get("raw"), "%"),
-        ("FIN_NET_MARGIN",     (fin.get("profitMargins")       or {}).get("raw"), "%"),
-        ("FIN_FCO",            (fin.get("operatingCashflow")   or {}).get("raw"), "R$"),
-        ("FIN_REVENUE",        (fin.get("totalRevenue")        or {}).get("raw"), "R$"),
-        ("FIN_REVENUE_GROWTH", (fin.get("revenueGrowth")       or {}).get("raw"), "%"),
-        ("FIN_GROSS_MARGIN",   (fin.get("grossMargins")        or {}).get("raw"), "%"),
-        ("FIN_EBITDA_MARGIN",  (fin.get("ebitdaMargins")       or {}).get("raw"), "%"),
-        ("VAL_PE",             (ks.get("forwardPE")            or {}).get("raw"), "x"),
-        ("VAL_PVP",            (ks.get("priceToBook")          or {}).get("raw"), "x"),
-        ("VAL_EV_EBITDA",      (ks.get("enterpriseToEbitda")   or {}).get("raw"), "x"),
-        ("VAL_DIVIDEND_YIELD", (ks.get("dividendYield")        or {}).get("raw"), "%"),
+        ("FIN_ROE",            derivados.get("FIN_ROE"),            "%"),
+        ("FIN_ROIC",           derivados.get("FIN_ROIC"),           "%"),
+        ("FIN_NET_MARGIN",     derivados.get("FIN_NET_MARGIN"),     "%"),
+        ("FIN_REVENUE",        safe_num(inc.get("totalRevenue")),   "R$"),
+        ("FIN_REVENUE_GROWTH", derivados.get("FIN_REVENUE_GROWTH"), "%"),
+        ("VAL_PE",             safe_num(ks.get("trailingPE")),      "x"),
+        ("VAL_PVP",            safe_num(ks.get("priceToBook")),     "x"),
+        ("VAL_EV_EBITDA",      safe_num(ks.get("enterpriseToEbitda")), "x"),
+        ("VAL_DIVIDEND_YIELD", safe_num(ks.get("dividendYield")),   "%"),
     ]
 
     for code, value, unit in indicadores:
@@ -256,24 +293,25 @@ def salvar_indicadores(asset_id, dados, source_id):
                     VALUES (%s,%s,%s,%s,%s,'TTM',%s,'1.0')
                     ON CONFLICT (asset_id, indicator_code, reference_date, period_type)
                     DO UPDATE SET raw_value=EXCLUDED.raw_value
-                """, (asset_id, code, hoje(), safe_num(value), unit, source_id))
+                """, (asset_id, code, hoje(), value, unit, source_id))
             conn.commit(); conn.close()
         except Exception as e:
             print(f"[COLLECTOR] ⚠️ Erro indicador {code}: {e}")
 
+    return derivados
+
 # ── STEP 7: Calcular Quality Score ───────────────────────────
+# FCO removido do MVP (indisponível no plano atual)
 BENCHMARKS = {
     "FIN_ROE":            {"min": -0.10, "max": 0.40},
     "FIN_ROIC":           {"min": -0.05, "max": 0.35},
     "FIN_NET_MARGIN":     {"min": -0.10, "max": 0.30},
-    "FIN_FCO":            {"min": 0,     "max": 10_000_000_000},
     "FIN_REVENUE_GROWTH": {"min": -0.20, "max": 0.50},
 }
 PESOS = {
-    "FIN_ROE":            0.25,
-    "FIN_ROIC":           0.20,
-    "FIN_NET_MARGIN":     0.20,
-    "FIN_FCO":            0.15,
+    "FIN_ROE":            0.30,
+    "FIN_ROIC":           0.25,
+    "FIN_NET_MARGIN":     0.25,
     "FIN_REVENUE_GROWTH": 0.20,
 }
 
@@ -293,9 +331,13 @@ def calcular_quality_score(ind_map):
         evidencias.append({"code": code, "valor": valor, "score": norm, "peso": peso})
 
     if peso_total == 0: return None
+
+    score_final = score_total / peso_total
+    confianca   = (peso_total / 1.0) * 100
+
     return {
-        "score":      round(score_total / peso_total, 2),
-        "confidence": round((peso_total / 1.0) * 100, 2),
+        "score":      round(score_final, 2),
+        "confidence": round(confianca, 2),
         "evidencias": evidencias
     }
 
@@ -425,18 +467,7 @@ def run_collector():
 
                 salvar_market_snapshot(asset_id, dados, source_id)
                 salvar_financial_snapshot(asset_id, dados, source_id)
-                salvar_indicadores(asset_id, dados, source_id)
-
-                ks  = dados.get("defaultKeyStatistics") or {}
-                fin = dados.get("financialData") or {}
-
-                ind_map = {
-                    "FIN_ROE":            safe_num((ks.get("returnOnEquity")     or {}).get("raw")),
-                    "FIN_ROIC":           safe_num((ks.get("returnOnCapital")    or {}).get("raw")),
-                    "FIN_NET_MARGIN":     safe_num((fin.get("profitMargins")     or {}).get("raw")),
-                    "FIN_FCO":            safe_num((fin.get("operatingCashflow") or {}).get("raw")),
-                    "FIN_REVENUE_GROWTH": safe_num((fin.get("revenueGrowth")     or {}).get("raw")),
-                }
+                ind_map = salvar_indicadores(asset_id, dados, source_id)
 
                 score = salvar_scores(asset_id, ind_map)
                 if score is not None:
