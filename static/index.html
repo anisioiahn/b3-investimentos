@@ -1687,6 +1687,7 @@ function renderTabelaCarteira(){
       <td class="num ${lucroClass}" id="ct-pct-${p.ticker}">${p.lucro_pct !== null ? `${p.lucro_pct >= 0 ? '+' : ''}${p.lucro_pct.toFixed(2)}%` : '—'}</td>
       <td>${alertasHtml}</td>
       <td>
+        <button class="ct-edit" onclick="abrirGrafico('${p.ticker}')" title="Ver análise">📊</button>
         <button class="ct-edit" onclick="editarPosicao('${p.ticker}')" title="Editar">✏️</button>
         <button class="ct-del" onclick="removerPosicao('${p.ticker}')" title="Remover">🗑</button>
       </td>
