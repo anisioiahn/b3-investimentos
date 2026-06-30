@@ -102,6 +102,8 @@ def init_db():
         nome TEXT, cor TEXT, setor_id TEXT, setor_nome TEXT,
         preco_medio NUMERIC, quantidade NUMERIC,
         data_compra TEXT, corretora TEXT, adicionado_em TEXT,
+        status TEXT NOT NULL DEFAULT 'confirmada' CHECK (status IN ('confirmada','pendente')),
+        origem TEXT DEFAULT 'manual',
         UNIQUE(usuario_id, ticker)
     );
 
@@ -143,6 +145,23 @@ def init_db():
         with conn.cursor() as cur: cur.execute(sql)
         conn.commit(); conn.close()
         print("[DB] Tabelas v3.0 criadas/verificadas", flush=True)
+
+        # Migration segura para bancos já existentes (caso as colunas ainda não existam)
+        try:
+            conn = get_conn()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    ALTER TABLE carteira
+                    ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'confirmada'
+                """)
+                cur.execute("""
+                    ALTER TABLE carteira
+                    ADD COLUMN IF NOT EXISTS origem TEXT DEFAULT 'manual'
+                """)
+            conn.commit(); conn.close()
+        except Exception as e:
+            print(f"[DB] Aviso migration carteira: {e}", flush=True)
+
         return True
     except Exception as e:
         print(f"[DB] Erro init: {e}", flush=True)
@@ -440,10 +459,11 @@ def db_listar_todos_alertas():
 
 # ── CARTEIRA por usuário ───────────────────────────────────────
 def db_listar_carteira(uid):
+    """Retorna TODAS as posições (confirmadas e pendentes). O front separa por 'status'."""
     try:
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT * FROM carteira WHERE usuario_id=%s ORDER BY ticker", (uid,))
+            cur.execute("SELECT * FROM carteira WHERE usuario_id=%s ORDER BY status, ticker", (uid,))
             rows = [dict(r) for r in cur.fetchall()]
             for r in rows:
                 if r.get('preco_medio'): r['preco_medio'] = float(r['preco_medio'])
@@ -453,14 +473,15 @@ def db_listar_carteira(uid):
     except: return []
 
 def db_salvar_posicao(uid, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora):
+    """Salva/atualiza posição como CONFIRMADA (fluxo manual normal)."""
     try:
         conn = get_conn()
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO carteira (usuario_id, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora, adicionado_em)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                INSERT INTO carteira (usuario_id, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora, adicionado_em, status, origem)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'confirmada','manual')
                 ON CONFLICT (usuario_id, ticker) DO UPDATE SET
-                nome=%s, cor=%s, setor_id=%s, setor_nome=%s, preco_medio=%s, quantidade=%s, data_compra=%s, corretora=%s, adicionado_em=%s
+                nome=%s, cor=%s, setor_id=%s, setor_nome=%s, preco_medio=%s, quantidade=%s, data_compra=%s, corretora=%s, adicionado_em=%s, status='confirmada'
             """, (uid, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora, agora_str(),
                   nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora, agora_str()))
         conn.commit(); conn.close()
@@ -477,6 +498,59 @@ def db_remover_posicao(uid, ticker):
         conn.commit(); conn.close()
         return True
     except: return False
+
+# ── CARTEIRA PENDENTE (sugestões do Janus Index) ────────────────
+def db_salvar_posicao_pendente(uid, ticker, nome, cor, setor_id, setor_nome,
+                                 preco_medio, quantidade, data_compra, corretora, origem='janus_sugestao'):
+    """Salva uma posição com status='pendente'. Não sobrescreve se o ticker já existir (confirmada ou pendente)."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO carteira (usuario_id, ticker, nome, cor, setor_id, setor_nome,
+                    preco_medio, quantidade, data_compra, corretora, adicionado_em, status, origem)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pendente',%s)
+                ON CONFLICT (usuario_id, ticker) DO NOTHING
+            """, (uid, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade,
+                  data_compra, corretora, agora_str(), origem))
+            inserido = cur.rowcount > 0
+        conn.commit(); conn.close()
+        return inserido
+    except Exception as e:
+        print(f"[DB] Erro salvar posição pendente: {e}", flush=True)
+        return False
+
+def db_confirmar_posicao_pendente(uid, ticker, preco_medio, quantidade, data_compra, corretora):
+    """Confirma uma posição pendente, transformando-a em confirmada (com valores possivelmente editados pelo usuário)."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE carteira SET
+                    preco_medio=%s, quantidade=%s, data_compra=%s, corretora=%s,
+                    status='confirmada', adicionado_em=%s
+                WHERE usuario_id=%s AND ticker=%s AND status='pendente'
+            """, (preco_medio, quantidade, data_compra, corretora, agora_str(), uid, ticker))
+            ok = cur.rowcount > 0
+        conn.commit(); conn.close()
+        return ok
+    except Exception as e:
+        print(f"[DB] Erro confirmar posição pendente: {e}", flush=True)
+        return False
+
+def db_descartar_posicao_pendente(uid, ticker):
+    """Remove uma posição pendente sem confirmar (descarta a sugestão)."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM carteira WHERE usuario_id=%s AND ticker=%s AND status='pendente'
+            """, (uid, ticker))
+        conn.commit(); conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erro descartar posição pendente: {e}", flush=True)
+        return False
 
 # ── PUSH por usuário ──────────────────────────────────────────
 def db_listar_push(uid):
