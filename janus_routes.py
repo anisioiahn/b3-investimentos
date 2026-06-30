@@ -53,6 +53,15 @@ def registrar_rotas_janus(app, requer_auth):
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
 
+    # ── GET /api/janus/debug-token (temporário) ───────────────
+    @app.route("/api/janus/debug-token")
+    def api_janus_debug_token():
+        token = os.getenv("BRAPI_TOKEN", "")
+        return jsonify({
+            "token_length": len(token),
+            "token_preview": (token[:6] + "..." + token[-4:]) if len(token) > 10 else token
+        })
+
     # ── GET /api/janus/ranking ────────────────────────────────
     @app.route("/api/janus/ranking")
     @requer_auth
