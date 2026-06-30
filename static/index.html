@@ -269,6 +269,83 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .countdown-val{font-family:monospace;font-size:12px;font-weight:600;color:var(--green);min-width:50px}
 .progress-bar{height:3px;background:var(--border);position:relative}
 .progress-fill{height:100%;background:var(--green);transition:width 1s linear;width:0%}
+
+/* ============================================================
+   JANUS INDEX
+   ============================================================ */
+.ji-status-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:1.25rem}
+.ji-status-info{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2)}
+.ji-status-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0}
+.ji-status-dot.atualizando{background:#f59e0b;animation:pulse 1s infinite}
+.ji-status-dot.erro{background:#e53935;animation:none}
+.ji-status-txt strong{color:var(--text)}
+.ji-btn-atualizar{padding:8px 16px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.ji-btn-atualizar:hover{opacity:.9}
+.ji-btn-atualizar:disabled{opacity:.5;cursor:not-allowed}
+.ji-btn-atualizar .spin{display:inline-block;animation:spin 1s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+.ji-mini-rankings{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:1.5rem}
+@media(max-width:680px){.ji-mini-rankings{grid-template-columns:1fr}}
+.ji-mini-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;box-shadow:var(--shadow)}
+.ji-mini-card.melhores{border-top:3px solid #16a34a}
+.ji-mini-card.piores{border-top:3px solid #e53935}
+.ji-mini-title{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.ji-mini-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
+.ji-mini-row:last-child{border-bottom:none}
+.ji-mini-pos{font-size:11px;color:var(--text3);width:16px;flex-shrink:0;font-weight:600}
+.ji-mini-ticker{font-size:12.5px;font-weight:700;flex:1}
+.ji-mini-empresa{font-size:10.5px;color:var(--text2);display:block;font-weight:400}
+
+.ji-sugerir-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--green-light);border-radius:12px;padding:12px 16px;margin-bottom:1.25rem}
+.ji-sugerir-label{font-size:13px;font-weight:600;color:var(--text)}
+.ji-sugerir-input{width:60px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;text-align:center;font-family:monospace}
+.ji-sugerir-input:focus{outline:none;border-color:var(--green)}
+.ji-btn-sugerir{padding:7px 16px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+.ji-btn-sugerir:hover{opacity:.9}
+
+.ji-table-wrap{overflow-x:auto}
+.ji-table{width:100%;border-collapse:collapse;font-size:13px}
+.ji-table th{text-align:left;padding:10px;font-size:11px;color:var(--text2);font-weight:600;border-bottom:2px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+.ji-table th:hover{color:var(--green)}
+.ji-table th.num{text-align:right}
+.ji-table th .sort-arrow{font-size:9px;margin-left:3px;opacity:.5}
+.ji-table th.sorted .sort-arrow{opacity:1;color:var(--green)}
+.ji-table td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.ji-table td.num{text-align:right;font-family:monospace}
+.ji-table tr:hover td{background:var(--bg)}
+.ji-pos{font-size:12px;color:var(--text3);font-weight:600;width:30px}
+.ji-row-ticker{display:flex;align-items:center;gap:10px}
+.ji-logo{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
+.ji-ticker{font-size:13px;font-weight:700}
+.ji-empresa{font-size:11px;color:var(--text2)}
+.ji-setor{font-size:10px;color:var(--text3)}
+
+.ji-score-badge{display:inline-flex;align-items:center;justify-content:center;min-width:48px;padding:5px 10px;border-radius:8px;font-weight:700;font-size:13px;font-family:monospace}
+.ji-score-muito-favoravel{background:#dcfce7;color:#15803d}
+.ji-score-favoravel{background:#ecfdf5;color:#16a34a}
+.ji-score-neutro{background:#fef9c3;color:#a16207}
+.ji-score-desfavoravel{background:#ffedd5;color:#c2410c}
+.ji-score-muito-desfavoravel{background:#fee2e2;color:#dc2626}
+.ji-classificacao-txt{font-size:10px;margin-top:3px;text-align:center}
+
+.ji-trend-up{color:#16a34a}
+.ji-trend-down{color:#e53935}
+.ji-trend-stable{color:var(--text3)}
+
+.ji-empty{text-align:center;padding:3rem;color:var(--text2)}
+.ji-empty-icon{font-size:40px;margin-bottom:12px}
+
+.ji-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:1rem}
+.ji-modal-overlay.open{display:flex}
+.ji-modal{background:#fff;border-radius:var(--radius);width:100%;max-width:560px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.ji-modal-header{display:flex;align-items:center;justify-content:space-between;padding:1.2rem 1.5rem;border-bottom:1px solid var(--border)}
+.ji-modal-title{font-size:15px;font-weight:700}
+.ji-modal-sub{font-size:12px;color:var(--text2);margin-top:2px}
+.ji-modal-body{padding:1rem 1.5rem;overflow-y:auto;flex:1}
+.ji-modal-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.ji-modal-item:last-child{border-bottom:none}
+.ji-modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);font-size:12px;color:var(--text3)}
 </style>
 </head>
 <body>
@@ -315,6 +392,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="tab active" onclick="goPage('setores',this)">📊 Setores</div>
     <div class="tab" onclick="goPage('empresas',this)" id="tab-empresas" style="display:none">🏢 <span id="tab-sname">Empresas</span></div>
     <div class="tab" onclick="goPage('carteira',this)">💼 Carteira</div>
+    <div class="tab" onclick="goPage('janus',this)">🎯 Janus Index</div>
     <div class="tab" onclick="goPage('alertas',this)">🔔 Alertas <span class="tab-badge" id="alt-cnt" style="display:none">0</span></div>
     <div class="tab" onclick="goPage('log',this)">🖥️ Log</div>
     <div class="tab" onclick="goPage('params',this)">⚙️ Parâmetros</div>
@@ -337,6 +415,44 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <button class="btn-add-pos" onclick="abrirModalPosicao()">+ Adicionar posição</button>
       </div>
       <div id="carteira-tabela"></div>
+    </div>
+
+    <!-- JANUS INDEX -->
+    <div class="page" id="page-janus">
+
+      <!-- Status da última coleta -->
+      <div class="ji-status-bar">
+        <div class="ji-status-info">
+          <span class="ji-status-dot" id="ji-status-dot"></span>
+          <span class="ji-status-txt" id="ji-status-txt">Carregando status...</span>
+        </div>
+        <button class="ji-btn-atualizar" id="ji-btn-atualizar" onclick="atualizarJanusIndex()">
+          <span id="ji-btn-icon">↻</span> Atualizar agora
+        </button>
+      </div>
+
+      <!-- Mini rankings -->
+      <div class="ji-mini-rankings">
+        <div class="ji-mini-card melhores">
+          <div class="ji-mini-title">🏆 Melhores Scores</div>
+          <div id="ji-top-melhores"></div>
+        </div>
+        <div class="ji-mini-card piores">
+          <div class="ji-mini-title">⚠️ Piores Scores</div>
+          <div id="ji-top-piores"></div>
+        </div>
+      </div>
+
+      <!-- Barra de carteira sugerida -->
+      <div class="ji-sugerir-bar">
+        <span class="ji-sugerir-label">💡 Sugerir carteira com score acima de</span>
+        <input type="number" class="ji-sugerir-input" id="ji-score-min" value="70" min="0" max="100">
+        <button class="ji-btn-sugerir" onclick="sugerirCarteira()">Gerar sugestão</button>
+      </div>
+
+      <!-- Tabela completa do ranking -->
+      <div id="ji-tabela-area"></div>
+
     </div>
 
     <div class="page" id="page-alertas"><div id="altbox"></div></div>
@@ -425,6 +541,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="pos-modal-footer">
       <button class="pos-btn-cancel" onclick="fecharModalPosicao()">Cancelar</button>
       <button class="pos-btn-save" onclick="salvarPosicao()">💾 Salvar posição</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CARTEIRA SUGERIDA (JANUS INDEX) -->
+<div class="ji-modal-overlay" id="ji-modal-sugestao" onclick="fecharModalSugestao(event)">
+  <div class="ji-modal" onclick="event.stopPropagation()">
+    <div class="ji-modal-header">
+      <div>
+        <div class="ji-modal-title">💡 Carteira Sugerida pelo Janus Index</div>
+        <div class="ji-modal-sub" id="ji-modal-sub">Ativos com score acima do limite definido</div>
+      </div>
+      <button class="modal-close" onclick="fecharModalSugestao()">✕</button>
+    </div>
+    <div class="ji-modal-body" id="ji-modal-body"></div>
+    <div class="ji-modal-footer">
+      Esta é apenas uma sugestão baseada em fundamentos. O Janus não recomenda investimentos — avalie sempre antes de decidir.
     </div>
   </div>
 </div>
@@ -630,6 +763,7 @@ function goPage(p,el){
   if(p==='alertas') renderAlerts();
   if(p==='params') renderFontes();
   if(p==='carteira') carregarCarteira();
+  if(p==='janus') carregarJanusIndex();
 }
 function goBack(){currentSector=null;document.getElementById('tab-empresas').style.display='none';goPage('setores',document.querySelector('.tab'));}
 
@@ -1473,6 +1607,270 @@ async function removerPosicao(ticker){
     renderCarteira();
   }catch(e){}
 }
+
+// ============================================================
+// JANUS INDEX — JAVASCRIPT
+// ============================================================
+
+let _janusRanking = [];
+let _janusStatus = null;
+let _janusSortCol = 'score';
+let _janusSortDir = 'desc';
+
+function ji_classSlug(classificacao){
+  const map = {
+    'Muito Favorável': 'muito-favoravel',
+    'Favorável': 'favoravel',
+    'Neutro': 'neutro',
+    'Desfavorável': 'desfavoravel',
+    'Muito Desfavorável': 'muito-desfavoravel'
+  };
+  return map[classificacao] || 'neutro';
+}
+
+function ji_trendIcon(trend){
+  if(trend === 'UP') return '<span class="ji-trend-up">▲</span>';
+  if(trend === 'DOWN') return '<span class="ji-trend-down">▼</span>';
+  return '<span class="ji-trend-stable">—</span>';
+}
+
+async function carregarJanusStatus(){
+  try{
+    const r = await fetch('/api/janus/status');
+    if(!r.ok) return;
+    const d = await r.json();
+    _janusStatus = d;
+    renderJanusStatus();
+  }catch(e){}
+}
+
+function renderJanusStatus(){
+  const dot = document.getElementById('ji-status-dot');
+  const txt = document.getElementById('ji-status-txt');
+  if(!_janusStatus || !dot || !txt) return;
+
+  const ultima = _janusStatus.ultima_coleta;
+  if(!ultima){
+    dot.className = 'ji-status-dot erro';
+    txt.innerHTML = '<strong>Nenhuma coleta realizada ainda</strong>';
+    return;
+  }
+
+  const status = ultima.status;
+  const dataFim = ultima.finished_at ? new Date(ultima.finished_at) : null;
+  const dataStr = dataFim ? dataFim.toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo', dateStyle:'short', timeStyle:'short'}) : '—';
+
+  if(status === 'RUNNING'){
+    dot.className = 'ji-status-dot atualizando';
+    txt.innerHTML = `<strong>Atualizando...</strong> coleta em andamento`;
+  } else if(status === 'SUCCESS'){
+    dot.className = 'ji-status-dot';
+    txt.innerHTML = `Última atualização: <strong>${dataStr}</strong> · ${ultima.records_processed}/${_janusStatus.total_ativos} ativos processados`;
+  } else {
+    dot.className = 'ji-status-dot erro';
+    txt.innerHTML = `<strong>Falha na última coleta</strong> · ${dataStr}`;
+  }
+}
+
+async function atualizarJanusIndex(){
+  const btn = document.getElementById('ji-btn-atualizar');
+  const icon = document.getElementById('ji-btn-icon');
+  if(btn){ btn.disabled = true; }
+  if(icon){ icon.classList.add('spin'); }
+
+  try{
+    await fetch('/api/admin/janus/coletar', {method:'POST', headers:{'Content-Type':'application/json'}});
+  }catch(e){}
+
+  let tentativas = 0;
+  const poll = setInterval(async ()=>{
+    tentativas++;
+    await carregarJanusStatus();
+    const rodando = _janusStatus?.ultima_coleta?.status === 'RUNNING';
+    if(!rodando || tentativas >= 36){
+      clearInterval(poll);
+      if(btn) btn.disabled = false;
+      if(icon) icon.classList.remove('spin');
+      await carregarJanusRanking();
+    }
+  }, 10000);
+}
+
+async function carregarJanusRanking(){
+  try{
+    const r = await fetch('/api/janus/ranking?limit=200');
+    if(!r.ok) return;
+    const d = await r.json();
+    _janusRanking = (d.ranking || []).map(item => ({
+      ticker: item.ticker,
+      empresa: item.trading_name || item.ticker,
+      setor: item.sector || '',
+      asset_type: item.asset_type || 'ACAO',
+      score: item.janus_score,
+      quality_score: item.quality_score,
+      general_position: item.general_position,
+      reference_date: item.reference_date
+    }));
+    renderJanusMiniRankings();
+    renderJanusTabela();
+  }catch(e){}
+}
+
+function renderJanusMiniRankings(){
+  const elMelhores = document.getElementById('ji-top-melhores');
+  const elPiores = document.getElementById('ji-top-piores');
+  if(!elMelhores || !elPiores) return;
+
+  if(!_janusRanking.length){
+    elMelhores.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Sem dados ainda</div>';
+    elPiores.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Sem dados ainda</div>';
+    return;
+  }
+
+  const ordenado = [..._janusRanking].sort((a,b)=> (b.score||0) - (a.score||0));
+  const melhores = ordenado.slice(0, 5);
+  const piores = ordenado.slice(-5).reverse();
+
+  const renderRow = (item, i) => `
+    <div class="ji-mini-row">
+      <span class="ji-mini-pos">${i+1}º</span>
+      <span class="ji-mini-ticker">${item.ticker}<span class="ji-mini-empresa">${item.empresa}</span></span>
+      <span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(item.score))}">${item.score?.toFixed(1) ?? '—'}</span>
+    </div>`;
+
+  elMelhores.innerHTML = melhores.map(renderRow).join('');
+  elPiores.innerHTML = piores.map(renderRow).join('');
+}
+
+function janusClassificacaoPorScore(score){
+  if(score === null || score === undefined) return 'Neutro';
+  if(score >= 80) return 'Muito Favorável';
+  if(score >= 60) return 'Favorável';
+  if(score >= 40) return 'Neutro';
+  if(score >= 20) return 'Desfavorável';
+  return 'Muito Desfavorável';
+}
+
+function janusOrdenar(coluna){
+  if(_janusSortCol === coluna){
+    _janusSortDir = _janusSortDir === 'desc' ? 'asc' : 'desc';
+  } else {
+    _janusSortCol = coluna;
+    _janusSortDir = coluna === 'ticker' || coluna === 'empresa' || coluna === 'setor' ? 'asc' : 'desc';
+  }
+  renderJanusTabela();
+}
+
+function renderJanusTabela(){
+  const el = document.getElementById('ji-tabela-area');
+  if(!el) return;
+
+  if(!_janusRanking.length){
+    el.innerHTML = `<div class="ji-empty">
+      <div class="ji-empty-icon">🎯</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px">Nenhum dado disponível ainda</div>
+      <div style="font-size:13px">Clique em "Atualizar agora" para gerar o primeiro ranking do Janus Index</div>
+    </div>`;
+    return;
+  }
+
+  const ordenado = [..._janusRanking].sort((a,b)=>{
+    let va = a[_janusSortCol], vb = b[_janusSortCol];
+    if(typeof va === 'string') va = (va||'').toLowerCase();
+    if(typeof vb === 'string') vb = (vb||'').toLowerCase();
+    if(va === null || va === undefined) va = _janusSortDir === 'desc' ? -Infinity : Infinity;
+    if(vb === null || vb === undefined) vb = _janusSortDir === 'desc' ? -Infinity : Infinity;
+    if(va < vb) return _janusSortDir === 'asc' ? -1 : 1;
+    if(va > vb) return _janusSortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const arrow = (col) => _janusSortCol === col
+    ? `<span class="sort-arrow">${_janusSortDir === 'desc' ? '▼' : '▲'}</span>`
+    : `<span class="sort-arrow">⇅</span>`;
+  const thCls = (col) => _janusSortCol === col ? 'sorted' : '';
+
+  let html = `<div class="ji-table-wrap"><table class="ji-table">
+    <thead><tr>
+      <th class="num">#</th>
+      <th class="${thCls('ticker')}" onclick="janusOrdenar('ticker')">Ativo ${arrow('ticker')}</th>
+      <th class="${thCls('setor')}" onclick="janusOrdenar('setor')">Setor ${arrow('setor')}</th>
+      <th class="num ${thCls('score')}" onclick="janusOrdenar('score')">Janus Score ${arrow('score')}</th>
+    </tr></thead><tbody>`;
+
+  ordenado.forEach((item, i) => {
+    const classificacao = janusClassificacaoPorScore(item.score);
+    const slug = ji_classSlug(classificacao);
+    const scoreTxt = item.score !== null && item.score !== undefined ? item.score.toFixed(1) : '—';
+    html += `<tr>
+      <td class="num ji-pos">${i+1}</td>
+      <td>
+        <div class="ji-row-ticker">
+          <div class="ji-logo" style="background:#0066cc">${item.ticker.substring(0,4)}</div>
+          <div>
+            <div class="ji-ticker">${item.ticker}</div>
+            <div class="ji-empresa">${item.empresa}</div>
+          </div>
+        </div>
+      </td>
+      <td><span class="ji-setor">${item.setor || '—'}</span></td>
+      <td class="num">
+        <span class="ji-score-badge ji-score-${slug}">${scoreTxt}</span>
+        <div class="ji-classificacao-txt">${classificacao}</div>
+      </td>
+    </tr>`;
+  });
+
+  html += `</tbody></table></div>`;
+  el.innerHTML = html;
+}
+
+function sugerirCarteira(){
+  const minScore = parseFloat(document.getElementById('ji-score-min').value) || 70;
+  const sugeridos = _janusRanking
+    .filter(item => item.score !== null && item.score >= minScore)
+    .sort((a,b)=> b.score - a.score);
+
+  document.getElementById('ji-modal-sub').textContent =
+    `${sugeridos.length} ativo(s) com score ≥ ${minScore}`;
+
+  const body = document.getElementById('ji-modal-body');
+  if(!sugeridos.length){
+    body.innerHTML = `<div class="ji-empty">
+      <div class="ji-empty-icon">🔍</div>
+      <div style="font-size:14px">Nenhum ativo atingiu o score mínimo de ${minScore}.</div>
+      <div style="font-size:12px;margin-top:6px">Tente reduzir o valor mínimo.</div>
+    </div>`;
+  } else {
+    body.innerHTML = sugeridos.map((item, i) => {
+      const classificacao = janusClassificacaoPorScore(item.score);
+      const slug = ji_classSlug(classificacao);
+      return `<div class="ji-modal-item">
+        <span class="ji-mini-pos">${i+1}º</span>
+        <div class="ji-logo" style="background:#0066cc">${item.ticker.substring(0,4)}</div>
+        <div style="flex:1">
+          <div class="ji-ticker">${item.ticker}</div>
+          <div class="ji-empresa">${item.empresa} · ${item.setor || ''}</div>
+        </div>
+        <span class="ji-score-badge ji-score-${slug}">${item.score.toFixed(1)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('ji-modal-sugestao').classList.add('open');
+}
+
+function fecharModalSugestao(e){
+  if(!e || e.target === document.getElementById('ji-modal-sugestao')){
+    document.getElementById('ji-modal-sugestao').classList.remove('open');
+  }
+}
+
+function carregarJanusIndex(){
+  carregarJanusStatus();
+  carregarJanusRanking();
+}
+
 carregarUsuario();
 carregarDados();
 carregarLogsIniciais();
