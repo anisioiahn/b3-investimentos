@@ -160,10 +160,12 @@ Escreva em português, tom profissional mas acessível, destacando os pontos for
                     SELECT r.general_position, r.sector_position, r.janus_score,
                            r.quality_score, r.reference_date,
                            a.ticker, a.asset_type,
-                           c.trading_name, c.sector
+                           c.trading_name, c.sector,
+                           js.confidence
                     FROM ranking_snapshots r
                     JOIN assets a ON a.asset_id = r.asset_id
                     LEFT JOIN companies c ON c.company_id = a.company_id
+                    LEFT JOIN janus_scores js ON js.asset_id = r.asset_id AND js.reference_date = r.reference_date
                     WHERE r.reference_date=%s AND r.ranking_type=%s
                     ORDER BY r.general_position
                     LIMIT %s
