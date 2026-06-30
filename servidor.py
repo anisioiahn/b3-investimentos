@@ -530,6 +530,84 @@ def api_carteira_resumo():
     return jsonify({"total_posicoes":len(posicoes),"total_investido":round(ti,2),
                     "total_atual":round(ta,2) if ta else None,"lucro_total":lucro,"lucro_pct":pct})
 
+# ── CARTEIRA PENDENTE (sugestões do Janus Index) ───────────────
+@app.route("/api/carteira/sugestao", methods=["POST"])
+@requer_auth
+def api_carteira_sugestao():
+    """Recebe lista de tickers sugeridos pelo Janus Index e cria como pendentes."""
+    d = request.json or {}
+    itens = d.get("itens", [])  # [{ticker, quantidade}]
+    if not itens:
+        return jsonify({"erro": "Nenhum item informado"}), 400
+
+    # Verifica limite do plano (mesma regra da carteira normal)
+    plano_nome = request.usuario.get('plano', 'free')
+    planos = {p['nome']: p for p in db.db_listar_planos()}
+    plano = planos.get(plano_nome, {})
+    max_cart = plano.get('max_carteira', -1)
+    carteira_atual = db.db_listar_carteira(uid())
+    tickers_atuais = [p['ticker'] for p in carteira_atual]
+
+    adicionados, ja_existentes, erros = [], [], []
+
+    for item in itens:
+        ticker = item.get("ticker", "").upper().strip()
+        quantidade = float(item.get("quantidade", 100))
+        if not ticker:
+            continue
+        if ticker in tickers_atuais:
+            ja_existentes.append(ticker)
+            continue
+        if max_cart > 0 and (len(tickers_atuais) + len(adicionados)) >= max_cart:
+            erros.append(ticker)
+            continue
+
+        nome = next((e["nome"] for s in _cache.get("setores", {}).values() for e in s["empresas"] if e["ticker"] == ticker), ticker)
+        cor = next((e["cor"] for s in _cache.get("setores", {}).values() for e in s["empresas"] if e["ticker"] == ticker), "#0066cc")
+        preco_atual = next((e["preco"] for s in _cache.get("setores", {}).values() for e in s["empresas"] if e["ticker"] == ticker), 0)
+        setor_id, setor_nome = "", ""
+        for sid, s in _cache.get("setores", {}).items():
+            if any(e["ticker"] == ticker for e in s["empresas"]):
+                setor_id, setor_nome = sid, s["nome"]
+                break
+
+        ok = db.db_salvar_posicao_pendente(
+            uid(), ticker, nome, cor, setor_id, setor_nome,
+            preco_atual or 0, quantidade, agora().strftime("%Y-%m-%d"), "", origem="janus_sugestao"
+        )
+        if ok:
+            adicionados.append(ticker)
+
+    return jsonify({
+        "ok": True,
+        "adicionados": adicionados,
+        "ja_existentes": ja_existentes,
+        "erros": erros
+    })
+
+@app.route("/api/carteira/pendente/<ticker>/confirmar", methods=["POST"])
+@requer_auth
+def api_carteira_pendente_confirmar(ticker):
+    d = request.json or {}
+    preco = float(d.get("preco_medio", 0))
+    qtd = float(d.get("quantidade", 0))
+    if preco <= 0 or qtd <= 0:
+        return jsonify({"erro": "Preço e quantidade devem ser maiores que zero"}), 400
+
+    ok = db.db_confirmar_posicao_pendente(
+        uid(), ticker.upper(), preco, qtd,
+        d.get("data_compra", ""), d.get("corretora", "")
+    )
+    if not ok:
+        return jsonify({"erro": "Posição pendente não encontrada"}), 404
+    return jsonify({"ok": True})
+
+@app.route("/api/carteira/pendente/<ticker>", methods=["DELETE"])
+@requer_auth
+def api_carteira_pendente_descartar(ticker):
+    db.db_descartar_posicao_pendente(uid(), ticker.upper())
+    return jsonify({"ok": True})
+
 # ── PUSH por usuário ──────────────────────────────────────────
 @app.route("/api/push/vapid-public-key")
 def api_vapid(): return jsonify({"publicKey":VAPID_PUBLIC_KEY})
@@ -574,6 +652,10 @@ def api_fontes_post():
         db.db_set_config(f"fonte_{i}_nome", f.get("nome",""))
         db.db_set_config(f"fonte_{i}_url", f.get("url",""))
     return jsonify({"ok": True})
+
+@app.route("/api/logs")
+@requer_auth
+def api_logs():
     desde = request.args.get("desde",0,type=int)
     return jsonify(_log_entries[desde:])
 
