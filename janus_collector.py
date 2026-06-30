@@ -133,10 +133,13 @@ def upsert_asset(stock):
 
 # ── STEP 3: Dados completos do ativo na Brapi ────────────────
 def buscar_dados_ativo(ticker):
-    # Token via query param (header Authorization retorna 403 no plano atual)
+    # Token via query param + User-Agent de navegador (servidor pode ser bloqueado sem isso)
     url = f"{BRAPI_BASE}/quote/{ticker}?modules={BRAPI_MODULES}&token={TOKEN_BRAPI}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     try:
-        r = requests.get(url, timeout=20)
+        r = requests.get(url, headers=headers, timeout=20)
         if r.status_code == 200:
             results = r.json().get("results", [])
             return results[0] if results else None
@@ -144,7 +147,7 @@ def buscar_dados_ativo(ticker):
             print("[COLLECTOR] ⏳ Rate limit, aguardando 30s...")
             time.sleep(30)
         else:
-            print(f"[COLLECTOR] ⚠️ Status {r.status_code} para {ticker}")
+            print(f"[COLLECTOR] ⚠️ Status {r.status_code} para {ticker}: {r.text[:200]}")
     except Exception as e:
         print(f"[COLLECTOR] ⚠️ Erro {ticker}: {e}")
     return None
