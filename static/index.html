@@ -1087,8 +1087,13 @@ async function abrirGrafico(ticker){
     fetchComTimeout(`/api/noticias/${ticker}`, 40000),
   ]);
 
-  // Atualiza mín/máx se veio detalhe
+  // Atualiza preço, variação, mín/máx se veio detalhe (importante para tickers fora do cache local)
   if(det && !det.erro){
+    if(det.preco){
+      const vrD=det.variacao||0, vpD=det.variacao_pct||0, clsD=vrD>=0?'up':'dn';
+      document.querySelector('#modal-stats .stat-box:nth-child(1) .stat-value').innerHTML = `R$ ${det.preco.toFixed(2)}`;
+      document.querySelector('#modal-stats .stat-box:nth-child(2) .stat-value').innerHTML = `<span class="${clsD}">${vrD>=0?'+':''}${vrD.toFixed(2)} (${vpD>=0?'+':''}${vpD.toFixed(2)}%)</span>`;
+    }
     if(det.minima_dia) document.getElementById('ms-min').textContent=`R$ ${det.minima_dia.toFixed(2)}`;
     if(det.maxima_dia) document.getElementById('ms-max').textContent=`R$ ${det.maxima_dia.toFixed(2)}`;
   }
