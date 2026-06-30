@@ -133,11 +133,10 @@ def upsert_asset(stock):
 
 # ── STEP 3: Dados completos do ativo na Brapi ────────────────
 def buscar_dados_ativo(ticker):
-    # Envia token via header Authorization (recomendado pela Brapi para backend)
-    headers = {"Authorization": f"Bearer {TOKEN_BRAPI}"}
-    url = f"{BRAPI_BASE}/quote/{ticker}?modules={BRAPI_MODULES}"
+    # Token via query param (header Authorization retorna 403 no plano atual)
+    url = f"{BRAPI_BASE}/quote/{ticker}?modules={BRAPI_MODULES}&token={TOKEN_BRAPI}"
     try:
-        r = requests.get(url, headers=headers, timeout=20)
+        r = requests.get(url, timeout=20)
         if r.status_code == 200:
             results = r.json().get("results", [])
             return results[0] if results else None
