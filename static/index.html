@@ -1886,6 +1886,11 @@ let _janusStatus = null;
 let _janusSortCol = 'score';
 let _janusSortDir = 'desc';
 
+function ji_logoHtml(ticker, corFundo){
+  const url = `https://icons.brapi.dev/icons/${ticker}.svg`;
+  return `<img src="${url}" alt="${ticker}" onerror="this.parentElement.style.background='${corFundo||'#0066cc'}';this.outerHTML='${ticker.substring(0,4)}'">`;
+}
+
 function ji_classSlug(classificacao){
   const map = {
     'Muito Favorável': 'muito-favoravel',
@@ -2076,7 +2081,7 @@ function renderJanusTabela(){
       <td class="num ji-pos">${i+1}</td>
       <td>
         <div class="ji-row-ticker">
-          <div class="ji-logo" style="background:#0066cc">${item.ticker.substring(0,4)}</div>
+          <div class="ji-logo" style="background:#0066cc">${ji_logoHtml(item.ticker)}</div>
           <div>
             <div class="ji-ticker">${item.ticker}</div>
             <div class="ji-empresa">${item.empresa}</div>
@@ -2139,7 +2144,7 @@ function sugerirCarteira(){
         <input type="checkbox" class="ji-modal-item-check" data-ticker="${item.ticker}"
           ${jaExiste ? 'disabled' : 'checked'} onchange="atualizarContadorSelecionados()">
         <span class="ji-mini-pos">${i+1}º</span>
-        <div class="ji-logo" style="background:#0066cc">${item.ticker.substring(0,4)}</div>
+        <div class="ji-logo" style="background:#0066cc">${ji_logoHtml(item.ticker)}</div>
         <div style="flex:1">
           <div class="ji-ticker">${item.ticker}</div>
           <div class="ji-empresa">${item.empresa} · ${item.setor || ''}</div>
@@ -2228,7 +2233,8 @@ async function abrirModalDetalhe(ticker){
   const body = document.getElementById('ji-detalhe-body');
   document.getElementById('ji-detalhe-ticker').textContent = ticker;
   document.getElementById('ji-detalhe-empresa').textContent = 'Carregando...';
-  document.getElementById('ji-detalhe-logo').textContent = ticker.substring(0,4);
+  document.getElementById('ji-detalhe-logo').style.background = '#0066cc';
+  document.getElementById('ji-detalhe-logo').innerHTML = ji_logoHtml(ticker);
   body.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text2)">Carregando análise...</div>';
   overlay.classList.add('open');
 
