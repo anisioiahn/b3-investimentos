@@ -1534,7 +1534,8 @@ function renderPendentesCarteira(){
     </div>`;
 
   pendentes.forEach(p => {
-    const logoHtml = p.logo ? `<img src="${p.logo}" onerror="this.parentElement.textContent='${p.ticker.substring(0,4)}'">` : p.ticker.substring(0,4);
+    const logoUrl = p.logo || `https://icons.brapi.dev/icons/${p.ticker}.svg`;
+    const logoHtml = `<img src="${logoUrl}" alt="${p.ticker}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.style.display='none';this.parentElement.textContent='${p.ticker.substring(0,4)}'"`+`>`;
     html += `<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="ct-logo" style="background:${p.cor}">${logoHtml}</div>
@@ -1657,7 +1658,8 @@ function renderTabelaCarteira(){
 
   ordenada.forEach(p => {
     const lucroClass = p.lucro > 0 ? 'lucro-pos' : p.lucro < 0 ? 'lucro-neg' : 'lucro-zero';
-    const logoHtml = p.logo ? `<img src="${p.logo}" onerror="this.parentElement.textContent='${p.ticker.substring(0,4)}'">` : p.ticker.substring(0,4);
+    const logoUrl = p.logo || `https://icons.brapi.dev/icons/${p.ticker}.svg`;
+    const logoHtml = `<img src="${logoUrl}" alt="${p.ticker}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.style.display='none';this.parentElement.textContent='${p.ticker.substring(0,4)}'">`;
     // Alertas do ticker
     const altAcima = _alertasServidor.find(a=>a.ticker===p.ticker&&a.direcao==='acima');
     const altAbaixo = _alertasServidor.find(a=>a.ticker===p.ticker&&a.direcao==='abaixo');
