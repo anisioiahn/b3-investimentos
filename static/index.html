@@ -2121,6 +2121,7 @@ async function abrirModalDetalhe(ticker){
     });
 
   }catch(e){
+    console.error('🔴 ERRO EM abrirModalDetalhe:', e);
     body.innerHTML = `<div class="ji-empty"><div class="ji-empty-icon">⚠️</div><div>Erro ao carregar análise.</div></div>`;
   }
 }
