@@ -2077,7 +2077,7 @@ async function abrirModalDetalhe(ticker){
             <div class="ji-evidencia-nome">${nome}</div>
             <div class="ji-evidencia-explicacao">${ev.explanation || ''}</div>
           </div>
-          <div class="ji-evidencia-score">${ev.score?.toFixed(0) ?? '—'}</div>
+          <div class="ji-evidencia-score">${ev.score !== null && ev.score !== undefined ? parseFloat(ev.score).toFixed(0) : '—'}</div>
         </div>`;
       });
     }
