@@ -133,39 +133,22 @@ def upsert_asset(stock):
 
 # ── STEP 3: Dados completos do ativo na Brapi ────────────────
 def buscar_dados_ativo(ticker):
-    # Chamada 1: cotação básica (sempre funciona)
-    dados = None
+    # Envia token via header Authorization (recomendado pela Brapi para backend)
+    headers = {"Authorization": f"Bearer {TOKEN_BRAPI}"}
+    url = f"{BRAPI_BASE}/quote/{ticker}?modules={BRAPI_MODULES}"
     try:
-        r = requests.get(f"{BRAPI_BASE}/quote/{ticker}?token={TOKEN_BRAPI}", timeout=20)
+        r = requests.get(url, headers=headers, timeout=20)
         if r.status_code == 200:
             results = r.json().get("results", [])
-            dados = results[0] if results else None
+            return results[0] if results else None
         elif r.status_code == 429:
             print("[COLLECTOR] ⏳ Rate limit, aguardando 30s...")
             time.sleep(30)
-    except Exception as e:
-        print(f"[COLLECTOR] ⚠️ Erro cotação {ticker}: {e}")
-
-    if not dados:
-        return None
-
-    # Chamada 2: módulos fundamentalistas (quando disponível no plano)
-    try:
-        time.sleep(0.3)
-        r2 = requests.get(f"{BRAPI_BASE}/quote/{ticker}?modules={BRAPI_MODULES}&token={TOKEN_BRAPI}", timeout=20)
-        if r2.status_code == 200:
-            results2 = r2.json().get("results", [])
-            if results2:
-                # Sobrescreve sempre os módulos fundamentalistas (não checa None)
-                for modulo in ["defaultKeyStatistics", "financialData", "balanceSheetHistory", "cashflowStatementHistory"]:
-                    if modulo in results2[0]:
-                        dados[modulo] = results2[0][modulo]
         else:
-            print(f"[COLLECTOR] ⚠️ Módulos status {r2.status_code} para {ticker}")
+            print(f"[COLLECTOR] ⚠️ Status {r.status_code} para {ticker}")
     except Exception as e:
-        print(f"[COLLECTOR] ⚠️ Módulos indisponíveis para {ticker}: {e}")
-
-    return dados
+        print(f"[COLLECTOR] ⚠️ Erro {ticker}: {e}")
+    return None
 
 # ── STEP 4: Market snapshot ───────────────────────────────────
 def salvar_market_snapshot(asset_id, dados, source_id):
