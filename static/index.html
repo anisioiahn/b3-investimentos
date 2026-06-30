@@ -917,7 +917,7 @@ function goPage(p,el){
   if(el) el.classList.add('active');
   if(p==='alertas') renderAlerts();
   if(p==='params') renderFontes();
-  if(p==='carteira') carregarCarteira();
+  if(p==='carteira'){ renderCarteira(); carregarCarteira(); }
   if(p==='janus') carregarJanusIndex();
 }
 function goBack(){currentSector=null;document.getElementById('tab-empresas').style.display='none';goPage('setores',document.querySelector('.tab'));}
@@ -1453,9 +1453,10 @@ async function carregarCarteira(){
     const chaveAntes = _carteira.map(p=>p.ticker+p.preco_medio+p.quantidade+p.status).join(',');
     const chaveDepois = novaCarteira.map(p=>p.ticker+p.preco_medio+p.quantidade+p.status).join(',');
     const mudou = chaveAntes !== chaveDepois;
+    const temPendentes = novaCarteira.some(p => p.status === 'pendente');
     _carteira = novaCarteira;
     if(_paginaAtiva === 'carteira'){
-      if(mudou || document.getElementById('carteira-tabela').innerHTML===''){
+      if(mudou || temPendentes || document.getElementById('carteira-tabela').innerHTML===''){
         renderCarteira();
       } else {
         // Apenas atualiza preços sem re-renderizar tudo
