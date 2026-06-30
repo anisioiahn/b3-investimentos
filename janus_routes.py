@@ -62,6 +62,79 @@ def registrar_rotas_janus(app, requer_auth):
             "token_preview": (token[:6] + "..." + token[-4:]) if len(token) > 10 else token
         })
 
+    # ── GET /api/janus/comentario/<ticker> ────────────────────
+    # Gera comentário de agente especialista via IA, sob demanda
+    @app.route("/api/janus/comentario/<ticker>")
+    @requer_auth
+    def api_janus_comentario(ticker):
+        try:
+            import requests as req
+            ticker = ticker.upper()
+            ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+
+            conn = get_conn()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT a.asset_id, a.ticker, c.trading_name, c.sector
+                    FROM assets a LEFT JOIN companies c ON c.company_id = a.company_id
+                    WHERE a.ticker=%s
+                """, (ticker,))
+                asset = cur.fetchone()
+                if not asset:
+                    conn.close()
+                    return jsonify({"erro": f"Ativo {ticker} não encontrado"}), 404
+
+                cur.execute("""
+                    SELECT overall_score, classification, confidence
+                    FROM janus_scores WHERE asset_id=%s
+                    ORDER BY reference_date DESC LIMIT 1
+                """, (asset["asset_id"],))
+                score_row = cur.fetchone()
+
+                cur.execute("""
+                    SELECT evidence_code, score, trend, explanation
+                    FROM evidences WHERE asset_id=%s
+                    ORDER BY reference_date DESC LIMIT 10
+                """, (asset["asset_id"],))
+                evidencias = [dict(r) for r in cur.fetchall()]
+            conn.close()
+
+            if not score_row:
+                return jsonify({"comentario": "Ainda não há dados suficientes para análise deste ativo."})
+
+            if not ANTHROPIC_KEY:
+                return jsonify({"comentario": "Configure ANTHROPIC_API_KEY para habilitar comentários do agente IA."})
+
+            evidencias_txt = "\n".join([
+                f"- {e['evidence_code']}: score {e['score']:.1f}, tendência {e['trend']}"
+                for e in evidencias
+            ])
+
+            prompt = f"""Você é um analista de investimentos experiente e didático. Analise os dados fundamentalistas abaixo e escreva um comentário curto (3-4 frases) sobre {asset['trading_name']} ({ticker}), setor {asset['sector']}.
+
+Janus Score: {float(score_row['overall_score']):.1f}/100 ({score_row['classification']})
+Confiança da análise: {float(score_row['confidence']):.0f}%
+
+Evidências que compõem o score:
+{evidencias_txt}
+
+Escreva em português, tom profissional mas acessível, destacando os pontos fortes e fracos. NÃO dê recomendação de compra/venda — apenas interprete os fundamentos. Não use formatação markdown, apenas texto corrido."""
+
+            resp = req.post("https://api.anthropic.com/v1/messages",
+                headers={"Content-Type":"application/json","x-api-key":ANTHROPIC_KEY,"anthropic-version":"2023-06-01"},
+                json={"model":"claude-sonnet-4-6","max_tokens":300,
+                      "messages":[{"role":"user","content":prompt}]},
+                timeout=30)
+
+            if resp.status_code == 200:
+                comentario = resp.json()["content"][0]["text"].strip()
+                return jsonify({"comentario": comentario})
+            else:
+                return jsonify({"comentario": "Não foi possível gerar o comentário no momento."})
+
+        except Exception as e:
+            return jsonify({"comentario": f"Erro ao gerar análise: {str(e)}"})
+
     # ── GET /api/janus/ranking ────────────────────────────────
     @app.route("/api/janus/ranking")
     @requer_auth
@@ -147,6 +220,13 @@ def registrar_rotas_janus(app, requer_auth):
                     ORDER BY reference_date DESC LIMIT 20
                 """, (asset_id,))
                 indicadores = [dict(r) for r in cur.fetchall()]
+
+                cur.execute("""
+                    SELECT overall_score, reference_date
+                    FROM janus_scores WHERE asset_id=%s
+                    ORDER BY reference_date DESC LIMIT 30
+                """, (asset_id,))
+                historico = [dict(r) for r in cur.fetchall()]
             conn.close()
 
             return jsonify({
@@ -155,7 +235,8 @@ def registrar_rotas_janus(app, requer_auth):
                 "setor":         asset["sector"],
                 "janus_score":   dict(score) if score else None,
                 "engine_scores": engine_scores,
-                "indicadores":   indicadores
+                "indicadores":   indicadores,
+                "historico":     historico
             })
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
@@ -232,5 +313,6 @@ def registrar_rotas_janus(app, requer_auth):
     print("  GET  /api/janus/ranking")
     print("  GET  /api/janus/score/<ticker>")
     print("  GET  /api/janus/evidence/<ticker>")
+    print("  GET  /api/janus/comentario/<ticker>")
     print("  GET  /api/janus/assets")
     print("  POST /api/admin/janus/coletar")
