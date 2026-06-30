@@ -346,6 +346,52 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .ji-modal-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
 .ji-modal-item:last-child{border-bottom:none}
 .ji-modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);font-size:12px;color:var(--text3)}
+
+/* Link "O que é isso?" */
+.ji-info-link{font-size:12px;color:var(--green);cursor:pointer;text-decoration:underline;margin-left:6px}
+.ji-info-link:hover{opacity:.8}
+
+/* Score clicável na tabela */
+.ji-score-clicavel{cursor:pointer;transition:transform .15s}
+.ji-score-clicavel:hover{transform:scale(1.08)}
+
+/* Modal "Sobre o Janus Index" — conteúdo didático */
+.ji-sobre-body{padding:1.5rem;overflow-y:auto}
+.ji-sobre-hero{text-align:center;padding:1rem 0 1.5rem;border-bottom:1px solid var(--border);margin-bottom:1.5rem}
+.ji-sobre-hero-icon{font-size:42px;margin-bottom:10px}
+.ji-sobre-hero-title{font-size:18px;font-weight:700}
+.ji-sobre-hero-sub{font-size:13px;color:var(--text2);margin-top:6px;max-width:420px;margin-left:auto;margin-right:auto;line-height:1.5}
+.ji-sobre-section{margin-bottom:1.5rem}
+.ji-sobre-section-title{font-size:14px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ji-sobre-section-text{font-size:13px;color:var(--text2);line-height:1.6}
+.ji-sobre-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}
+@media(max-width:560px){.ji-sobre-grid{grid-template-columns:1fr}}
+.ji-sobre-card{background:var(--bg);border-radius:10px;padding:12px;font-size:12px}
+.ji-sobre-card-title{font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.ji-sobre-disclaimer{background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:14px;font-size:12.5px;color:#78350f;line-height:1.6;display:flex;gap:10px;align-items:flex-start}
+.ji-sobre-disclaimer-icon{font-size:20px;flex-shrink:0}
+
+/* Modal de detalhe do ativo */
+.ji-detalhe-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:flex-start;justify-content:center;padding:1rem;overflow-y:auto}
+.ji-detalhe-overlay.open{display:flex}
+.ji-detalhe-modal{background:#fff;border-radius:var(--radius);width:100%;max-width:680px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.ji-detalhe-header{display:flex;align-items:center;justify-content:space-between;padding:1.2rem 1.5rem;border-bottom:1px solid var(--border)}
+.ji-detalhe-title-wrap{display:flex;align-items:center;gap:12px}
+.ji-detalhe-body{padding:1.5rem}
+.ji-detalhe-score-hero{display:flex;align-items:center;gap:16px;background:var(--bg);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.5rem}
+.ji-detalhe-score-big{font-size:32px;font-weight:800;font-family:monospace}
+.ji-detalhe-score-info{flex:1}
+.ji-detalhe-score-class{font-size:14px;font-weight:700}
+.ji-detalhe-score-conf{font-size:11px;color:var(--text2);margin-top:2px}
+.ji-evidencia-row{display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;background:var(--bg);margin-bottom:8px}
+.ji-evidencia-nome{flex:1;font-size:12.5px;font-weight:600}
+.ji-evidencia-explicacao{font-size:11px;color:var(--text2);margin-top:2px}
+.ji-evidencia-score{font-weight:700;font-size:13px;font-family:monospace;min-width:42px;text-align:right}
+.ji-comentario-box{background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #c4b5fd;border-radius:12px;padding:14px;margin-top:1rem}
+.ji-comentario-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;font-weight:700;color:#6d28d9}
+.ji-comentario-txt{font-size:12.5px;color:#3730a3;line-height:1.6}
+.ji-comentario-loading{font-size:12px;color:#6d28d9;text-align:center;padding:1rem 0;animation:pulse 1.5s infinite}
+.ji-historico-wrap{height:140px;position:relative;margin-top:.5rem}
 </style>
 </head>
 <body>
@@ -425,6 +471,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <div class="ji-status-info">
           <span class="ji-status-dot" id="ji-status-dot"></span>
           <span class="ji-status-txt" id="ji-status-txt">Carregando status...</span>
+          <span class="ji-info-link" onclick="abrirModalSobre()">ℹ️ O que é isso?</span>
         </div>
         <button class="ji-btn-atualizar" id="ji-btn-atualizar" onclick="atualizarJanusIndex()">
           <span id="ji-btn-icon">↻</span> Atualizar agora
@@ -558,6 +605,99 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="ji-modal-body" id="ji-modal-body"></div>
     <div class="ji-modal-footer">
       Esta é apenas uma sugestão baseada em fundamentos. O Janus não recomenda investimentos — avalie sempre antes de decidir.
+    </div>
+  </div>
+</div>
+
+<!-- MODAL "O QUE É O JANUS INDEX" -->
+<div class="ji-modal-overlay" id="ji-modal-sobre" onclick="fecharModalSobre(event)">
+  <div class="ji-modal" onclick="event.stopPropagation()" style="max-width:640px;max-height:85vh">
+    <div class="ji-modal-header">
+      <div class="ji-modal-title">🎯 Sobre o Janus Index</div>
+      <button class="modal-close" onclick="fecharModalSobre()">✕</button>
+    </div>
+    <div class="ji-sobre-body">
+      <div class="ji-sobre-hero">
+        <div class="ji-sobre-hero-icon">🎯</div>
+        <div class="ji-sobre-hero-title">Inteligência fundamentalista para todos os ativos da B3</div>
+        <div class="ji-sobre-hero-sub">O Janus Index transforma dados financeiros complexos em uma nota de 0 a 100, totalmente explicável e reproduzível.</div>
+      </div>
+
+      <div class="ji-sobre-section">
+        <div class="ji-sobre-section-title">📊 O que é o Janus Score?</div>
+        <div class="ji-sobre-section-text">
+          É uma nota de qualidade fundamentalista calculada para cada empresa listada na B3, com base em indicadores financeiros reais — como rentabilidade, margem de lucro e crescimento de receita. Quanto maior a nota, mais sólidos são os fundamentos da empresa no momento da análise.
+        </div>
+      </div>
+
+      <div class="ji-sobre-section">
+        <div class="ji-sobre-section-title">⚙️ Como o cálculo funciona?</div>
+        <div class="ji-sobre-section-text">
+          O motor atual, chamado <strong>Quality Engine</strong>, analisa 4 indicadores fundamentais extraídos diretamente dos balanços e demonstrativos das empresas:
+        </div>
+        <div class="ji-sobre-grid">
+          <div class="ji-sobre-card">
+            <div class="ji-sobre-card-title">📈 ROE <span style="color:var(--text3);font-weight:400">(30%)</span></div>
+            Retorno sobre o patrimônio — quanto a empresa lucra em relação ao capital próprio investido.
+          </div>
+          <div class="ji-sobre-card">
+            <div class="ji-sobre-card-title">💰 ROIC <span style="color:var(--text3);font-weight:400">(25%)</span></div>
+            Retorno sobre o capital investido — eficiência no uso de todo o capital da empresa.
+          </div>
+          <div class="ji-sobre-card">
+            <div class="ji-sobre-card-title">📊 Margem Líquida <span style="color:var(--text3);font-weight:400">(25%)</span></div>
+            Percentual da receita que vira lucro líquido — mede a eficiência operacional.
+          </div>
+          <div class="ji-sobre-card">
+            <div class="ji-sobre-card-title">🚀 Crescimento de Receita <span style="color:var(--text3);font-weight:400">(20%)</span></div>
+            Variação da receita em relação ao período anterior — mede a expansão do negócio.
+          </div>
+        </div>
+      </div>
+
+      <div class="ji-sobre-section">
+        <div class="ji-sobre-section-title">🎨 As 5 classificações</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+          <div style="display:flex;align-items:center;gap:10px"><span class="ji-score-badge ji-score-muito-favoravel">80+</span><span style="font-size:12.5px;color:var(--text2)">Muito Favorável — fundamentos excelentes</span></div>
+          <div style="display:flex;align-items:center;gap:10px"><span class="ji-score-badge ji-score-favoravel">60-79</span><span style="font-size:12.5px;color:var(--text2)">Favorável — bons fundamentos</span></div>
+          <div style="display:flex;align-items:center;gap:10px"><span class="ji-score-badge ji-score-neutro">40-59</span><span style="font-size:12.5px;color:var(--text2)">Neutro — fundamentos medianos</span></div>
+          <div style="display:flex;align-items:center;gap:10px"><span class="ji-score-badge ji-score-desfavoravel">20-39</span><span style="font-size:12.5px;color:var(--text2)">Desfavorável — fundamentos fracos</span></div>
+          <div style="display:flex;align-items:center;gap:10px"><span class="ji-score-badge ji-score-muito-desfavoravel">0-19</span><span style="font-size:12.5px;color:var(--text2)">Muito Desfavorável — fundamentos preocupantes</span></div>
+        </div>
+      </div>
+
+      <div class="ji-sobre-section">
+        <div class="ji-sobre-section-title">🔄 Atualização dos dados</div>
+        <div class="ji-sobre-section-text">
+          Os dados são coletados automaticamente todos os dias úteis (abertura e fechamento da B3), com base em demonstrativos financeiros oficiais das empresas. Você também pode forçar uma atualização manual a qualquer momento.
+        </div>
+      </div>
+
+      <div class="ji-sobre-disclaimer">
+        <div class="ji-sobre-disclaimer-icon">⚠️</div>
+        <div>
+          <strong>O Janus Index não prevê o futuro.</strong> Ele organiza e interpreta dados financeiros históricos para ajudar você a entender melhor os fundamentos de uma empresa. Não é uma recomendação de compra ou venda, e desempenho passado não garante resultados futuros. Use como mais uma ferramenta no seu processo de decisão — sempre faça sua própria análise.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALHE DO ATIVO (clique no score) -->
+<div class="ji-detalhe-overlay" id="ji-detalhe-overlay" onclick="fecharModalDetalhe(event)">
+  <div class="ji-detalhe-modal" onclick="event.stopPropagation()">
+    <div class="ji-detalhe-header">
+      <div class="ji-detalhe-title-wrap">
+        <div class="ji-logo" id="ji-detalhe-logo" style="width:40px;height:40px;font-size:11px">--</div>
+        <div>
+          <div style="font-size:15px;font-weight:700" id="ji-detalhe-ticker">—</div>
+          <div style="font-size:12px;color:var(--text2)" id="ji-detalhe-empresa">—</div>
+        </div>
+      </div>
+      <button class="modal-close" onclick="fecharModalDetalhe()">✕</button>
+    </div>
+    <div class="ji-detalhe-body" id="ji-detalhe-body">
+      <div style="text-align:center;padding:2rem;color:var(--text2)">Carregando análise...</div>
     </div>
   </div>
 </div>
@@ -1735,7 +1875,7 @@ function renderJanusMiniRankings(){
     <div class="ji-mini-row">
       <span class="ji-mini-pos">${i+1}º</span>
       <span class="ji-mini-ticker">${item.ticker}<span class="ji-mini-empresa">${item.empresa}</span></span>
-      <span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(item.score))}">${item.score?.toFixed(1) ?? '—'}</span>
+      <span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(item.score))} ji-score-clicavel" onclick="abrirModalDetalhe('${item.ticker}')" title="Clique para ver detalhes">${item.score?.toFixed(1) ?? '—'}</span>
     </div>`;
 
   elMelhores.innerHTML = melhores.map(renderRow).join('');
@@ -1815,7 +1955,7 @@ function renderJanusTabela(){
       </td>
       <td><span class="ji-setor">${item.setor || '—'}</span></td>
       <td class="num">
-        <span class="ji-score-badge ji-score-${slug}">${scoreTxt}</span>
+        <span class="ji-score-badge ji-score-${slug} ji-score-clicavel" onclick="abrirModalDetalhe('${item.ticker}')" title="Clique para ver detalhes">${scoreTxt}</span>
         <div class="ji-classificacao-txt">${classificacao}</div>
       </td>
     </tr>`;
@@ -1863,6 +2003,131 @@ function sugerirCarteira(){
 function fecharModalSugestao(e){
   if(!e || e.target === document.getElementById('ji-modal-sugestao')){
     document.getElementById('ji-modal-sugestao').classList.remove('open');
+  }
+}
+
+// ── Modal "Sobre o Janus Index" ─────────────────────────────────
+function abrirModalSobre(){
+  document.getElementById('ji-modal-sobre').classList.add('open');
+}
+function fecharModalSobre(e){
+  if(!e || e.target === document.getElementById('ji-modal-sobre')){
+    document.getElementById('ji-modal-sobre').classList.remove('open');
+  }
+}
+
+// ── Modal de detalhe do ativo (clique no score) ─────────────────
+let _jiHistoricoChart = null;
+
+async function abrirModalDetalhe(ticker){
+  const overlay = document.getElementById('ji-detalhe-overlay');
+  const body = document.getElementById('ji-detalhe-body');
+  document.getElementById('ji-detalhe-ticker').textContent = ticker;
+  document.getElementById('ji-detalhe-empresa').textContent = 'Carregando...';
+  document.getElementById('ji-detalhe-logo').textContent = ticker.substring(0,4);
+  body.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text2)">Carregando análise...</div>';
+  overlay.classList.add('open');
+
+  try{
+    const [scoreData, evidenceData] = await Promise.all([
+      fetch(`/api/janus/score/${ticker}`).then(r=>r.json()),
+      fetch(`/api/janus/evidence/${ticker}`).then(r=>r.json())
+    ]);
+
+    if(scoreData.erro){
+      body.innerHTML = `<div class="ji-empty"><div class="ji-empty-icon">⚠️</div><div>${scoreData.erro}</div></div>`;
+      return;
+    }
+
+    document.getElementById('ji-detalhe-empresa').textContent = `${scoreData.empresa || ticker} · ${scoreData.setor || ''}`;
+
+    const js = scoreData.janus_score;
+    const score = js ? parseFloat(js.overall_score) : null;
+    const classificacao = js ? js.classification : janusClassificacaoPorScore(score);
+    const confianca = js ? parseFloat(js.confidence) : null;
+    const slug = ji_classSlug(classificacao);
+
+    const evidencias = evidenceData.evidencias || [];
+    const nomesAmigaveis = {
+      'QUALITY_FIN_ROE': 'Retorno sobre Patrimônio (ROE)',
+      'QUALITY_FIN_ROIC': 'Retorno sobre Capital (ROIC)',
+      'QUALITY_FIN_NET_MARGIN': 'Margem Líquida',
+      'QUALITY_FIN_REVENUE_GROWTH': 'Crescimento de Receita'
+    };
+
+    let html = `
+      <div class="ji-detalhe-score-hero">
+        <div class="ji-detalhe-score-big ji-score-${slug}" style="padding:8px 14px;border-radius:10px">${score !== null ? score.toFixed(1) : '—'}</div>
+        <div class="ji-detalhe-score-info">
+          <div class="ji-detalhe-score-class">${classificacao}</div>
+          <div class="ji-detalhe-score-conf">Confiança da análise: ${confianca !== null ? confianca.toFixed(0) : '—'}%</div>
+        </div>
+      </div>
+
+      <div class="ji-sobre-section-title">📋 Como chegamos a este score</div>`;
+
+    if(!evidencias.length){
+      html += `<div style="font-size:12px;color:var(--text3);padding:1rem 0">Indicadores não disponíveis para este ativo no momento.</div>`;
+    } else {
+      evidencias.forEach(ev => {
+        const nome = nomesAmigaveis[ev.evidence_code] || ev.evidence_code;
+        html += `<div class="ji-evidencia-row">
+          ${ji_trendIcon(ev.trend)}
+          <div style="flex:1">
+            <div class="ji-evidencia-nome">${nome}</div>
+            <div class="ji-evidencia-explicacao">${ev.explanation || ''}</div>
+          </div>
+          <div class="ji-evidencia-score">${ev.score?.toFixed(0) ?? '—'}</div>
+        </div>`;
+      });
+    }
+
+    html += `
+      <div class="ji-sobre-section-title" style="margin-top:1.25rem">📈 Evolução do score</div>
+      <div class="ji-historico-wrap"><canvas id="ji-historico-canvas"></canvas></div>
+
+      <div class="ji-comentario-box">
+        <div class="ji-comentario-header">🧠 Comentário do analista IA</div>
+        <div id="ji-comentario-conteudo"><div class="ji-comentario-loading">Gerando análise...</div></div>
+      </div>`;
+
+    body.innerHTML = html;
+
+    // Renderiza gráfico de histórico
+    const historico = (scoreData.historico || []).slice().reverse();
+    if(historico.length > 1){
+      const labels = historico.map(h => new Date(h.reference_date).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}));
+      const valores = historico.map(h => parseFloat(h.overall_score));
+      if(_jiHistoricoChart){ _jiHistoricoChart.destroy(); _jiHistoricoChart = null; }
+      const ctx = document.getElementById('ji-historico-canvas')?.getContext('2d');
+      if(ctx){
+        _jiHistoricoChart = new Chart(ctx, {
+          type: 'line',
+          data: { labels, datasets: [{ data: valores, borderColor: '#0066cc', backgroundColor: 'rgba(0,102,204,.08)', borderWidth: 2, pointRadius: 2, fill: true, tension: 0.3 }] },
+          options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{min:0,max:100,ticks:{font:{size:9}}}, x:{ticks:{font:{size:9},maxTicksLimit:8}} } }
+        });
+      }
+    } else {
+      document.querySelector('.ji-historico-wrap').innerHTML = '<div style="font-size:11px;color:var(--text3);text-align:center;padding:1rem">Histórico insuficiente — volte em alguns dias para ver a evolução.</div>';
+    }
+
+    // Busca comentário do agente IA (assíncrono, não bloqueia o resto)
+    fetch(`/api/janus/comentario/${ticker}`).then(r=>r.json()).then(d=>{
+      const el = document.getElementById('ji-comentario-conteudo');
+      if(el) el.innerHTML = `<div class="ji-comentario-txt">${d.comentario || 'Não foi possível gerar o comentário.'}</div>`;
+    }).catch(()=>{
+      const el = document.getElementById('ji-comentario-conteudo');
+      if(el) el.innerHTML = `<div class="ji-comentario-txt">Não foi possível gerar o comentário no momento.</div>`;
+    });
+
+  }catch(e){
+    body.innerHTML = `<div class="ji-empty"><div class="ji-empty-icon">⚠️</div><div>Erro ao carregar análise.</div></div>`;
+  }
+}
+
+function fecharModalDetalhe(e){
+  if(!e || e.target === document.getElementById('ji-detalhe-overlay')){
+    document.getElementById('ji-detalhe-overlay').classList.remove('open');
   }
 }
 
