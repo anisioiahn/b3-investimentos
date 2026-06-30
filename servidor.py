@@ -562,14 +562,35 @@ def api_carteira_sugestao():
             erros.append(ticker)
             continue
 
-        nome = next((e["nome"] for s in _cache.get("setores", {}).values() for e in s["empresas"] if e["ticker"] == ticker), ticker)
+        nome = next((e["nome"] for s in _cache.get("setores", {}).values() for e in s["empresas"] if e["ticker"] == ticker), None)
         cor = next((e["cor"] for s in _cache.get("setores", {}).values() for e in s["empresas"] if e["ticker"] == ticker), "#0066cc")
-        preco_atual = next((e["preco"] for s in _cache.get("setores", {}).values() for e in s["empresas"] if e["ticker"] == ticker), 0)
+        preco_atual = next((e["preco"] for s in _cache.get("setores", {}).values() for e in s["empresas"] if e["ticker"] == ticker), None)
         setor_id, setor_nome = "", ""
         for sid, s in _cache.get("setores", {}).items():
             if any(e["ticker"] == ticker for e in s["empresas"]):
                 setor_id, setor_nome = sid, s["nome"]
                 break
+
+        # Fallback: ticker não está no cache interno (não faz parte dos setores monitorados)
+        # Busca direto na Brapi para garantir preço e nome corretos
+        if not nome or not preco_atual:
+            try:
+                rb = requests.get(f"{QUOTE_URL}/{ticker}?token={TOKEN_BRAPI}", timeout=15)
+                if rb.status_code == 200:
+                    res = rb.json().get("results", [])
+                    if res:
+                        d_brapi = res[0]
+                        if not nome:
+                            nome = d_brapi.get("longName") or d_brapi.get("shortName") or ticker
+                        if not preco_atual:
+                            preco_atual = d_brapi.get("regularMarketPrice") or 0
+            except Exception:
+                pass
+
+        if not nome:
+            nome = ticker
+        if not preco_atual:
+            preco_atual = 0
 
         ok = db.db_salvar_posicao_pendente(
             uid(), ticker, nome, cor, setor_id, setor_nome,
