@@ -1043,7 +1043,20 @@ async function fetchComTimeout(url, ms=25000){
 async function abrirGrafico(ticker){
   let co=null;
   for(const s of Object.values(DADOS.setores)){co=s.empresas.find(e=>e.ticker===ticker);if(co)break;}
-  if(!co)return;
+  if(!co){
+    // Ticker fora dos setores monitorados (ex: sugestão do Janus Index) — monta um objeto mínimo
+    const pend = (_carteira || []).find(p => p.ticker === ticker);
+    co = {
+      ticker,
+      nome: pend?.nome || ticker,
+      cor: pend?.cor || '#0066cc',
+      preco: pend?.preco_atual || null,
+      variacao: 0,
+      variacao_pct: 0,
+      minima_dia: null,
+      maxima_dia: null
+    };
+  }
   document.getElementById('modal-logo').style.background=co.cor;
   document.getElementById('modal-logo').textContent=ticker.substring(0,4);
   document.getElementById('modal-name').textContent=co.nome;
@@ -1540,6 +1553,7 @@ function renderPendentesCarteira(){
           <input type="text" id="pend-corretora-${p.ticker}" value="${p.corretora || ''}" placeholder="Opcional" style="padding:6px 8px;font-size:13px">
         </div>
         <div style="display:flex;gap:6px">
+          <button class="ji-btn-sugerir" style="padding:8px 14px;font-size:12px;background:#6d28d9" onclick="abrirGrafico('${p.ticker}')" title="Ver gráfico, notícias e recomendação">📊 Ver análise</button>
           <button class="pos-btn-save" style="padding:8px 14px;font-size:12px" onclick="confirmarPendente('${p.ticker}')">✓ Confirmar</button>
           <button class="pos-btn-cancel" style="padding:8px 14px;font-size:12px;color:#e53935;border-color:#e53935" onclick="descartarPendente('${p.ticker}')">✕ Descartar</button>
         </div>
