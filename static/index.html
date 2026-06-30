@@ -2009,6 +2009,7 @@ function renderJanusMiniRankings(){
   const renderRow = (item, i) => `
     <div class="ji-mini-row">
       <span class="ji-mini-pos">${i+1}º</span>
+      <div class="ji-logo" style="background:#0066cc;width:28px;height:28px;flex-shrink:0">${ji_logoHtml(item.ticker)}</div>
       <span class="ji-mini-ticker">${item.ticker}<span class="ji-mini-empresa">${item.empresa}</span></span>
       <span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(item.score))} ji-score-clicavel" onclick="abrirModalDetalhe('${item.ticker}')" title="Clique para ver detalhes">${item.score?.toFixed(1) ?? '—'}</span>
     </div>`;
