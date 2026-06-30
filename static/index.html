@@ -344,6 +344,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .ji-modal-sub{font-size:12px;color:var(--text2);margin-top:2px}
 .ji-modal-body{padding:1rem 1.5rem;overflow-y:auto;flex:1}
 .ji-modal-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.ji-modal-item.ja-existe{opacity:.5}
+.ji-modal-item-check{width:18px;height:18px;flex-shrink:0;cursor:pointer}
+.ji-modal-item-check:disabled{cursor:not-allowed}
+.ji-modal-item-tag-existe{font-size:10px;background:var(--bg);color:var(--text3);padding:2px 8px;border-radius:6px;white-space:nowrap}
+.ji-sugestao-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:12px;color:var(--text2)}
+.ji-sugestao-link{color:var(--green);cursor:pointer;text-decoration:underline}
 .ji-modal-item:last-child{border-bottom:none}
 .ji-modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);font-size:12px;color:var(--text3)}
 
@@ -492,8 +498,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
       <!-- Barra de carteira sugerida -->
       <div class="ji-sugerir-bar">
-        <span class="ji-sugerir-label">💡 Sugerir carteira com score acima de</span>
+        <span class="ji-sugerir-label">💡 Sugerir carteira com score entre</span>
         <input type="number" class="ji-sugerir-input" id="ji-score-min" value="70" min="0" max="100">
+        <span class="ji-sugerir-label">e</span>
+        <input type="number" class="ji-sugerir-input" id="ji-score-max" value="90" min="0" max="100">
+        <span class="ji-sugerir-label" style="margin-left:10px">e confiança entre</span>
+        <input type="number" class="ji-sugerir-input" id="ji-conf-min" value="50" min="0" max="100">
+        <span class="ji-sugerir-label">e</span>
+        <input type="number" class="ji-sugerir-input" id="ji-conf-max" value="100" min="0" max="100">
         <button class="ji-btn-sugerir" onclick="sugerirCarteira()">Gerar sugestão</button>
       </div>
 
@@ -603,8 +615,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <button class="modal-close" onclick="fecharModalSugestao()">✕</button>
     </div>
     <div class="ji-modal-body" id="ji-modal-body"></div>
-    <div class="ji-modal-footer">
-      Esta é apenas uma sugestão baseada em fundamentos. O Janus não recomenda investimentos — avalie sempre antes de decidir.
+    <div class="ji-modal-footer" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <span style="flex:1;min-width:200px">Esta é apenas uma sugestão baseada em fundamentos. O Janus não recomenda investimentos — avalie sempre antes de decidir.</span>
+      <button class="ji-btn-sugerir" id="ji-btn-add-selecionados" onclick="adicionarSelecionadosCarteira()" style="white-space:nowrap">
+        + Adicionar selecionados à carteira
+      </button>
     </div>
   </div>
 </div>
@@ -1434,9 +1449,9 @@ async function carregarCarteira(){
   try{
     const r = await fetch('/api/carteira');
     const novaCarteira = await r.json();
-    // Compara apenas campos que o usuário editou (não preço_atual que muda sempre)
-    const chaveAntes = _carteira.map(p=>p.ticker+p.preco_medio+p.quantidade).join(',');
-    const chaveDepois = novaCarteira.map(p=>p.ticker+p.preco_medio+p.quantidade).join(',');
+    // Compara campos que o usuário editou + status (para detectar pendentes confirmados/descartados)
+    const chaveAntes = _carteira.map(p=>p.ticker+p.preco_medio+p.quantidade+p.status).join(',');
+    const chaveDepois = novaCarteira.map(p=>p.ticker+p.preco_medio+p.quantidade+p.status).join(',');
     const mudou = chaveAntes !== chaveDepois;
     _carteira = novaCarteira;
     if(_paginaAtiva === 'carteira'){
@@ -1472,13 +1487,105 @@ function atualizarPrecosCarteira(){
 
 function renderCarteira(){
   renderResumoCarteira();
+  renderPendentesCarteira();
   renderTabelaCarteira();
 }
 
+function renderPendentesCarteira(){
+  let area = document.getElementById('carteira-pendentes-area');
+  if(!area){
+    area = document.createElement('div');
+    area.id = 'carteira-pendentes-area';
+    const tabela = document.getElementById('carteira-tabela');
+    tabela.parentNode.insertBefore(area, tabela);
+  }
+
+  const pendentes = (_carteira || []).filter(p => p.status === 'pendente');
+  if(!pendentes.length){
+    area.innerHTML = '';
+    return;
+  }
+
+  let html = `<div style="background:#fff7ed;border:1px dashed #f59e0b;border-radius:14px;padding:1.25rem;margin-bottom:1.5rem">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem">
+      <span style="font-size:18px">⏳</span>
+      <div style="font-size:14px;font-weight:700">Sugestões pendentes de confirmação</div>
+      <span style="font-size:11px;background:#f59e0b;color:#fff;padding:2px 8px;border-radius:10px">${pendentes.length}</span>
+    </div>`;
+
+  pendentes.forEach(p => {
+    const logoHtml = p.logo ? `<img src="${p.logo}" onerror="this.parentElement.textContent='${p.ticker.substring(0,4)}'">` : p.ticker.substring(0,4);
+    html += `<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="ct-logo" style="background:${p.cor}">${logoHtml}</div>
+        <div style="flex:1;min-width:140px">
+          <div class="ct-ticker">${p.ticker}</div>
+          <div class="ct-nome">${p.nome}</div>
+        </div>
+        <div class="pos-field" style="width:110px">
+          <label style="font-size:10px">Preço (R$)</label>
+          <input type="number" step="0.01" min="0" id="pend-preco-${p.ticker}" value="${p.preco_medio}" style="padding:6px 8px;font-size:13px">
+        </div>
+        <div class="pos-field" style="width:90px">
+          <label style="font-size:10px">Quantidade</label>
+          <input type="number" step="1" min="0" id="pend-qtd-${p.ticker}" value="${p.quantidade}" style="padding:6px 8px;font-size:13px">
+        </div>
+        <div class="pos-field" style="width:130px">
+          <label style="font-size:10px">Data compra</label>
+          <input type="date" id="pend-data-${p.ticker}" value="${p.data_compra || ''}" style="padding:6px 8px;font-size:13px">
+        </div>
+        <div class="pos-field" style="width:120px">
+          <label style="font-size:10px">Corretora</label>
+          <input type="text" id="pend-corretora-${p.ticker}" value="${p.corretora || ''}" placeholder="Opcional" style="padding:6px 8px;font-size:13px">
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="pos-btn-save" style="padding:8px 14px;font-size:12px" onclick="confirmarPendente('${p.ticker}')">✓ Confirmar</button>
+          <button class="pos-btn-cancel" style="padding:8px 14px;font-size:12px;color:#e53935;border-color:#e53935" onclick="descartarPendente('${p.ticker}')">✕ Descartar</button>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  html += `</div>`;
+  area.innerHTML = html;
+}
+
+async function confirmarPendente(ticker){
+  const preco = parseFloat(document.getElementById(`pend-preco-${ticker}`).value);
+  const qtd = parseFloat(document.getElementById(`pend-qtd-${ticker}`).value);
+  const data = document.getElementById(`pend-data-${ticker}`).value;
+  const corretora = document.getElementById(`pend-corretora-${ticker}`).value;
+
+  if(!preco || preco <= 0){ alert('Informe um preço válido'); return; }
+  if(!qtd || qtd <= 0){ alert('Informe uma quantidade válida'); return; }
+
+  try{
+    const r = await fetch(`/api/carteira/pendente/${ticker}/confirmar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preco_medio: preco, quantidade: qtd, data_compra: data, corretora })
+    });
+    const d = await r.json();
+    if(!r.ok){ alert(d.erro || 'Erro ao confirmar'); return; }
+    await carregarCarteira();
+    renderCarteira();
+  }catch(e){ alert('Erro de conexão ao confirmar posição'); }
+}
+
+async function descartarPendente(ticker){
+  if(!confirm(`Descartar a sugestão de ${ticker}?`)) return;
+  try{
+    await fetch(`/api/carteira/pendente/${ticker}`, { method: 'DELETE' });
+    await carregarCarteira();
+    renderCarteira();
+  }catch(e){}
+}
+
 async function renderResumoCarteira(){
-  // Calcula resumo localmente sem fetch ao servidor
-  const totalInvestido = _carteira.reduce((s,p)=>s+(p.valor_investido||0),0);
-  const totalAtual = _carteira.reduce((s,p)=>s+(p.valor_atual||p.valor_investido||0),0);
+  // Calcula resumo localmente sem fetch ao servidor — apenas posições confirmadas
+  const confirmadas = (_carteira || []).filter(p => p.status !== 'pendente');
+  const totalInvestido = confirmadas.reduce((s,p)=>s+(p.valor_investido||0),0);
+  const totalAtual = confirmadas.reduce((s,p)=>s+(p.valor_atual||p.valor_investido||0),0);
   const lucro = totalAtual - totalInvestido;
   const lucroP = totalInvestido>0 ? (lucro/totalInvestido*100) : 0;
   const lucroClass = lucro>0?'lucro-pos':lucro<0?'lucro-neg':'';
@@ -1486,7 +1593,7 @@ async function renderResumoCarteira(){
     <div class="resumo-card">
       <div class="resumo-label">Total Investido</div>
       <div class="resumo-valor">R$ ${fmt(totalInvestido)}</div>
-      <div class="resumo-sub" style="color:var(--text3)">${_carteira.length} posição(ões)</div>
+      <div class="resumo-sub" style="color:var(--text3)">${confirmadas.length} posição(ões)</div>
     </div>
     <div class="resumo-card">
       <div class="resumo-label">Valor Atual</div>
@@ -1502,7 +1609,8 @@ async function renderResumoCarteira(){
 
 function renderTabelaCarteira(){
   const el = document.getElementById('carteira-tabela');
-  if(!_carteira.length){
+  const confirmadas = (_carteira || []).filter(p => p.status !== 'pendente');
+  if(!confirmadas.length){
     el.innerHTML = `<div class="carteira-empty">
       <div style="font-size:40px;margin-bottom:12px">💼</div>
       <div style="font-size:15px;font-weight:600;margin-bottom:6px">Carteira vazia</div>
@@ -1511,7 +1619,7 @@ function renderTabelaCarteira(){
     return;
   }
   // Ordenar por valor atual desc
-  const ordenada = [..._carteira].sort((a,b)=>(b.valor_atual||b.valor_investido)-(a.valor_atual||a.valor_investido));
+  const ordenada = [...confirmadas].sort((a,b)=>(b.valor_atual||b.valor_investido)-(a.valor_atual||a.valor_investido));
   let html = `<div style="overflow-x:auto"><table class="carteira-table">
     <thead><tr>
       <th>Ativo</th>
@@ -1848,6 +1956,7 @@ async function carregarJanusRanking(){
       asset_type: item.asset_type || 'ACAO',
       score: item.janus_score !== null && item.janus_score !== undefined ? parseFloat(item.janus_score) : null,
       quality_score: item.quality_score !== null && item.quality_score !== undefined ? parseFloat(item.quality_score) : null,
+      confidence: item.confidence !== null && item.confidence !== undefined ? parseFloat(item.confidence) : null,
       general_position: item.general_position,
       reference_date: item.reference_date
     }));
@@ -1966,38 +2075,112 @@ function renderJanusTabela(){
 }
 
 function sugerirCarteira(){
-  const minScore = parseFloat(document.getElementById('ji-score-min').value) || 70;
+  const scoreMin = parseFloat(document.getElementById('ji-score-min').value);
+  const scoreMax = parseFloat(document.getElementById('ji-score-max').value);
+  const confMin  = parseFloat(document.getElementById('ji-conf-min').value);
+  const confMax  = parseFloat(document.getElementById('ji-conf-max').value);
+
+  const tickersNaCarteira = new Set((_carteira || []).map(p => p.ticker));
+
   const sugeridos = _janusRanking
-    .filter(item => item.score !== null && item.score >= minScore)
+    .filter(item => {
+      if(item.score === null || item.score === undefined) return false;
+      if(item.score < scoreMin || item.score > scoreMax) return false;
+      // confiança não está no objeto de ranking por padrão — assume 100 se ausente
+      const conf = item.confidence !== undefined && item.confidence !== null ? item.confidence : 100;
+      if(conf < confMin || conf > confMax) return false;
+      return true;
+    })
     .sort((a,b)=> b.score - a.score);
 
   document.getElementById('ji-modal-sub').textContent =
-    `${sugeridos.length} ativo(s) com score ≥ ${minScore}`;
+    `${sugeridos.length} ativo(s) com score entre ${scoreMin} e ${scoreMax}, confiança entre ${confMin}% e ${confMax}%`;
 
   const body = document.getElementById('ji-modal-body');
   if(!sugeridos.length){
     body.innerHTML = `<div class="ji-empty">
       <div class="ji-empty-icon">🔍</div>
-      <div style="font-size:14px">Nenhum ativo atingiu o score mínimo de ${minScore}.</div>
-      <div style="font-size:12px;margin-top:6px">Tente reduzir o valor mínimo.</div>
+      <div style="font-size:14px">Nenhum ativo atendeu aos filtros definidos.</div>
+      <div style="font-size:12px;margin-top:6px">Tente ampliar as faixas de score ou confiança.</div>
     </div>`;
+    document.getElementById('ji-btn-add-selecionados').style.display = 'none';
   } else {
-    body.innerHTML = sugeridos.map((item, i) => {
+    let toolbarHtml = `<div class="ji-sugestao-toolbar">
+      <span><span class="ji-sugestao-link" onclick="toggleTodosSugestao(true)">Selecionar todos</span> · <span class="ji-sugestao-link" onclick="toggleTodosSugestao(false)">Limpar seleção</span></span>
+      <span>Quantidade padrão: 100 ações por ativo</span>
+    </div>`;
+
+    let itensHtml = sugeridos.map((item, i) => {
       const classificacao = janusClassificacaoPorScore(item.score);
       const slug = ji_classSlug(classificacao);
-      return `<div class="ji-modal-item">
+      const jaExiste = tickersNaCarteira.has(item.ticker);
+      return `<div class="ji-modal-item ${jaExiste ? 'ja-existe' : ''}">
+        <input type="checkbox" class="ji-modal-item-check" data-ticker="${item.ticker}"
+          ${jaExiste ? 'disabled' : 'checked'} onchange="atualizarContadorSelecionados()">
         <span class="ji-mini-pos">${i+1}º</span>
         <div class="ji-logo" style="background:#0066cc">${item.ticker.substring(0,4)}</div>
         <div style="flex:1">
           <div class="ji-ticker">${item.ticker}</div>
           <div class="ji-empresa">${item.empresa} · ${item.setor || ''}</div>
         </div>
+        ${jaExiste ? '<span class="ji-modal-item-tag-existe">Já na carteira</span>' : ''}
         <span class="ji-score-badge ji-score-${slug}">${item.score.toFixed(1)}</span>
       </div>`;
     }).join('');
+
+    body.innerHTML = toolbarHtml + itensHtml;
+    document.getElementById('ji-btn-add-selecionados').style.display = 'inline-block';
+    atualizarContadorSelecionados();
   }
 
   document.getElementById('ji-modal-sugestao').classList.add('open');
+}
+
+function toggleTodosSugestao(marcar){
+  document.querySelectorAll('.ji-modal-item-check:not(:disabled)').forEach(cb => cb.checked = marcar);
+  atualizarContadorSelecionados();
+}
+
+function atualizarContadorSelecionados(){
+  const total = document.querySelectorAll('.ji-modal-item-check:checked').length;
+  const btn = document.getElementById('ji-btn-add-selecionados');
+  if(btn) btn.textContent = total > 0 ? `+ Adicionar ${total} selecionado(s) à carteira` : '+ Adicionar selecionados à carteira';
+}
+
+async function adicionarSelecionadosCarteira(){
+  const checks = document.querySelectorAll('.ji-modal-item-check:checked');
+  if(!checks.length){
+    alert('Selecione pelo menos um ativo.');
+    return;
+  }
+  const itens = Array.from(checks).map(cb => ({ ticker: cb.dataset.ticker, quantidade: 100 }));
+
+  const btn = document.getElementById('ji-btn-add-selecionados');
+  btn.disabled = true;
+  btn.textContent = 'Adicionando...';
+
+  try{
+    const r = await fetch('/api/carteira/sugestao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itens })
+    });
+    const d = await r.json();
+
+    if(d.adicionados && d.adicionados.length){
+      alert(`✅ ${d.adicionados.length} ativo(s) adicionado(s) como pendente na sua carteira. Vá até a aba Carteira para revisar e confirmar.`);
+      fecharModalSugestao();
+      await carregarCarteira();
+      if(_paginaAtiva === 'carteira') renderCarteira();
+    } else {
+      alert('Nenhum ativo novo foi adicionado (todos já estavam na carteira ou houve erro).');
+    }
+  }catch(e){
+    alert('Erro ao adicionar ativos à carteira.');
+  }finally{
+    btn.disabled = false;
+    atualizarContadorSelecionados();
+  }
 }
 
 function fecharModalSugestao(e){
