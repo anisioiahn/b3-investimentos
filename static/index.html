@@ -1976,21 +1976,27 @@ function renderJanusStatus(){
   const txt = document.getElementById('ji-status-txt');
   if(!_janusStatus || !dot || !txt) return;
 
+  // Usa o flag real do processo em memória (não o status do banco que pode ficar RUNNING travado)
+  const rodandoAgora = _janusStatus.rodando === true;
+
   const ultima = _janusStatus.ultima_coleta;
-  if(!ultima){
+  if(!ultima && !rodandoAgora){
     dot.className = 'ji-status-dot erro';
     txt.innerHTML = '<strong>Nenhuma coleta realizada ainda</strong>';
     return;
   }
 
-  const status = ultima.status;
-  const dataFim = ultima.finished_at ? new Date(ultima.finished_at) : null;
-  const dataStr = dataFim ? dataFim.toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo', dateStyle:'short', timeStyle:'short'}) : '—';
-
-  if(status === 'RUNNING'){
+  if(rodandoAgora){
     dot.className = 'ji-status-dot atualizando';
     txt.innerHTML = `<strong>Atualizando...</strong> coleta em andamento`;
-  } else if(status === 'SUCCESS'){
+    return;
+  }
+
+  const status = ultima?.status;
+  const dataFim = ultima?.finished_at ? new Date(ultima.finished_at) : null;
+  const dataStr = dataFim ? dataFim.toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo', dateStyle:'short', timeStyle:'short'}) : '—';
+
+  if(status === 'SUCCESS'){
     dot.className = 'ji-status-dot';
     txt.innerHTML = `Última atualização: <strong>${dataStr}</strong> · ${ultima.records_processed}/${_janusStatus.total_ativos} ativos processados`;
   } else {
