@@ -782,6 +782,43 @@ def api_logs():
     desde = request.args.get("desde",0,type=int)
     return jsonify(_log_entries[desde:])
 
+# ── AJIA — Analista Janus com Inteligência Artificial ─────────
+@app.route("/api/ajia/chat", methods=["POST"])
+@requer_auth
+def api_ajia_chat():
+    """Proxy seguro para a API da Anthropic — mantém a chave no servidor."""
+    if not ANTHROPIC_KEY:
+        return jsonify({"erro": "ANTHROPIC_API_KEY não configurada"}), 503
+    d = request.json or {}
+    system_prompt = d.get("system", "")
+    messages = d.get("messages", [])
+    max_tokens = d.get("max_tokens", 600)
+    if not messages:
+        return jsonify({"erro": "messages obrigatório"}), 400
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_KEY,
+                "anthropic-version": "2023-06-01"
+            },
+            json={
+                "model": "claude-sonnet-4-6",
+                "max_tokens": max_tokens,
+                "system": system_prompt,
+                "messages": messages
+            },
+            timeout=45
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            texto = data.get("content", [{}])[0].get("text", "")
+            return jsonify({"texto": texto})
+        return jsonify({"erro": f"Erro na API: {resp.status_code}"}), resp.status_code
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
 # ── ADMIN ROUTES ──────────────────────────────────────────────
 @app.route("/api/admin/login", methods=["POST"])
 def api_admin_login():
