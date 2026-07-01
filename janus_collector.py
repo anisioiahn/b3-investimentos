@@ -353,8 +353,10 @@ def run_collector(on_progress=None):
             msg      = f"Lote {lote_num}/{total_l}: {', '.join(lote[:5])}..."
             prog(pct, atual, len(tickers), msg)
 
+            t0 = time.time()
             time.sleep(DELAY_MS)
             dados_lote = buscar_dados_lote(lote)
+            t_brapi = round(time.time() - t0, 1)
 
             lote_salvar = [
                 (asset_map[t], t, dados_lote[t])
@@ -364,9 +366,12 @@ def run_collector(on_progress=None):
 
             if lote_salvar:
                 try:
+                    t1 = time.time()
                     rl = salvar_lote_banco(conn, lote_salvar, source_id)
+                    t_banco = round(time.time() - t1, 1)
                     rankings.extend(rl)
                     processados += len(lote_salvar)
+                    print(f"[COLLECTOR] Lote {lote_num}: Brapi={t_brapi}s Banco={t_banco}s", flush=True)
                 except Exception as e:
                     print(f"[COLLECTOR] ❌ Erro lote {lote_num}: {e}", flush=True)
                     erros += len(lote_salvar)
