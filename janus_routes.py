@@ -36,7 +36,11 @@ def _rodar_coleta():
     _set_progresso(0, 0, 0, "Iniciando...")
     try:
         from janus_collector import run_collector
-        run_collector()
+
+        def callback(pct, atual, total, msg):
+            _set_progresso(pct, atual, total, msg)
+
+        run_collector(on_progress=callback)
         _set_progresso(100, 0, 0, "Concluído!")
     except Exception as e:
         print(f"[JANUS] Erro na coleta: {e}", flush=True)
