@@ -29,78 +29,103 @@ def run_collector_com_progresso():
     _janus_rodando = True
     _janus_progresso = {"atual": 0, "total": 0, "ticker_atual": "Iniciando...", "pct": 0}
     try:
-        from janus_collector import buscar_lista_ativos, upsert_asset, buscar_dados_lote, \
-            salvar_market_snapshot, salvar_financial_snapshot, salvar_indicadores, \
-            salvar_scores, salvar_ranking, get_source_id, iniciar_log, finalizar_log, \
-            LOTE_FUNDAMENTALISTA, DELAY_MS, hoje as col_hoje
+        from janus_collector import buscar_lista_ativos, buscar_dados_lote, \
+            salvar_lote_banco, salvar_ranking, get_source_id, iniciar_log, finalizar_log, \
+            LOTE_BRAPI, DELAY_MS, get_conn as col_get_conn
         import time
 
-        source_id = get_source_id()
-        log_id = iniciar_log("janus-data-collector", source_id)
+        col_conn = col_get_conn()
+        try:
+            source_id = get_source_id(col_conn)
+            col_conn.commit()
+            log_id = iniciar_log(col_conn, source_id)
+            col_conn.commit()
 
-        lista = buscar_lista_ativos()
-        if not lista:
-            finalizar_log(log_id, "FAILED", 0, "Lista vazia")
-            return
+            lista = buscar_lista_ativos()
+            if not lista:
+                finalizar_log(col_conn, log_id, "FAILED", 0, "Lista vazia")
+                col_conn.commit()
+                return
 
-        _janus_progresso["total"] = len(lista)
-        _janus_progresso["ticker_atual"] = f"Registrando {len(lista)} ativos no banco..."
+            _janus_progresso["total"] = len(lista)
+            _janus_progresso["ticker_atual"] = f"Registrando {len(lista)} ativos no banco..."
 
-        # Upsert todos os assets com progresso
-        asset_map = {}
-        for idx, stock in enumerate(lista):
-            ticker = stock.get("stock") or stock.get("symbol")
-            if not ticker: continue
-            asset_id = upsert_asset(stock)
-            if asset_id:
-                asset_map[ticker] = asset_id
-            # Atualiza progresso a cada 10 ativos
-            if idx % 10 == 0:
-                _janus_progresso["atual"] = idx
-                _janus_progresso["pct"] = round(idx / len(lista) * 100)  # proporcional real
-                _janus_progresso["ticker_atual"] = f"Registrando ativos... ({idx}/{len(lista)})"
+            # Upsert batch com progresso
+            asset_map = {}
+            with col_conn.cursor() as cur:
+                for idx, stock in enumerate(lista):
+                    ticker = stock.get("stock") or stock.get("symbol")
+                    if not ticker: continue
+                    nome  = stock.get("name", ticker)
+                    setor = stock.get("sector")
+                    try:
+                        cur.execute("""
+                            INSERT INTO companies (corporate_name, trading_name, sector, updated_at)
+                            VALUES (%s, %s, %s, %s)
+                            ON CONFLICT (trading_name) DO UPDATE SET
+                                sector=EXCLUDED.sector, updated_at=EXCLUDED.updated_at
+                            RETURNING company_id
+                        """, (nome, nome, setor, agora().isoformat()))
+                        company_id = cur.fetchone()[0]
+                        cur.execute("""
+                            INSERT INTO assets (ticker, company_id, asset_type, currency, country, status, updated_at)
+                            VALUES (%s, %s, 'ACAO', 'BRL', 'BR', 'ATIVO', %s)
+                            ON CONFLICT (ticker) DO UPDATE SET
+                                company_id=EXCLUDED.company_id, updated_at=EXCLUDED.updated_at
+                            RETURNING asset_id
+                        """, (ticker, company_id, agora().isoformat()))
+                        asset_map[ticker] = cur.fetchone()[0]
+                    except Exception: pass
+                    if idx % 10 == 0:
+                        _janus_progresso["atual"] = idx
+                        _janus_progresso["pct"] = round(idx / len(lista) * 100)
+                        _janus_progresso["ticker_atual"] = f"Registrando ativos... ({idx}/{len(lista)})"
+            col_conn.commit()
 
-        tickers_lista = list(asset_map.keys())
-        total_processados = 0
-        total_erros = 0
-        rankings = []
-        total_lotes = (len(tickers_lista) + LOTE_FUNDAMENTALISTA - 1) // LOTE_FUNDAMENTALISTA
+            tickers_lista = list(asset_map.keys())
+            total_lotes = (len(tickers_lista) + LOTE_BRAPI - 1) // LOTE_BRAPI
+            total_processados = 0
+            total_erros = 0
+            rankings = []
 
-        for i in range(0, len(tickers_lista), LOTE_FUNDAMENTALISTA):
-            lote = tickers_lista[i:i+LOTE_FUNDAMENTALISTA]
-            lote_num = i // LOTE_FUNDAMENTALISTA + 1
-            _janus_progresso["ticker_atual"] = f"Lote {lote_num}/{total_lotes}: {', '.join(lote)}"
-            # fase 2: continua proporcional ao total geral
-            _janus_progresso["atual"] = i
-            _janus_progresso["pct"] = round(i / len(tickers_lista) * 100)
+            for i in range(0, len(tickers_lista), LOTE_BRAPI):
+                lote = tickers_lista[i:i+LOTE_BRAPI]
+                lote_num = i // LOTE_BRAPI + 1
+                _janus_progresso["ticker_atual"] = f"Lote {lote_num}/{total_lotes}: {', '.join(lote)}"
+                _janus_progresso["atual"] = i
+                _janus_progresso["pct"] = round(i / len(tickers_lista) * 100)
 
-            time.sleep(DELAY_MS)
-            dados_lote = buscar_dados_lote(lote)
+                time.sleep(DELAY_MS)
+                dados_lote = buscar_dados_lote(lote)
 
-            for ticker in lote:
-                asset_id = asset_map.get(ticker)
-                dados = dados_lote.get(ticker)
-                if not dados or not asset_id:
-                    total_erros += 1
-                    continue
-                try:
-                    salvar_market_snapshot(asset_id, dados, source_id)
-                    salvar_financial_snapshot(asset_id, dados, source_id)
-                    ind_map = salvar_indicadores(asset_id, dados, source_id)
-                    score = salvar_scores(asset_id, ind_map)
-                    if score is not None:
-                        rankings.append({"asset_id": asset_id, "ticker": ticker, "score": score})
-                    total_processados += 1
-                except Exception:
-                    total_erros += 1
+                lote_para_salvar = []
+                for ticker in lote:
+                    dados = dados_lote.get(ticker)
+                    if dados:
+                        lote_para_salvar.append((asset_map[ticker], ticker, dados))
+                    else:
+                        total_erros += 1
 
-        if rankings:
-            salvar_ranking(rankings)
+                if lote_para_salvar:
+                    try:
+                        rankings_lote = salvar_lote_banco(col_conn, lote_para_salvar, source_id)
+                        rankings.extend(rankings_lote)
+                        total_processados += len(lote_para_salvar)
+                    except Exception as e:
+                        print(f"[JANUS] Erro lote {lote_num}: {e}", flush=True)
+                        total_erros += len(lote_para_salvar)
 
-        _janus_progresso["atual"] = len(tickers_lista)
-        _janus_progresso["pct"] = 100
-        _janus_progresso["ticker_atual"] = f"Concluído! {total_processados} ativos processados"
-        finalizar_log(log_id, "SUCCESS", total_processados)
+            if rankings:
+                salvar_ranking(col_conn, rankings)
+
+            _janus_progresso["atual"] = len(tickers_lista)
+            _janus_progresso["pct"] = 100
+            _janus_progresso["ticker_atual"] = f"Concluído! {total_processados} ativos processados"
+            finalizar_log(col_conn, log_id, "SUCCESS", total_processados)
+            col_conn.commit()
+
+        finally:
+            col_conn.close()
 
     except Exception as e:
         print(f"[JANUS] Erro na coleta: {e}", flush=True)
