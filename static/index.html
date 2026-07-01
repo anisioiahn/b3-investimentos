@@ -1081,19 +1081,27 @@ function renderEmpresas(silencioso){
       </div>
       ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${altAcima.valor.toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${c.ticker}','acima')">✕</button></div>`:''}
       ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${altAbaixo.valor.toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${c.ticker}','abaixo')">✕</button></div>`:''}`;
-    return `<div class="co-row" onclick="abrirGrafico('${c.ticker}')">
+    const ji=(_janusRanking||[]).find(j=>j.ticker===c.ticker);
+    const jiBadge=ji?.score!=null?`<span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(ji.score))}" style="font-size:10px;padding:2px 7px">${ji.score.toFixed(1)}</span>`:'';
+    return `<div class="co-row" style="cursor:default">
       <div class="co-logo" style="background:${c.cor}">${logoHtml}</div>
-      <div class="co-info">
+      <div class="co-info" style="flex:1.5">
         <div class="co-name">${c.nome}</div>
-        <div class="co-ticker">${c.ticker}</div>
-        ${(()=>{const ji=(_janusRanking||[]).find(j=>j.ticker===c.ticker);return ji?.score!=null?`<span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(ji.score))}" style="font-size:10px;padding:2px 7px;margin-top:3px">${ji.score.toFixed(1)}</span>`:''})()}
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">
+          <span class="co-ticker">${c.ticker}</span>
+          <span style="font-size:10px;color:var(--text3)">· ${currentSector?DADOS.setores[currentSector]?.nome:''}</span>
+        </div>
+        ${jiBadge?`<div style="margin-top:4px">${jiBadge}</div>`:''}
       </div>
-      <div class="co-price-blk">
+      <div class="co-price-blk" style="text-align:right;flex:1">
         <div class="co-price">R$ ${c.preco.toFixed(2)}</div>
         <div class="co-chg ${cls}">${arrow} ${sign}${vr.toFixed(2)} (${vp>=0?'+':''}${vp.toFixed(2)}%)</div>
-        <div class="co-range">Min: ${c.minima_dia?.toFixed(2)||'—'} · Máx: ${c.maxima_dia?.toFixed(2)||'—'}</div>
+        <div class="co-range" style="font-size:10px">Min: ${c.minima_dia?.toFixed(2)||'—'} · Máx: ${c.maxima_dia?.toFixed(2)||'—'}</div>
       </div>
       <div class="co-target-blk" onclick="event.stopPropagation()">${alertasHtml}</div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:center;flex-shrink:0" onclick="event.stopPropagation()">
+        <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:8px 12px;font-size:13px" onclick="abrirGrafico('${c.ticker}')" title="Ver análise completa">📊</button>
+      </div>
     </div>`;
   }).join('');
 }
