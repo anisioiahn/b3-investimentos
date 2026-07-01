@@ -270,6 +270,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .progress-bar{height:3px;background:var(--border);position:relative}
 .progress-fill{height:100%;background:var(--green);transition:width 1s linear;width:0%}
 
+/* Gauge de progresso da atualização */
+.gauge-overlay{display:none;position:fixed;bottom:1rem;right:1rem;z-index:300;background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 18px;box-shadow:0 8px 32px rgba(0,0,0,.15);min-width:280px;max-width:340px}
+.gauge-overlay.ativo{display:block}
+.gauge-titulo{font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
+.gauge-setor{font-size:11px;color:var(--text2);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gauge-bar-wrap{background:var(--bg);border-radius:6px;height:8px;overflow:hidden}
+.gauge-bar-fill{height:100%;background:var(--green);border-radius:6px;transition:width .5s ease}
+.gauge-pct{font-size:11px;color:var(--text2);margin-top:5px;text-align:right;font-family:monospace}
+
 /* ============================================================
    JANUS INDEX
    ============================================================ */
@@ -885,12 +894,53 @@ async function forcarAtualizacao(){
   if(_intervaloSegundos > 0){
     _proximoUpdate = Date.now() + _intervaloSegundos * 1000;
   }
-  // Polling simples sem acumular timeouts
+
+  // Mostra gauge
+  const gauge     = document.getElementById('gauge-overlay');
+  const gaugeBar  = document.getElementById('gauge-bar');
+  const gaugePct  = document.getElementById('gauge-pct');
+  const gaugeSetor= document.getElementById('gauge-setor');
+  const gaugeCont = document.getElementById('gauge-contagem');
+  if(gauge) gauge.classList.add('ativo');
+
   let tentativas = 0;
   const poll = setInterval(async()=>{
     tentativas++;
+
+    // Atualiza gauge via /api/progresso
+    try{
+      const rp = await fetch('/api/progresso');
+      const prog = await rp.json();
+      if(gaugeBar)  gaugeBar.style.width  = `${prog.pct}%`;
+      if(gaugePct)  gaugePct.textContent  = `${prog.pct}%`;
+      if(gaugeSetor) gaugeSetor.textContent = prog.setor_atual || '...';
+      if(gaugeCont) gaugeCont.textContent  = `${prog.atual}/${prog.total}`;
+
+      // Quando terminar
+      if(!prog.atualizando && prog.pct >= 100){
+        clearInterval(poll);
+        if(gauge) gauge.classList.remove('ativo');
+        await carregarDados();
+        return;
+      }
+    }catch(e){}
+
     await carregarDados();
-    if(dadosCarregados || tentativas >= 12) clearInterval(poll);
+    if(dadosCarregados && tentativas >= 3){
+      // Verifica se terminou
+      try{
+        const rs = await fetch('/api/progresso');
+        const ps = await rs.json();
+        if(!ps.atualizando){
+          clearInterval(poll);
+          if(gauge) gauge.classList.remove('ativo');
+        }
+      }catch(e){}
+    }
+    if(tentativas >= 24) {
+      clearInterval(poll);
+      if(gauge) gauge.classList.remove('ativo');
+    }
   }, 5000);
 }
 async function carregarLogsIniciais(){
@@ -2370,5 +2420,18 @@ const _pollDados=setInterval(async()=>{
   else{ clearInterval(_pollDados); setInterval(carregarDados,60000); }
 },10000);
 </script>
+<!-- GAUGE DE PROGRESSO DA ATUALIZAÇÃO -->
+<div class="gauge-overlay" id="gauge-overlay">
+  <div class="gauge-titulo">
+    <span>🔄 Atualizando cotações</span>
+    <span id="gauge-contagem" style="font-family:monospace;color:var(--green)">0/0</span>
+  </div>
+  <div class="gauge-setor" id="gauge-setor">Iniciando...</div>
+  <div class="gauge-bar-wrap">
+    <div class="gauge-bar-fill" id="gauge-bar" style="width:0%"></div>
+  </div>
+  <div class="gauge-pct" id="gauge-pct">0%</div>
+</div>
+
 </body>
 </html>
