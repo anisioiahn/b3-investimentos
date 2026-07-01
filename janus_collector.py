@@ -12,8 +12,8 @@ from datetime import datetime, timezone, timedelta
 TOKEN_BRAPI   = os.getenv("BRAPI_TOKEN", "")
 BRAPI_BASE    = "https://brapi.dev/api"
 BRAPI_MODULES = "defaultKeyStatistics,balanceSheetHistory,incomeStatementHistory,summaryProfile"
-DELAY_MS      = 0.5
-MAX_ATIVOS    = 100
+DELAY_MS      = 0.8   # delay entre requisições para não estourar rate limit
+MAX_ATIVOS    = 500   # cobre toda a B3
 
 TZ_BRASILIA = timezone(timedelta(hours=-3))
 def agora():    return datetime.now(TZ_BRASILIA)
@@ -83,18 +83,38 @@ def finalizar_log(log_id, status, records, error_msg=None):
 
 # ── STEP 1: Lista de ativos da B3 ────────────────────────────
 def buscar_lista_ativos():
-    print("[COLLECTOR] 📋 Buscando lista de ativos da B3...")
-    url = f"{BRAPI_BASE}/quote/list?token={TOKEN_BRAPI}&type=stock&limit={MAX_ATIVOS}&sortBy=volume&sortOrder=desc"
-    try:
-        r = requests.get(url, timeout=20)
-        if r.status_code == 200:
-            stocks = r.json().get("stocks", [])
-            print(f"[COLLECTOR] ✅ {len(stocks)} ativos encontrados")
-            return stocks
-        print(f"[COLLECTOR] ⚠️ Erro na lista: {r.status_code}")
-    except Exception as e:
-        print(f"[COLLECTOR] ❌ Erro ao buscar lista: {e}")
-    return []
+    """Busca todos os ativos da B3 com paginação (limite 500 por página)."""
+    print("[COLLECTOR] 📋 Buscando lista completa de ativos da B3...")
+    todos = []
+    pagina = 1
+    limite_pagina = 500
+    while True:
+        try:
+            url = f"{BRAPI_BASE}/quote/list?token={TOKEN_BRAPI}&type=stock&limit={limite_pagina}&page={pagina}&sortBy=volume&sortOrder=desc"
+            r = requests.get(url, timeout=30)
+            if r.status_code == 200:
+                dados = r.json()
+                stocks = dados.get("stocks", [])
+                if not stocks:
+                    break
+                todos.extend(stocks)
+                print(f"[COLLECTOR] 📄 Página {pagina}: {len(stocks)} ativos (total: {len(todos)})")
+                # Se retornou menos que o limite, chegamos ao fim
+                if len(stocks) < limite_pagina:
+                    break
+                pagina += 1
+                time.sleep(1)
+            elif r.status_code == 429:
+                print("[COLLECTOR] ⏳ Rate limit na lista, aguardando 30s...")
+                time.sleep(30)
+            else:
+                print(f"[COLLECTOR] ⚠️ Erro na lista: {r.status_code}")
+                break
+        except Exception as e:
+            print(f"[COLLECTOR] ❌ Erro ao buscar lista página {pagina}: {e}")
+            break
+    print(f"[COLLECTOR] ✅ {len(todos)} ativos encontrados no total")
+    return todos
 
 # ── STEP 2: Upsert company + asset ───────────────────────────
 def upsert_asset(stock):
@@ -131,27 +151,117 @@ def upsert_asset(stock):
         print(f"[COLLECTOR] ⚠️ Erro upsert {ticker}: {e}")
         return None
 
-# ── STEP 3: Dados completos do ativo na Brapi ────────────────
-def buscar_dados_ativo(ticker):
-    url = f"{BRAPI_BASE}/quote/{ticker}?modules={BRAPI_MODULES}&token={TOKEN_BRAPI}"
+# ── STEP 3: Dados completos em lote (até 5 tickers por chamada) ──
+LOTE_FUNDAMENTALISTA = 5  # Brapi suporta múltiplos tickers com módulos
+
+def buscar_dados_lote(tickers):
+    """Busca dados fundamentalistas de até 5 tickers numa só chamada."""
+    joined = ",".join(tickers)
+    url = f"{BRAPI_BASE}/quote/{joined}?modules={BRAPI_MODULES}&token={TOKEN_BRAPI}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     try:
-        r = requests.get(url, headers=headers, timeout=20)
+        r = requests.get(url, headers=headers, timeout=30)
         if r.status_code == 200:
             results = r.json().get("results", [])
-            return results[0] if results else None
+            # Retorna dicionário ticker → dados
+            return {d["symbol"]: d for d in results if d.get("symbol")}
         elif r.status_code == 429:
             print("[COLLECTOR] ⏳ Rate limit, aguardando 30s...")
             time.sleep(30)
+            # Tenta de novo após espera
+            r2 = requests.get(url, headers=headers, timeout=30)
+            if r2.status_code == 200:
+                results = r2.json().get("results", [])
+                return {d["symbol"]: d for d in results if d.get("symbol")}
         else:
-            print(f"[COLLECTOR] ⚠️ Status {r.status_code} para {ticker}: {r.text[:200]}")
+            print(f"[COLLECTOR] ⚠️ Status {r.status_code} para lote {joined}: {r.text[:150]}")
     except Exception as e:
-        print(f"[COLLECTOR] ⚠️ Erro {ticker}: {e}")
-    return None
+        print(f"[COLLECTOR] ⚠️ Erro lote {joined}: {e}")
+    return {}
 
-# ── STEP 4: Market snapshot ───────────────────────────────────
+# ── MAIN ─────────────────────────────────────────────────────
+def run_collector():
+    print(f"[COLLECTOR] 🚀 Janus Index Data Collector iniciando...")
+    print(f"[COLLECTOR] 📅 Data de referência: {hoje()}")
+
+    source_id = get_source_id()
+    log_id    = iniciar_log("janus-data-collector", source_id)
+
+    total_processados = 0
+    total_erros       = 0
+    rankings          = []
+
+    try:
+        lista = buscar_lista_ativos()
+        if not lista:
+            finalizar_log(log_id, "FAILED", 0, "Lista de ativos vazia")
+            return
+
+        # STEP 1: Upsert todos os assets primeiro (rápido — só banco)
+        asset_map = {}  # ticker → asset_id
+        for stock in lista:
+            ticker = stock.get("stock") or stock.get("symbol")
+            if not ticker: continue
+            asset_id = upsert_asset(stock)
+            if asset_id:
+                asset_map[ticker] = asset_id
+
+        print(f"[COLLECTOR] 💾 {len(asset_map)} ativos registrados no banco")
+
+        # STEP 2: Busca dados fundamentalistas em lotes de 5
+        tickers_lista = list(asset_map.keys())
+        total_lotes = (len(tickers_lista) + LOTE_FUNDAMENTALISTA - 1) // LOTE_FUNDAMENTALISTA
+        print(f"[COLLECTOR] 📦 Processando {len(tickers_lista)} ativos em {total_lotes} lotes de {LOTE_FUNDAMENTALISTA}")
+
+        for i in range(0, len(tickers_lista), LOTE_FUNDAMENTALISTA):
+            lote = tickers_lista[i:i+LOTE_FUNDAMENTALISTA]
+            lote_num = i // LOTE_FUNDAMENTALISTA + 1
+            print(f"[COLLECTOR] 📊 Lote {lote_num}/{total_lotes}: {', '.join(lote)}")
+
+            time.sleep(DELAY_MS)
+            dados_lote = buscar_dados_lote(lote)
+
+            for ticker in lote:
+                asset_id = asset_map[ticker]
+                dados = dados_lote.get(ticker)
+
+                if not dados:
+                    print(f"[COLLECTOR] ⚠️ Sem dados para {ticker}")
+                    total_erros += 1
+                    continue
+
+                try:
+                    salvar_market_snapshot(asset_id, dados, source_id)
+                    salvar_financial_snapshot(asset_id, dados, source_id)
+                    ind_map = salvar_indicadores(asset_id, dados, source_id)
+
+                    score = salvar_scores(asset_id, ind_map)
+                    if score is not None:
+                        rankings.append({"asset_id": asset_id, "ticker": ticker, "score": score})
+
+                    total_processados += 1
+                    score_str = f"{score:.1f}" if score is not None else "N/A"
+                    print(f"[COLLECTOR] ✅ {ticker} → Quality Score: {score_str}")
+
+                except Exception as e:
+                    total_erros += 1
+                    print(f"[COLLECTOR] ❌ Erro em {ticker}: {e}")
+
+        if rankings:
+            salvar_ranking(rankings)
+
+        finalizar_log(log_id, "SUCCESS", total_processados)
+        print(f"[COLLECTOR] ✅ Coleta finalizada!")
+        print(f"[COLLECTOR]    Total B3:    {len(lista)}")
+        print(f"[COLLECTOR]    Processados: {total_processados}")
+        print(f"[COLLECTOR]    Erros:       {total_erros}")
+        print(f"[COLLECTOR]    No ranking:  {len(rankings)}")
+
+    except Exception as e:
+        print(f"[COLLECTOR] ❌ Erro fatal: {e}")
+        finalizar_log(log_id, "FAILED", total_processados, str(e))
 def salvar_market_snapshot(asset_id, dados, source_id):
     try:
         conn = get_conn()
@@ -428,71 +538,6 @@ def salvar_ranking(rankings):
         except Exception as e:
             print(f"[COLLECTOR] ⚠️ Erro ranking {item['ticker']}: {e}")
     print(f"[COLLECTOR] 🏆 Ranking salvo com {len(rankings)} ativos")
-
-# ── MAIN ─────────────────────────────────────────────────────
-def run_collector():
-    print(f"[COLLECTOR] 🚀 Janus Index Data Collector iniciando...")
-    print(f"[COLLECTOR] 📅 Data de referência: {hoje()}")
-
-    source_id = get_source_id()
-    log_id    = iniciar_log("janus-data-collector", source_id)
-
-    total_processados = 0
-    total_erros       = 0
-    rankings          = []
-
-    try:
-        lista = buscar_lista_ativos()
-        if not lista:
-            finalizar_log(log_id, "FAILED", 0, "Lista de ativos vazia")
-            return
-
-        for stock in lista:
-            ticker = stock.get("stock") or stock.get("symbol")
-            if not ticker: continue
-
-            try:
-                print(f"[COLLECTOR] 📊 Processando {ticker}...")
-
-                asset_id = upsert_asset(stock)
-                if not asset_id:
-                    print(f"[COLLECTOR] ⚠️ Sem asset_id para {ticker}")
-                    continue
-
-                time.sleep(DELAY_MS)
-                dados = buscar_dados_ativo(ticker)
-                if not dados:
-                    print(f"[COLLECTOR] ⚠️ Sem dados para {ticker}")
-                    continue
-
-                salvar_market_snapshot(asset_id, dados, source_id)
-                salvar_financial_snapshot(asset_id, dados, source_id)
-                ind_map = salvar_indicadores(asset_id, dados, source_id)
-
-                score = salvar_scores(asset_id, ind_map)
-                if score is not None:
-                    rankings.append({"asset_id": asset_id, "ticker": ticker, "score": score})
-
-                total_processados += 1
-                score_str = f"{score:.1f}" if score is not None else "N/A"
-                print(f"[COLLECTOR] ✅ {ticker} → Quality Score: {score_str}")
-
-            except Exception as e:
-                total_erros += 1
-                print(f"[COLLECTOR] ❌ Erro em {ticker}: {e}")
-
-        if rankings:
-            salvar_ranking(rankings)
-
-        finalizar_log(log_id, "SUCCESS", total_processados)
-        print(f"[COLLECTOR] ✅ Coleta finalizada!")
-        print(f"[COLLECTOR]    Processados: {total_processados}")
-        print(f"[COLLECTOR]    Erros:       {total_erros}")
-        print(f"[COLLECTOR]    No ranking:  {len(rankings)}")
-
-    except Exception as e:
-        print(f"[COLLECTOR] ❌ Erro fatal: {e}")
-        finalizar_log(log_id, "FAILED", total_processados, str(e))
 
 if __name__ == "__main__":
     run_collector()
