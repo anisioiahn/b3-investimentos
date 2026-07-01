@@ -2005,23 +2005,25 @@ async function atualizarJanusIndex(){
   if(btn){ btn.disabled = true; }
   if(icon){ icon.classList.add('spin'); }
 
-  // Mostra gauge do Janus Index
+  // Mostra gauge imediatamente
   const gauge      = document.getElementById('gauge-overlay');
   const gaugeBar   = document.getElementById('gauge-bar');
   const gaugePct   = document.getElementById('gauge-pct');
   const gaugeSetor = document.getElementById('gauge-setor');
   const gaugeCont  = document.getElementById('gauge-contagem');
+  const gaugeTitle = document.querySelector('#gauge-overlay .gauge-titulo span:first-child');
 
-  const atualizarGauge = (prog) => {
+  const mostrarGauge = (prog) => {
     if(gauge)      gauge.classList.add('ativo');
-    if(gaugeBar)   gaugeBar.style.width  = `${prog.pct}%`;
-    if(gaugePct)   gaugePct.textContent  = `${prog.pct}%`;
-    if(gaugeSetor) gaugeSetor.textContent = prog.ticker_atual || '...';
-    if(gaugeCont)  gaugeCont.textContent  = `${prog.atual}/${prog.total}`;
-    // Muda título do gauge
-    const titulo = document.querySelector('#gauge-overlay .gauge-titulo span:first-child');
-    if(titulo) titulo.textContent = '🎯 Atualizando Janus Index';
+    if(gaugeTitle) gaugeTitle.textContent = '🎯 Janus Index — Atualizando';
+    if(gaugeBar)   gaugeBar.style.width   = `${prog.pct || 0}%`;
+    if(gaugePct)   gaugePct.textContent   = `${prog.pct || 0}%`;
+    if(gaugeSetor) gaugeSetor.textContent  = prog.ticker_atual || 'Iniciando coleta...';
+    if(gaugeCont)  gaugeCont.textContent   = prog.total > 0 ? `${prog.atual}/${prog.total}` : '...';
   };
+
+  // Mostra gauge já na largada
+  mostrarGauge({pct: 0, ticker_atual: 'Iniciando coleta...', atual: 0, total: 0});
 
   try{
     await fetch('/api/admin/janus/coletar', {method:'POST', headers:{'Content-Type':'application/json'}});
@@ -2038,14 +2040,14 @@ async function atualizarJanusIndex(){
     try{
       const rp = await fetch('/api/janus/progresso');
       const prog = await rp.json();
-      atualizarGauge(prog);
+      mostrarGauge(prog);
 
-      // Terminou (estava rodando e parou, ou pct 100)
+      // Terminou
       if((!prog.rodando && ultimoRodando) || prog.pct >= 100){
         clearInterval(poll);
         if(btn) btn.disabled = false;
         if(icon) icon.classList.remove('spin');
-        setTimeout(()=>{ if(gauge) gauge.classList.remove('ativo'); }, 2000);
+        setTimeout(()=>{ if(gauge) gauge.classList.remove('ativo'); }, 3000);
         await carregarJanusStatus();
         await carregarJanusRanking();
         return;
@@ -2053,7 +2055,7 @@ async function atualizarJanusIndex(){
       ultimoRodando = prog.rodando;
     }catch(e){}
 
-    if(tentativas >= 60){ // 5min de timeout
+    if(tentativas >= 60){
       clearInterval(poll);
       if(btn) btn.disabled = false;
       if(icon) icon.classList.remove('spin');
