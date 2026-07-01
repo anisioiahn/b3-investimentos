@@ -319,7 +319,9 @@ def salvar_ranking(conn, rankings):
 # ── MAIN ───────────────────────────────────────────────────
 def run_collector(on_progress=None):
     def prog(pct, atual, total, msg):
-        print(f"[COLLECTOR] {pct}% {msg}", flush=True)
+        # Formato parseável pelo subprocess: "37% Lote 24/79: ..."
+        linha = f"{pct}% {msg}"
+        print(f"[COLLECTOR] {linha}", flush=True)
         if on_progress:
             try: on_progress(pct, atual, total, msg)
             except: pass
