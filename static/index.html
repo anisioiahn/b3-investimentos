@@ -2475,7 +2475,8 @@ function renderJanusMiniRankings(){
       <span class="ji-mini-pos">${i+1}º</span>
       <div class="ji-logo" style="background:#0066cc;width:28px;height:28px;flex-shrink:0">${ji_logoHtml(item.ticker)}</div>
       <span class="ji-mini-ticker">${item.ticker}<span class="ji-mini-empresa">${item.empresa}</span></span>
-      <span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(item.score))} ji-score-clicavel" onclick="abrirModalDetalhe('${item.ticker}')" title="Clique para ver detalhes">${item.score?.toFixed(1) ?? '—'}</span>
+      <span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(item.score))} ji-score-clicavel" onclick="abrirModalDetalhe('${item.ticker}')" title="Ver detalhes do score">${item.score?.toFixed(1) ?? '—'}</span>
+      <button onclick="abrirGrafico('${item.ticker}')" title="Ver análise completa" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;flex-shrink:0">📊</button>
     </div>`;
 
   elMelhores.innerHTML = melhores.map(renderRow).join('');
@@ -2536,6 +2537,7 @@ function renderJanusTabela(){
       <th class="${thCls('ticker')}" onclick="janusOrdenar('ticker')">Ativo ${arrow('ticker')}</th>
       <th class="${thCls('setor')}" onclick="janusOrdenar('setor')">Setor ${arrow('setor')}</th>
       <th class="num ${thCls('score')}" onclick="janusOrdenar('score')">Janus Score ${arrow('score')}</th>
+      <th class="num">Análise</th>
     </tr></thead><tbody>`;
 
   ordenado.forEach((item, i) => {
@@ -2555,8 +2557,11 @@ function renderJanusTabela(){
       </td>
       <td><span class="ji-setor">${item.setor || '—'}</span></td>
       <td class="num">
-        <span class="ji-score-badge ji-score-${slug} ji-score-clicavel" onclick="abrirModalDetalhe('${item.ticker}')" title="Clique para ver detalhes">${scoreTxt}</span>
+        <span class="ji-score-badge ji-score-${slug} ji-score-clicavel" onclick="abrirModalDetalhe('${item.ticker}')" title="Ver detalhes do score">${scoreTxt}</span>
         <div class="ji-classificacao-txt">${classificacao}</div>
+      </td>
+      <td class="num">
+        <button onclick="abrirGrafico('${item.ticker}')" title="Ver análise completa" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px;transition:background .2s" onmouseover="this.style.background='var(--green-light)'" onmouseout="this.style.background='none'">📊</button>
       </td>
     </tr>`;
   });
