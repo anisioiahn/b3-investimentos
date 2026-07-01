@@ -91,33 +91,37 @@ def buscar_lista_ativos():
 # ── Upsert em batch ────────────────────────────────────────
 def upsert_assets_batch(conn, lista):
     asset_map = {}
-    with conn.cursor() as cur:
-        for stock in lista:
-            ticker = stock.get("stock") or stock.get("symbol")
-            if not ticker: continue
-            nome  = stock.get("name", ticker)
-            setor = stock.get("sector")
-            try:
-                cur.execute("""
-                    INSERT INTO companies (corporate_name, trading_name, sector, updated_at)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (trading_name) DO UPDATE SET
-                        sector=EXCLUDED.sector, updated_at=EXCLUDED.updated_at
-                    RETURNING company_id
-                """, (nome, nome, setor, agora_str()))
-                company_id = cur.fetchone()[0]
-                cur.execute("""
-                    INSERT INTO assets (ticker, company_id, asset_type, currency, country, status, updated_at)
-                    VALUES (%s, %s, 'ACAO', 'BRL', 'BR', 'ATIVO', %s)
-                    ON CONFLICT (ticker) DO UPDATE SET
-                        company_id=EXCLUDED.company_id, updated_at=EXCLUDED.updated_at
-                    RETURNING asset_id
-                """, (ticker, company_id, agora_str()))
-                asset_map[ticker] = cur.fetchone()[0]
-            except Exception as e:
-                print(f"[COLLECTOR] ⚠️ Upsert {ticker}: {e}", flush=True)
-    conn.commit()
-    print(f"[COLLECTOR] 💾 {len(asset_map)} ativos registrados", flush=True)
+    total = len(lista)
+    for i in range(0, total, 50):
+        mini_lote = lista[i:i+50]
+        with conn.cursor() as cur:
+            for stock in mini_lote:
+                ticker = stock.get("stock") or stock.get("symbol")
+                if not ticker: continue
+                nome  = stock.get("name", ticker)
+                setor = stock.get("sector")
+                try:
+                    cur.execute("""
+                        INSERT INTO companies (corporate_name, trading_name, sector, updated_at)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (trading_name) DO UPDATE SET
+                            sector=EXCLUDED.sector, updated_at=EXCLUDED.updated_at
+                        RETURNING company_id
+                    """, (nome, nome, setor, agora_str()))
+                    company_id = cur.fetchone()[0]
+                    cur.execute("""
+                        INSERT INTO assets (ticker, company_id, asset_type, currency, country, status, updated_at)
+                        VALUES (%s, %s, 'ACAO', 'BRL', 'BR', 'ATIVO', %s)
+                        ON CONFLICT (ticker) DO UPDATE SET
+                            company_id=EXCLUDED.company_id, updated_at=EXCLUDED.updated_at
+                        RETURNING asset_id
+                    """, (ticker, company_id, agora_str()))
+                    asset_map[ticker] = cur.fetchone()[0]
+                except Exception as e:
+                    print(f"[COLLECTOR] ⚠️ Upsert {ticker}: {e}", flush=True)
+        conn.commit()  # commit a cada 50
+        print(f"[COLLECTOR] 💾 Registrados {min(i+50, total)}/{total}", flush=True)
+    print(f"[COLLECTOR] 💾 {len(asset_map)} ativos no banco", flush=True)
     return asset_map
 
 # ── Busca dados fundamentalistas ───────────────────────────
