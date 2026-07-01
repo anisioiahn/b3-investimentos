@@ -15,11 +15,27 @@ def iniciar_cron_janus():
 
         def executar():
             from janus_routes import _janus_estado, _rodar_coleta
-            hora = agora().strftime("%H:%M")
-            if _janus_estado["rodando"]:
-                print(f"[JANUS CRON] ⚠️ {hora} — coleta já em andamento, pulando...")
+            hora = agora()
+            hora_str = hora.strftime("%H:%M")
+            hora_h = hora.hour
+            hora_m = hora.minute
+
+            # Só executa se estiver dentro de 5 minutos do horário agendado
+            # Evita disparar no boot do servidor
+            horarios_validos = [(10, 0), (19, 0)]
+            valido = any(
+                hora_h == h and hora_m <= 5
+                for h, m in horarios_validos
+            )
+            if not valido:
+                print(f"[JANUS CRON] ⏭️ {hora_str} — fora do horário de coleta, ignorando")
                 return
-            print(f"[JANUS CRON] ⏰ {hora} — iniciando coleta agendada...")
+
+            if _janus_estado["rodando"]:
+                print(f"[JANUS CRON] ⚠️ {hora_str} — coleta já em andamento, pulando...")
+                return
+
+            print(f"[JANUS CRON] ⏰ {hora_str} — iniciando coleta agendada...")
             threading.Thread(target=_rodar_coleta, daemon=True).start()
 
         scheduler = BackgroundScheduler(
