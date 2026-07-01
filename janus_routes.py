@@ -92,8 +92,8 @@ def run_collector_com_progresso():
                 lote = tickers_lista[i:i+LOTE_BRAPI]
                 lote_num = i // LOTE_BRAPI + 1
                 _janus_progresso["ticker_atual"] = f"Lote {lote_num}/{total_lotes}: {', '.join(lote)}"
-                _janus_progresso["atual"] = i
-                _janus_progresso["pct"] = round(i / len(tickers_lista) * 100)
+                _janus_progresso["atual"] = i + len(lote)  # mostra tickers já enviados para Brapi
+                _janus_progresso["pct"] = round((i + len(lote)) / len(tickers_lista) * 100)
 
                 time.sleep(DELAY_MS)
                 dados_lote = buscar_dados_lote(lote)
