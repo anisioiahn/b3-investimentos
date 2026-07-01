@@ -91,6 +91,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .modal-ticker{font-size:12px;color:var(--text2);font-family:monospace}
 .modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;color:var(--text2)}
 .modal-body{padding:1.5rem}
+.painel-tab{background:none;border:none;padding:10px 18px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s}
+.painel-tab.active{color:var(--green);border-bottom-color:var(--green)}
+.painel-tab:hover{color:var(--text)}
+.painel-body{padding:1.25rem 0}
+.jaia-msg{display:flex;gap:10px;align-items:flex-start}
+.jaia-msg.jaia-user{flex-direction:row-reverse}
+.jaia-avatar{width:32px;height:32px;border-radius:50%;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.jaia-msg.jaia-user .jaia-avatar{background:#e3f2fd}
+.jaia-bubble{background:#fff;border:1px solid var(--border);border-radius:12px;border-top-left-radius:4px;padding:10px 14px;font-size:13px;line-height:1.5;max-width:85%}
+.jaia-msg.jaia-user .jaia-bubble{background:var(--green);color:#fff;border-top-left-radius:12px;border-top-right-radius:4px;border-color:var(--green)}
+.jaia-loading{display:flex;gap:4px;padding:10px 14px}
+.jaia-loading span{width:6px;height:6px;background:var(--text3);border-radius:50%;animation:bounce .8s infinite}
+.jaia-loading span:nth-child(2){animation-delay:.15s}
+.jaia-loading span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.jaia-sugestao{background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:5px 12px;font-size:11px;cursor:pointer;color:var(--text2);transition:all .2s}
+.jaia-sugestao:hover{background:var(--green-light);color:var(--green);border-color:var(--green)}
 .modal-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem}
 .stat-box{background:var(--bg);border-radius:10px;padding:10px 12px;text-align:center}
 .stat-label{font-size:10px;color:var(--text2);margin-bottom:4px}
@@ -729,15 +746,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
 <!-- MODAL GRÁFICO + NOTÍCIAS -->
 <div class="modal-overlay" id="modal" onclick="fecharModal(event)">
-  <div class="modal" onclick="event.stopPropagation()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:860px;width:100%">
+    <!-- HEADER DO ATIVO -->
     <div class="modal-header">
       <div class="modal-title">
         <div class="modal-logo" id="modal-logo"></div>
-        <div><div class="modal-name" id="modal-name"></div><div class="modal-ticker" id="modal-ticker"></div></div>
+        <div>
+          <div class="modal-name" id="modal-name"></div>
+          <div class="modal-ticker" id="modal-ticker" style="font-size:12px;color:var(--text2)"></div>
+          <div id="modal-setor" style="font-size:11px;color:var(--text3);margin-top:2px"></div>
+        </div>
       </div>
-      <button class="modal-close" onclick="fecharModal()">✕</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn" id="modal-alerta-btn" onclick="abrirAlertaDoModal()" title="Configurar alerta">🔔 Alerta</button>
+        <div id="modal-janus-badge" style="display:none"></div>
+        <button class="modal-close" onclick="fecharModal()">✕</button>
+      </div>
     </div>
-    <div class="modal-body">
+
+    <!-- ABAS -->
+    <div style="display:flex;border-bottom:2px solid var(--border);margin:0 -1.25rem;padding:0 1.25rem">
+      <button class="painel-tab active" id="tab-cotacao" onclick="trocarAba('cotacao')">📈 Cotação</button>
+      <button class="painel-tab" id="tab-noticias" onclick="trocarAba('noticias')">📰 Notícias</button>
+      <button class="painel-tab" id="tab-jaia" onclick="trocarAba('jaia')">🤖 JAIA</button>
+    </div>
+
+    <!-- ABA 1: COTAÇÃO -->
+    <div class="painel-body" id="painel-cotacao">
       <div class="modal-stats" id="modal-stats"></div>
       <div class="chart-header">
         <div class="chart-title">Histórico de preço</div>
@@ -752,14 +787,50 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <div class="chart-loading" id="chart-loading">Carregando histórico...</div>
         <canvas id="priceChart"></canvas>
       </div>
-      <!-- NOTÍCIAS -->
-      <div class="noticias-section">
-        <div class="noticias-title">📰 Análise e Notícias</div>
+    </div>
+
+    <!-- ABA 2: NOTÍCIAS -->
+    <div class="painel-body" id="painel-noticias" style="display:none">
+      <div class="noticias-section" style="margin-top:0">
         <div class="noticias-grid" id="noticias-grid">
           <div class="noticia-col"><div class="noticia-loading">Carregando notícias...</div></div>
           <div class="noticia-col"><div class="noticia-loading">Carregando notícias...</div></div>
           <div class="noticia-col"><div class="noticia-loading">Carregando notícias...</div></div>
-          <div class="rec-col"><div class="rec-loading">Gerando recomendação com IA...</div></div>
+          <div class="rec-col"><div class="rec-loading">Gerando análise com IA...</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ABA 3: JAIA -->
+    <div class="painel-body" id="painel-jaia" style="display:none">
+      <!-- Score Janus -->
+      <div id="jaia-score-area" style="margin-bottom:1rem"></div>
+      <!-- Chat JAIA -->
+      <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">
+        <div style="background:linear-gradient(135deg,#1a237e,#283593);padding:12px 16px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:20px">🤖</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#fff">JAIA — Janus Analista de IA</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.7)">Especialista em investimentos B3</div>
+          </div>
+        </div>
+        <div id="jaia-chat" style="height:320px;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:10px;background:var(--bg)">
+          <div class="jaia-msg jaia-bot">
+            <div class="jaia-avatar">🤖</div>
+            <div class="jaia-bubble">Olá! Sou a JAIA, sua analista de IA especializada em investimentos na B3. Analisando os dados de <strong id="jaia-ticker-nome"></strong>... Como posso ajudá-lo?</div>
+          </div>
+        </div>
+        <div style="padding:10px;border-top:1px solid var(--border);display:flex;gap:8px;background:#fff">
+          <input type="text" id="jaia-input" placeholder="Pergunte sobre este ativo..." 
+            style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:20px;font-size:13px;outline:none"
+            onkeydown="if(event.key==='Enter')enviarJaia()">
+          <button onclick="enviarJaia()" class="ji-btn-sugerir" style="border-radius:20px;padding:10px 18px">Enviar</button>
+        </div>
+        <div style="padding:6px 16px 10px;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">📊 Analisar fundamentos</button>
+          <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">⚖️ Vale a pena comprar?</button>
+          <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">🔍 Pontos de atenção</button>
+          <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">📈 Perspectivas futuras</button>
         </div>
       </div>
     </div>
@@ -1012,7 +1083,11 @@ function renderEmpresas(silencioso){
       ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${altAbaixo.valor.toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${c.ticker}','abaixo')">✕</button></div>`:''}`;
     return `<div class="co-row" onclick="abrirGrafico('${c.ticker}')">
       <div class="co-logo" style="background:${c.cor}">${logoHtml}</div>
-      <div class="co-info"><div class="co-name">${c.nome}</div><div class="co-ticker">${c.ticker}</div></div>
+      <div class="co-info">
+        <div class="co-name">${c.nome}</div>
+        <div class="co-ticker">${c.ticker}</div>
+        ${(()=>{const ji=(_janusRanking||[]).find(j=>j.ticker===c.ticker);return ji?.score!=null?`<span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(ji.score))}" style="font-size:10px;padding:2px 7px;margin-top:3px">${ji.score.toFixed(1)}</span>`:''})()}
+      </div>
       <div class="co-price-blk">
         <div class="co-price">R$ ${c.preco.toFixed(2)}</div>
         <div class="co-chg ${cls}">${arrow} ${sign}${vr.toFixed(2)} (${vp>=0?'+':''}${vp.toFixed(2)}%)</div>
@@ -1091,59 +1166,104 @@ async function fetchComTimeout(url, ms=25000){
   }catch(e){clearTimeout(id);return null;}
 }
 
+// Estado global do painel
+let _painelTicker = null;
+let _painelCo = null;
+let _jaiaHistorico = []; // histórico de conversa da JAIA por sessão
+let _jaiaContexto = null; // contexto do ativo para a JAIA
+
 async function abrirGrafico(ticker){
-  let co=null;
+  _painelTicker = ticker;
+  _jaiaHistorico = []; // reset histórico ao abrir novo ativo
+
+  let co = null;
   for(const s of Object.values(DADOS.setores)){co=s.empresas.find(e=>e.ticker===ticker);if(co)break;}
   if(!co){
-    // Ticker fora dos setores monitorados (ex: sugestão do Janus Index) — monta um objeto mínimo
     const pend = (_carteira || []).find(p => p.ticker === ticker);
+    const janusItem = (_janusRanking || []).find(j => j.ticker === ticker);
     co = {
       ticker,
-      nome: pend?.nome || ticker,
+      nome: pend?.nome || janusItem?.empresa || ticker,
       cor: pend?.cor || '#0066cc',
+      setor_nome: pend?.setor_nome || janusItem?.setor || '',
       preco: pend?.preco_atual || null,
-      variacao: 0,
-      variacao_pct: 0,
-      minima_dia: null,
-      maxima_dia: null
+      variacao: 0, variacao_pct: 0,
+      minima_dia: null, maxima_dia: null
     };
   }
-  document.getElementById('modal-logo').style.background=co.cor;
-  document.getElementById('modal-logo').textContent=ticker.substring(0,4);
-  document.getElementById('modal-name').textContent=co.nome;
-  document.getElementById('modal-ticker').textContent=ticker;
+  _painelCo = co;
 
-  // Mostra dados já disponíveis do cache imediatamente
-  const vr=co.variacao||0,vp=co.variacao_pct||0,cls=vr>=0?'up':'dn';
+  // Popula header
+  const logoEl = document.getElementById('modal-logo');
+  logoEl.style.background = co.cor;
+  logoEl.innerHTML = `<img src="https://icons.brapi.dev/icons/${ticker}.svg" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.style.display='none';this.parentElement.textContent='${ticker.substring(0,4)}'">`;
+  document.getElementById('modal-name').textContent = co.nome;
+  document.getElementById('modal-ticker').textContent = ticker;
+  const setorEl = document.getElementById('modal-setor');
+  if(setorEl) setorEl.textContent = co.setor_nome || '';
+
+  // Badge Janus
+  const janusItem = (_janusRanking || []).find(j => j.ticker === ticker);
+  const badgeEl = document.getElementById('modal-janus-badge');
+  if(janusItem?.score !== null && janusItem?.score !== undefined){
+    const slug = ji_classSlug(janusClassificacaoPorScore(janusItem.score));
+    badgeEl.innerHTML = `<span class="ji-score-badge ji-score-${slug}" title="Janus Score">${janusItem.score.toFixed(1)}</span>`;
+    badgeEl.style.display = 'block';
+  } else {
+    badgeEl.style.display = 'none';
+  }
+
+  // Alerta btn
+  const alertaBtn = document.getElementById('modal-alerta-btn');
+  if(alertaBtn) alertaBtn.onclick = () => abrirAlertaDoModal(ticker, co);
+
+  // Abre na aba cotação por padrão
+  trocarAba('cotacao');
+  document.getElementById('modal').classList.add('open');
+
+  // Stats iniciais
+  const vr=co.variacao||0, vp=co.variacao_pct||0, cls=vr>=0?'up':'dn';
   document.getElementById('modal-stats').innerHTML=`
     <div class="stat-box"><div class="stat-label">Preço</div><div class="stat-value">R$ ${co.preco?.toFixed(2)||'—'}</div></div>
     <div class="stat-box"><div class="stat-label">Variação</div><div class="stat-value"><span class="${cls}">${vr>=0?'+':''}${vr.toFixed(2)} (${vp>=0?'+':''}${vp.toFixed(2)}%)</span></div></div>
     <div class="stat-box"><div class="stat-label">Mínima</div><div class="stat-value" id="ms-min">${co.minima_dia?`R$ ${co.minima_dia.toFixed(2)}`:'<span style="color:#999;font-size:11px">buscando...</span>'}</div></div>
     <div class="stat-box"><div class="stat-label">Máxima</div><div class="stat-value" id="ms-max">${co.maxima_dia?`R$ ${co.maxima_dia.toFixed(2)}`:'<span style="color:#999;font-size:11px">buscando...</span>'}</div></div>`;
 
-  document.getElementById('modal').classList.add('open');
+  // Reset gráfico
   document.getElementById('chart-loading').style.display='flex';
   document.getElementById('chart-loading').textContent='Carregando histórico...';
   if(chartInstance){chartInstance.destroy();chartInstance=null;}
+
+  // Reset notícias
   document.getElementById('noticias-grid').innerHTML=`
     <div class="noticia-col"><div class="noticia-loading">Carregando...</div></div>
     <div class="noticia-col"><div class="noticia-loading">Carregando...</div></div>
     <div class="noticia-col"><div class="noticia-loading">Carregando...</div></div>
-    <div class="rec-col"><div class="rec-loading">Gerando recomendação com IA...</div></div>`;
+    <div class="rec-col"><div class="rec-loading">Gerando análise com IA...</div></div>`;
 
-  // Busca detalhe (mín/máx), histórico e notícias em paralelo com timeout
-  const [det, hist, nots] = await Promise.all([
+  // Reset JAIA
+  const jaiaTickerNome = document.getElementById('jaia-ticker-nome');
+  if(jaiaTickerNome) jaiaTickerNome.textContent = `${co.nome} (${ticker})`;
+  const jaiaChat = document.getElementById('jaia-chat');
+  if(jaiaChat) jaiaChat.innerHTML = `<div class="jaia-msg jaia-bot">
+    <div class="jaia-avatar">🤖</div>
+    <div class="jaia-bubble">Olá! Sou a JAIA. Estou carregando os dados de <strong>${co.nome} (${ticker})</strong> para te ajudar com a análise. Aguarde um momento ou já pode fazer sua pergunta!</div>
+  </div>`;
+
+  // Busca tudo em paralelo
+  const [det, hist, nots, scoreData] = await Promise.all([
     fetchComTimeout(`/api/detalhe/${ticker}`, 20000),
     fetchComTimeout(`/api/historico/${ticker}`, 30000),
     fetchComTimeout(`/api/noticias/${ticker}`, 40000),
+    fetchComTimeout(`/api/janus/score/${ticker}`, 15000),
   ]);
 
-  // Atualiza preço, variação, mín/máx se veio detalhe (importante para tickers fora do cache local)
+  // Atualiza stats com detalhe
   if(det && !det.erro){
     if(det.preco){
       const vrD=det.variacao||0, vpD=det.variacao_pct||0, clsD=vrD>=0?'up':'dn';
-      document.querySelector('#modal-stats .stat-box:nth-child(1) .stat-value').innerHTML = `R$ ${det.preco.toFixed(2)}`;
-      document.querySelector('#modal-stats .stat-box:nth-child(2) .stat-value').innerHTML = `<span class="${clsD}">${vrD>=0?'+':''}${vrD.toFixed(2)} (${vpD>=0?'+':''}${vpD.toFixed(2)}%)</span>`;
+      document.querySelector('#modal-stats .stat-box:nth-child(1) .stat-value').innerHTML=`R$ ${det.preco.toFixed(2)}`;
+      document.querySelector('#modal-stats .stat-box:nth-child(2) .stat-value').innerHTML=`<span class="${clsD}">${vrD>=0?'+':''}${vrD.toFixed(2)} (${vpD>=0?'+':''}${vpD.toFixed(2)}%)</span>`;
     }
     if(det.minima_dia) document.getElementById('ms-min').textContent=`R$ ${det.minima_dia.toFixed(2)}`;
     if(det.maxima_dia) document.getElementById('ms-max').textContent=`R$ ${det.maxima_dia.toFixed(2)}`;
@@ -1158,12 +1278,166 @@ async function abrirGrafico(ticker){
     renderChart(chartDataFull);
   } else {
     document.getElementById('chart-loading').style.display='flex';
-    document.getElementById('chart-loading').textContent='Histórico não disponível no plano atual da brapi.dev';
+    document.getElementById('chart-loading').textContent='Histórico não disponível.';
   }
 
   // Notícias
   if(nots) renderNoticias(nots);
-  else document.getElementById('noticias-grid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:1rem;color:var(--text2)">Não foi possível carregar notícias.</div>';
+  else document.getElementById('noticias-grid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:1rem">Não foi possível carregar notícias.</div>';
+
+  // Monta contexto da JAIA com todos os dados disponíveis
+  _jaiaContexto = {
+    ticker, nome: co.nome, setor: co.setor_nome,
+    preco: det?.preco || co.preco,
+    variacao_pct: det?.variacao_pct || co.variacao_pct,
+    minima: det?.minima_dia, maxima: det?.maxima_dia,
+    janus_score: janusItem?.score,
+    janus_classificacao: janusItem ? janusClassificacaoPorScore(janusItem.score) : null,
+    janus_confianca: janusItem?.confidence,
+    noticias: nots ? Object.values(nots.noticias||{}).flat().slice(0,6).map(n=>n.titulo) : [],
+    sentimento: nots?.recomendacao?.sinal,
+    score_data: scoreData
+  };
+
+  // Popula área do score Janus na aba JAIA
+  renderJaiaScoreArea(scoreData, janusItem);
+}
+
+function trocarAba(aba){
+  ['cotacao','noticias','jaia'].forEach(a=>{
+    document.getElementById(`tab-${a}`)?.classList.toggle('active', a===aba);
+    const painel = document.getElementById(`painel-${a}`);
+    if(painel) painel.style.display = a===aba ? 'block' : 'none';
+  });
+}
+
+function abrirAlertaDoModal(ticker, co){
+  fecharModal();
+  setTimeout(()=>{
+    // Abre modal de alerta inline
+    const coAlvo = co || _painelCo;
+    const tickerAlvo = ticker || _painelTicker;
+    if(coAlvo) toggleDirAlerta(tickerAlvo, 'acima', null);
+  }, 150);
+}
+
+function renderJaiaScoreArea(scoreData, janusItem){
+  const el = document.getElementById('jaia-score-area');
+  if(!el) return;
+  if(!janusItem?.score && !scoreData){
+    el.innerHTML = `<div style="text-align:center;padding:1rem;color:var(--text2);font-size:13px">Score Janus não disponível para este ativo ainda.</div>`;
+    return;
+  }
+  const score = janusItem?.score || scoreData?.overall_score;
+  const classif = janusItem ? janusClassificacaoPorScore(score) : scoreData?.classification || '—';
+  const conf = janusItem?.confidence || scoreData?.confidence || '—';
+  const slug = ji_classSlug(classif);
+  const inds = scoreData?.indicadores || {};
+  let indsHtml = '';
+  if(Object.keys(inds).length){
+    indsHtml = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">` +
+      Object.entries(inds).map(([k,v])=>`
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px">
+          <div style="color:var(--text3)">${k}</div>
+          <div style="font-weight:700">${v!==null&&v!==undefined ? (typeof v==='number'?v.toFixed(2):v) : '—'}</div>
+        </div>`).join('') + `</div>`;
+  }
+  el.innerHTML = `
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <span class="ji-score-badge ji-score-${slug}" style="font-size:22px;padding:8px 16px">${score?.toFixed(1)||'—'}</span>
+        <div>
+          <div style="font-size:14px;font-weight:700">${classif}</div>
+          <div style="font-size:12px;color:var(--text2)">Confiança: ${typeof conf==='number'?conf.toFixed(0)+'%':conf}</div>
+        </div>
+      </div>
+      ${indsHtml}
+    </div>`;
+}
+
+// ── JAIA — Chat com IA ─────────────────────────────────────
+async function enviarJaia(){
+  const input = document.getElementById('jaia-input');
+  const pergunta = input?.value?.trim();
+  if(!pergunta) return;
+  input.value = '';
+  _enviarMensagemJaia(pergunta);
+}
+
+function enviarJaiaSugestao(btn){
+  _enviarMensagemJaia(btn.textContent.replace(/^[^\w]+/,'').trim());
+}
+
+async function _enviarMensagemJaia(pergunta){
+  const chat = document.getElementById('jaia-chat');
+  if(!chat) return;
+
+  // Adiciona mensagem do usuário
+  _jaiaHistorico.push({role:'user', content: pergunta});
+  chat.innerHTML += `<div class="jaia-msg jaia-user">
+    <div class="jaia-avatar">👤</div>
+    <div class="jaia-bubble">${pergunta}</div>
+  </div>`;
+
+  // Loading
+  const loadId = 'jaia-loading-' + Date.now();
+  chat.innerHTML += `<div class="jaia-msg jaia-bot" id="${loadId}">
+    <div class="jaia-avatar">🤖</div>
+    <div class="jaia-bubble"><div class="jaia-loading"><span></span><span></span><span></span></div></div>
+  </div>`;
+  chat.scrollTop = chat.scrollHeight;
+
+  try{
+    // Monta prompt com contexto completo do ativo
+    const ctx = _jaiaContexto || {};
+    const sistemaPrompt = `Você é a JAIA (Janus Analista de IA), especialista em investimentos na bolsa brasileira B3.
+Você está analisando o ativo ${ctx.ticker} - ${ctx.nome} (${ctx.setor || 'setor não identificado'}).
+
+DADOS DO ATIVO:
+- Preço atual: R$ ${ctx.preco?.toFixed(2) || 'N/D'}
+- Variação hoje: ${ctx.variacao_pct?.toFixed(2) || 'N/D'}%
+- Mínima/Máxima do dia: R$ ${ctx.minima?.toFixed(2)||'N/D'} / R$ ${ctx.maxima?.toFixed(2)||'N/D'}
+- Janus Score: ${ctx.janus_score?.toFixed(1) || 'N/D'} (${ctx.janus_classificacao || 'N/D'})
+- Confiança do score: ${ctx.janus_confianca?.toFixed(0) || 'N/D'}%
+- Sentimento das notícias: ${ctx.sentimento || 'N/D'}
+- Notícias recentes: ${ctx.noticias?.slice(0,4).join(' | ') || 'Sem notícias'}
+
+Responda de forma objetiva, em português, com profundidade de analista especializado. 
+Não recomende compra ou venda diretamente — use linguagem de análise (favorável, desfavorável, cautela).
+Seja direto e use dados concretos quando disponíveis.`;
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 600,
+        system: sistemaPrompt,
+        messages: _jaiaHistorico
+      })
+    });
+
+    const data = await resp.json();
+    const resposta = data.content?.[0]?.text || 'Não consegui gerar uma resposta.';
+
+    // Adiciona resposta ao histórico
+    _jaiaHistorico.push({role: 'assistant', content: resposta});
+
+    // Remove loading e adiciona resposta
+    document.getElementById(loadId)?.remove();
+    chat.innerHTML += `<div class="jaia-msg jaia-bot">
+      <div class="jaia-avatar">🤖</div>
+      <div class="jaia-bubble">${resposta.replace(/\n/g,'<br>')}</div>
+    </div>`;
+
+  }catch(e){
+    document.getElementById(loadId)?.remove();
+    chat.innerHTML += `<div class="jaia-msg jaia-bot">
+      <div class="jaia-avatar">🤖</div>
+      <div class="jaia-bubble" style="color:#e53935">Erro ao conectar com a JAIA. Tente novamente.</div>
+    </div>`;
+  }
+  chat.scrollTop = chat.scrollHeight;
 }
 
 function renderNoticias(data){
