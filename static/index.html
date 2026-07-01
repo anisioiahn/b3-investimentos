@@ -1292,17 +1292,17 @@ async function abrirGrafico(ticker){
     preco: det?.preco || co.preco,
     variacao_pct: det?.variacao_pct || co.variacao_pct,
     minima: det?.minima_dia, maxima: det?.maxima_dia,
-    janus_score: scoreData?.janus_score?.overall_score ?? janusItem?.score,
+    janus_score: scoreData?.janus_score?.overall_score != null ? parseFloat(scoreData.janus_score.overall_score) : (janusItem?.score != null ? parseFloat(janusItem.score) : null),
     janus_classificacao: scoreData?.janus_score?.classification || (janusItem ? janusClassificacaoPorScore(janusItem.score) : null),
-    janus_confianca: scoreData?.janus_score?.confidence ?? janusItem?.confidence,
+    janus_confianca: scoreData?.janus_score?.confidence != null ? parseFloat(scoreData.janus_score.confidence) : (janusItem?.confidence != null ? parseFloat(janusItem.confidence) : null),
     indicadores: scoreData?.indicadores || {},
     noticias: nots ? Object.values(nots.noticias||{}).flat().slice(0,6).map(n=>n.titulo) : [],
     sentimento: nots?.recomendacao?.sinal,
     justificativa: nots?.recomendacao?.justificativa
   };
 
-  // Popula score na aba JAIA
-  renderJaiaScoreArea(scoreData, janusItem);
+  // Popula score na aba JAIA — passa janusItem E o score diretamente como fallback extra
+  renderJaiaScoreArea(scoreData, janusItem || {score: null});
 
   // JAIA faz análise inicial automática em background
   _enviarMensagemJaiaAuto();
@@ -1332,9 +1332,9 @@ function renderJaiaScoreArea(scoreData, janusItem){
 
   // scoreData.janus_score é um objeto com overall_score, confidence, classification
   const js = scoreData?.janus_score;
-  const score = js?.overall_score ?? janusItem?.score;
+  const score = js?.overall_score != null ? parseFloat(js.overall_score) : (janusItem?.score != null ? parseFloat(janusItem.score) : null);
   const classif = js?.classification || (janusItem ? janusClassificacaoPorScore(janusItem?.score) : null);
-  const conf = js?.confidence ?? janusItem?.confidence;
+  const conf = js?.confidence != null ? parseFloat(js.confidence) : (janusItem?.confidence != null ? parseFloat(janusItem.confidence) : null);
 
   if(score === null || score === undefined){
     el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text2);font-size:13px;background:var(--bg);border-radius:10px">Score Janus ainda não calculado para este ativo.</div>';
