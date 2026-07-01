@@ -27,7 +27,7 @@ def _set_progresso(pct, atual, total, msg):
     _janus_estado.update({"pct": pct, "atual": atual, "total": total, "msg": msg})
 
 def _rodar_coleta():
-    """Executa a coleta completa. Só roda se o lock estiver livre."""
+    """Executa a coleta em subprocess separado — imune ao timeout do Gunicorn."""
     global _janus_estado
     if not _janus_lock.acquire(blocking=False):
         print("[JANUS] Coleta já em andamento, ignorando.", flush=True)
@@ -35,15 +35,36 @@ def _rodar_coleta():
     _janus_estado["rodando"] = True
     _set_progresso(0, 0, 0, "Iniciando...")
     try:
-        from janus_collector import run_collector
+        import subprocess, sys, json
+        # Roda janus_collector.py como processo independente
+        proc = subprocess.Popen(
+            [sys.executable, "janus_collector.py"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+        # Lê output linha a linha e atualiza progresso
+        for linha in proc.stdout:
+            linha = linha.strip()
+            if not linha: continue
+            print(f"[COLLECTOR] {linha}", flush=True)
+            # Parseia linhas de progresso: "[COLLECTOR] 37% Lote 24/79: ..."
+            if "%" in linha and linha[0].isdigit():
+                try:
+                    pct_str = linha.split("%")[0].strip()
+                    msg = linha.split("%", 1)[1].strip()
+                    pct = int(pct_str)
+                    _set_progresso(pct, 0, 0, msg)
+                except: pass
 
-        def callback(pct, atual, total, msg):
-            _set_progresso(pct, atual, total, msg)
-
-        run_collector(on_progress=callback)
-        _set_progresso(100, 0, 0, "Concluído!")
+        proc.wait()
+        if proc.returncode == 0:
+            _set_progresso(100, 0, 0, "Concluído!")
+        else:
+            _set_progresso(0, 0, 0, f"Erro (código {proc.returncode})")
     except Exception as e:
-        print(f"[JANUS] Erro na coleta: {e}", flush=True)
+        print(f"[JANUS] Erro ao rodar coleta: {e}", flush=True)
         _set_progresso(0, 0, 0, f"Erro: {e}")
     finally:
         _janus_estado["rodando"] = False
