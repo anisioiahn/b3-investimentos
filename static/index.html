@@ -764,7 +764,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     </div>
 
     <!-- ABAS -->
-    <div style="display:flex;border-bottom:2px solid var(--border);padding:0 1.5rem">
+    <div style="display:flex;border-bottom:2px solid var(--border);margin:0;padding:0 1.5rem;overflow:hidden">
       <button class="painel-tab active" id="tab-cotacao" onclick="trocarAba('cotacao')">📈 Cotação</button>
       <button class="painel-tab" id="tab-noticias" onclick="trocarAba('noticias')">📰 Notícias</button>
       <button class="painel-tab" id="tab-jaia" onclick="trocarAba('jaia')">🤖 JAIA</button>
@@ -1292,9 +1292,9 @@ async function abrirGrafico(ticker){
     preco: det?.preco || co.preco,
     variacao_pct: det?.variacao_pct || co.variacao_pct,
     minima: det?.minima_dia, maxima: det?.maxima_dia,
-    janus_score: scoreData?.overall_score || janusItem?.score,
-    janus_classificacao: scoreData?.classification || (janusItem ? janusClassificacaoPorScore(janusItem.score) : null),
-    janus_confianca: scoreData?.confidence || janusItem?.confidence,
+    janus_score: scoreData?.janus_score?.overall_score ?? janusItem?.score,
+    janus_classificacao: scoreData?.janus_score?.classification || (janusItem ? janusClassificacaoPorScore(janusItem.score) : null),
+    janus_confianca: scoreData?.janus_score?.confidence ?? janusItem?.confidence,
     indicadores: scoreData?.indicadores || {},
     noticias: nots ? Object.values(nots.noticias||{}).flat().slice(0,6).map(n=>n.titulo) : [],
     sentimento: nots?.recomendacao?.sinal,
@@ -1330,38 +1330,50 @@ function renderJaiaScoreArea(scoreData, janusItem){
   const el = document.getElementById('jaia-score-area');
   if(!el) return;
 
-  const score = scoreData?.overall_score ?? janusItem?.score;
-  const classif = scoreData?.classification || (janusItem ? janusClassificacaoPorScore(janusItem?.score) : null);
-  const conf = scoreData?.confidence ?? janusItem?.confidence;
+  // scoreData.janus_score é um objeto com overall_score, confidence, classification
+  const js = scoreData?.janus_score;
+  const score = js?.overall_score ?? janusItem?.score;
+  const classif = js?.classification || (janusItem ? janusClassificacaoPorScore(janusItem?.score) : null);
+  const conf = js?.confidence ?? janusItem?.confidence;
 
   if(score === null || score === undefined){
-    el.innerHTML = `<div style="text-align:center;padding:12px;color:var(--text2);font-size:13px;background:var(--bg);border-radius:10px">Score Janus ainda não calculado para este ativo.</div>`;
+    el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text2);font-size:13px;background:var(--bg);border-radius:10px">Score Janus ainda não calculado para este ativo.</div>';
     return;
   }
 
   const slug = ji_classSlug(classif || '');
-  const inds = scoreData?.indicadores || {};
-  let indsHtml = '';
-  if(Object.keys(inds).length){
-    indsHtml = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">` +
-      Object.entries(inds).map(([k,v])=>`
-        <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;min-width:100px">
-          <div style="color:var(--text3);margin-bottom:2px">${k}</div>
-          <div style="font-weight:700;color:var(--text)">${v!==null&&v!==undefined?(typeof v==='number'?(v*100).toFixed(1)+'%':v):'—'}</div>
-        </div>`).join('') + `</div>`;
-  }
+  const NOMES = {
+    'FIN_ROE':'ROE','FIN_ROIC':'ROIC','FIN_NET_MARGIN':'Margem Líq.',
+    'FIN_REVENUE_GROWTH':'Cresc. Receita','VAL_PE':'P/L',
+    'VAL_PVP':'P/VP','VAL_DIVIDEND_YIELD':'DY','VAL_EV_EBITDA':'EV/EBITDA'
+  };
+  // indicadores é lista [{indicator_code, raw_value, unit}]
+  const indsMap = {};
+  (scoreData?.indicadores || []).forEach(ind => {
+    if(ind.indicator_code !== 'FIN_REVENUE' && !indsMap[ind.indicator_code])
+      indsMap[ind.indicator_code] = ind;
+  });
+  const indsHtml = Object.entries(indsMap).map(([k,v]) => {
+    const nome = NOMES[k] || k;
+    const val = v.raw_value;
+    const fmt = val === null || val === undefined ? '—'
+      : v.unit === '%' ? (parseFloat(val)*100).toFixed(1)+'%'
+      : parseFloat(val).toFixed(2);
+    return '<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;min-width:90px">'
+      + '<div style="color:var(--text3);margin-bottom:2px">'+nome+'</div>'
+      + '<div style="font-weight:700;color:var(--text)">'+fmt+'</div>'
+      + '</div>';
+  }).join('');
 
-  el.innerHTML = `
-    <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px">
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:4px">
-        <span class="ji-score-badge ji-score-${slug}" style="font-size:24px;padding:10px 18px">${score.toFixed(1)}</span>
-        <div>
-          <div style="font-size:15px;font-weight:700">${classif || '—'}</div>
-          <div style="font-size:12px;color:var(--text2)">Confiança: ${conf!==null&&conf!==undefined?(typeof conf==='number'?conf.toFixed(0)+'%':conf):'—'}</div>
-        </div>
-      </div>
-      ${indsHtml}
-    </div>`;
+  el.innerHTML = '<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px">'
+    + '<div style="display:flex;align-items:center;gap:16px;margin-bottom:'+(indsHtml?'12':'0')+'px">'
+    + '<span class="ji-score-badge ji-score-'+slug+'" style="font-size:24px;padding:10px 18px">'+score.toFixed(1)+'</span>'
+    + '<div>'
+    + '<div style="font-size:15px;font-weight:700">'+(classif||'—')+'</div>'
+    + '<div style="font-size:12px;color:var(--text2)">Confiança: '+(conf!=null?parseFloat(conf).toFixed(0)+'%':'—')+'</div>'
+    + '</div></div>'
+    + (indsHtml ? '<div style="display:flex;flex-wrap:wrap;gap:8px">'+indsHtml+'</div>' : '')
+    + '</div>';
 }
 
 async function _enviarMensagemJaiaAuto(){
