@@ -23,7 +23,14 @@ def iniciar_cron_janus():
             print(f"[JANUS CRON] ⏰ {hora} — iniciando coleta agendada...")
             threading.Thread(target=run_collector_com_progresso, daemon=True).start()
 
-        scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
+        scheduler = BackgroundScheduler(
+            timezone="America/Sao_Paulo",
+            job_defaults={
+                'misfire_grace_time': None,  # não dispara jobs atrasados ao reiniciar
+                'coalesce': True,            # agrupa múltiplos disparos em um só
+                'max_instances': 1           # nunca mais de 1 instância simultânea
+            }
+        )
 
         scheduler.add_job(executar, "cron",
                           day_of_week="mon-fri",
