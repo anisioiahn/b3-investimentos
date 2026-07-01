@@ -48,15 +48,15 @@ def _rodar_coleta():
         for linha in proc.stdout:
             linha = linha.strip()
             if not linha: continue
-            print(f"[COLLECTOR] {linha}", flush=True)
-            # Parseia linhas de progresso: "[COLLECTOR] 37% Lote 24/79: ..."
-            if "%" in linha and linha[0].isdigit():
-                try:
-                    pct_str = linha.split("%")[0].strip()
-                    msg = linha.split("%", 1)[1].strip()
-                    pct = int(pct_str)
+            print(linha, flush=True)
+            # Parseia: "[COLLECTOR] 37% Lote 24/79: ..."
+            try:
+                parte = linha.replace("[COLLECTOR]", "").strip()
+                if parte and parte[0].isdigit() and "%" in parte:
+                    pct = int(parte.split("%")[0].strip())
+                    msg = parte.split("%", 1)[1].strip()
                     _set_progresso(pct, 0, 0, msg)
-                except: pass
+            except: pass
 
         proc.wait()
         if proc.returncode == 0:
