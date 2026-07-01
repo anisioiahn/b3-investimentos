@@ -22,10 +22,17 @@ def get_conn():
 # Flag global de progresso do collector
 _janus_rodando = False
 _janus_progresso = {"atual": 0, "total": 0, "ticker_atual": "", "pct": 0}
+_janus_lock = threading.Lock()  # garante que só uma coleta roda por vez
 
 def run_collector_com_progresso():
     """Wrapper que atualiza o flag global durante a coleta."""
     global _janus_rodando, _janus_progresso
+
+    # Lock atômico — impede duas coletas simultâneas mesmo com race condition
+    if not _janus_lock.acquire(blocking=False):
+        print("[JANUS] ⚠️ Coleta já em andamento, nova requisição ignorada.", flush=True)
+        return
+
     _janus_rodando = True
     _janus_progresso = {"atual": 0, "total": 0, "ticker_atual": "Iniciando...", "pct": 0}
     try:
@@ -131,6 +138,7 @@ def run_collector_com_progresso():
         print(f"[JANUS] Erro na coleta: {e}", flush=True)
     finally:
         _janus_rodando = False
+        _janus_lock.release()  # libera para próxima coleta
 
 
 def registrar_rotas_janus(app, requer_auth):
@@ -448,9 +456,12 @@ Escreva em português, tom profissional mas acessível, destacando os pontos for
             token = request.cookies.get("janus_token", "")
         if not auth.verificar_jwt(token):
             return jsonify({"erro": "Acesso negado"}), 403
-        if _janus_rodando:
+        if _janus_rodando or not _janus_lock.acquire(blocking=False):
+            if not _janus_rodando:
+                _janus_lock.release()  # liberou mas não estava rodando, libera de volta
             return jsonify({"ok": False, "mensagem": "Coleta já em andamento"}), 409
 
+        _janus_lock.release()  # libera para run_collector_com_progresso adquirir
         threading.Thread(target=run_collector_com_progresso, daemon=True).start()
         return jsonify({"ok": True, "mensagem": "Coleta iniciada"})
 
