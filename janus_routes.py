@@ -136,6 +136,7 @@ def registrar_rotas_janus(app, requer_auth):
                 "status":        "online",
                 "total_ativos":  total_ativos,
                 "total_scores":  total_scores,
+                "rodando":       _janus_rodando,  # flag real do processo em memória
                 "ultima_coleta": dict(ultima) if ultima else None
             })
         except Exception as e:
