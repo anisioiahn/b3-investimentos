@@ -1413,19 +1413,18 @@ Ao final, adicione exatamente esta frase: "Pode fazer a sua pergunta!"
 
 Use linguagem de analista especializado. Não recomende compra/venda diretamente.`;
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/api/ajia/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 500,
         system: sistemaPrompt,
+        max_tokens: 500,
         messages: [{role: 'user', content: `Faça a análise inicial de ${ctx.ticker} - ${ctx.nome}.`}]
       })
     });
 
     const data = await resp.json();
-    const resposta = data.content?.[0]?.text || 'Não foi possível gerar análise.';
+    const resposta = data.texto || data.erro || 'Não foi possível gerar análise.';
 
     // Adiciona ao histórico para manter contexto
     _jaiaHistorico.push({role: 'user', content: `Faça a análise inicial de ${ctx.ticker} - ${ctx.nome}.`});
@@ -1498,19 +1497,18 @@ Responda de forma objetiva, em português, com profundidade de analista especial
 Não recomende compra ou venda diretamente — use linguagem de análise (favorável, desfavorável, cautela).
 Seja direto e use dados concretos quando disponíveis.`;
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/api/ajia/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 600,
         system: sistemaPrompt,
+        max_tokens: 600,
         messages: _jaiaHistorico
       })
     });
 
     const data = await resp.json();
-    const resposta = data.content?.[0]?.text || 'Não consegui gerar uma resposta.';
+    const resposta = data.texto || data.erro || 'Não consegui gerar uma resposta.';
 
     // Adiciona resposta ao histórico
     _jaiaHistorico.push({role: 'assistant', content: resposta});
