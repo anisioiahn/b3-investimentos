@@ -2443,6 +2443,51 @@ function carregarJanusIndex(){
 }
 
 carregarUsuario();
+
+// Restaura gauge se voltar para a aba enquanto coleta estiver rodando
+document.addEventListener('visibilitychange', async () => {
+  if(document.visibilityState === 'visible'){
+    // Verifica progresso do collector do Janus Index
+    try{
+      const rj = await fetch('/api/janus/progresso');
+      const pj = await rj.json();
+      if(pj.rodando){
+        const gauge      = document.getElementById('gauge-overlay');
+        const gaugeBar   = document.getElementById('gauge-bar');
+        const gaugePct   = document.getElementById('gauge-pct');
+        const gaugeSetor = document.getElementById('gauge-setor');
+        const gaugeCont  = document.getElementById('gauge-contagem');
+        const gaugeTitle = document.querySelector('#gauge-overlay .gauge-titulo span:first-child');
+        if(gauge)      gauge.classList.add('ativo');
+        if(gaugeTitle) gaugeTitle.textContent = '🎯 Janus Index — Atualizando';
+        if(gaugeBar)   gaugeBar.style.width   = `${pj.pct}%`;
+        if(gaugePct)   gaugePct.textContent   = `${pj.pct}%`;
+        if(gaugeSetor) gaugeSetor.textContent  = pj.ticker_atual || '...';
+        if(gaugeCont)  gaugeCont.textContent   = `${pj.atual}/${pj.total}`;
+      }
+    }catch(e){}
+
+    // Verifica progresso do atualizar_cache (cotações)
+    try{
+      const rp = await fetch('/api/progresso');
+      const pp = await rp.json();
+      if(pp.atualizando){
+        const gauge      = document.getElementById('gauge-overlay');
+        const gaugeBar   = document.getElementById('gauge-bar');
+        const gaugePct   = document.getElementById('gauge-pct');
+        const gaugeSetor = document.getElementById('gauge-setor');
+        const gaugeCont  = document.getElementById('gauge-contagem');
+        const gaugeTitle = document.querySelector('#gauge-overlay .gauge-titulo span:first-child');
+        if(gauge)      gauge.classList.add('ativo');
+        if(gaugeTitle) gaugeTitle.textContent = '🔄 Atualizando cotações';
+        if(gaugeBar)   gaugeBar.style.width   = `${pp.pct}%`;
+        if(gaugePct)   gaugePct.textContent   = `${pp.pct}%`;
+        if(gaugeSetor) gaugeSetor.textContent  = pp.setor_atual || '...';
+        if(gaugeCont)  gaugeCont.textContent   = `${pp.atual}/${pp.total}`;
+      }
+    }catch(e){}
+  }
+});
 carregarDados();
 carregarLogsIniciais();
 carregarFontes();
