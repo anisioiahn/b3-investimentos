@@ -6,7 +6,7 @@
 #   registrar_rotas_janus(app, requer_auth)
 # ============================================================
 
-import psycopg2, psycopg2.extras, os
+import psycopg2, psycopg2.extras, os, threading
 from flask import jsonify, request
 from datetime import datetime, timezone, timedelta
 
@@ -18,6 +18,85 @@ def get_conn():
     url = os.getenv("DATABASE_URL", "")
     if not url: raise Exception("DATABASE_URL não configurada")
     return psycopg2.connect(url, sslmode="require")
+
+# Flag global de progresso do collector
+_janus_rodando = False
+_janus_progresso = {"atual": 0, "total": 0, "ticker_atual": "", "pct": 0}
+
+def run_collector_com_progresso():
+    """Wrapper que atualiza o flag global durante a coleta."""
+    global _janus_rodando, _janus_progresso
+    _janus_rodando = True
+    _janus_progresso = {"atual": 0, "total": 0, "ticker_atual": "Iniciando...", "pct": 0}
+    try:
+        from janus_collector import buscar_lista_ativos, upsert_asset, buscar_dados_lote, \
+            salvar_market_snapshot, salvar_financial_snapshot, salvar_indicadores, \
+            salvar_scores, salvar_ranking, get_source_id, iniciar_log, finalizar_log, \
+            LOTE_FUNDAMENTALISTA, DELAY_MS, hoje as col_hoje
+        import time
+
+        source_id = get_source_id()
+        log_id = iniciar_log("janus-data-collector", source_id)
+
+        lista = buscar_lista_ativos()
+        if not lista:
+            finalizar_log(log_id, "FAILED", 0, "Lista vazia")
+            return
+
+        _janus_progresso["total"] = len(lista)
+
+        # Upsert todos os assets
+        asset_map = {}
+        for stock in lista:
+            ticker = stock.get("stock") or stock.get("symbol")
+            if not ticker: continue
+            asset_id = upsert_asset(stock)
+            if asset_id:
+                asset_map[ticker] = asset_id
+
+        tickers_lista = list(asset_map.keys())
+        total_processados = 0
+        total_erros = 0
+        rankings = []
+
+        for i in range(0, len(tickers_lista), LOTE_FUNDAMENTALISTA):
+            lote = tickers_lista[i:i+LOTE_FUNDAMENTALISTA]
+            _janus_progresso["ticker_atual"] = f"Lote {i//LOTE_FUNDAMENTALISTA+1}: {', '.join(lote)}"
+            _janus_progresso["atual"] = i
+            _janus_progresso["pct"] = round(i / len(tickers_lista) * 100)
+
+            time.sleep(DELAY_MS)
+            dados_lote = buscar_dados_lote(lote)
+
+            for ticker in lote:
+                asset_id = asset_map.get(ticker)
+                dados = dados_lote.get(ticker)
+                if not dados or not asset_id:
+                    total_erros += 1
+                    continue
+                try:
+                    salvar_market_snapshot(asset_id, dados, source_id)
+                    salvar_financial_snapshot(asset_id, dados, source_id)
+                    ind_map = salvar_indicadores(asset_id, dados, source_id)
+                    score = salvar_scores(asset_id, ind_map)
+                    if score is not None:
+                        rankings.append({"asset_id": asset_id, "ticker": ticker, "score": score})
+                    total_processados += 1
+                except Exception:
+                    total_erros += 1
+
+        if rankings:
+            salvar_ranking(rankings)
+
+        _janus_progresso["atual"] = len(tickers_lista)
+        _janus_progresso["pct"] = 100
+        _janus_progresso["ticker_atual"] = f"Concluído! {total_processados} ativos processados"
+        finalizar_log(log_id, "SUCCESS", total_processados)
+
+    except Exception as e:
+        print(f"[JANUS] Erro na coleta: {e}", flush=True)
+    finally:
+        _janus_rodando = False
 
 
 def registrar_rotas_janus(app, requer_auth):
@@ -295,23 +374,36 @@ Escreva em português, tom profissional mas acessível, destacando os pontos for
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
 
+    # ── GET /api/janus/progresso ───────────────────────────────
+    @app.route("/api/janus/progresso")
+    @requer_auth
+    def api_janus_progresso():
+        return jsonify({
+            "rodando": _janus_rodando,
+            "atual": _janus_progresso["atual"],
+            "total": _janus_progresso["total"],
+            "pct": _janus_progresso["pct"],
+            "ticker_atual": _janus_progresso["ticker_atual"]
+        })
+
     # ── POST /api/admin/janus/coletar ─────────────────────────
     @app.route("/api/admin/janus/coletar", methods=["POST"])
     def api_janus_coletar_manual():
         import auth
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
         if not token:
-            token = request.cookies.get("janus_admin_token", "")
-        if not auth.verificar_jwt_admin(token):
+            token = request.cookies.get("janus_token", "")
+        if not auth.verificar_jwt(token):
             return jsonify({"erro": "Acesso negado"}), 403
+        if _janus_rodando:
+            return jsonify({"ok": False, "mensagem": "Coleta já em andamento"}), 409
 
-        import threading
-        from janus_collector import run_collector
-        threading.Thread(target=run_collector, daemon=True).start()
+        threading.Thread(target=run_collector_com_progresso, daemon=True).start()
         return jsonify({"ok": True, "mensagem": "Coleta iniciada"})
 
     print("[JANUS] Rotas registradas:")
     print("  GET  /api/janus/status")
+    print("  GET  /api/janus/progresso")
     print("  GET  /api/janus/ranking")
     print("  GET  /api/janus/score/<ticker>")
     print("  GET  /api/janus/evidence/<ticker>")
