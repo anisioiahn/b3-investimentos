@@ -2450,14 +2450,20 @@ function carregarJanusIndex(){
 
 carregarUsuario();
 
-// Restaura gauge se voltar para a aba enquanto coleta estiver rodando
-document.addEventListener('visibilitychange', async () => {
-  if(document.visibilityState === 'visible'){
-    // Verifica progresso do collector do Janus Index
+// Polling de progresso ativo — continua enquanto alguma coleta estiver rodando
+let _gaugePollingAtivo = null;
+
+function iniciarGaugePolling(){
+  if(_gaugePollingAtivo) return; // já está rodando
+  _gaugePollingAtivo = setInterval(async () => {
+    let algumAtivo = false;
+
+    // Verifica Janus Index
     try{
       const rj = await fetch('/api/janus/progresso');
       const pj = await rj.json();
       if(pj.rodando){
+        algumAtivo = true;
         const gauge      = document.getElementById('gauge-overlay');
         const gaugeBar   = document.getElementById('gauge-bar');
         const gaugePct   = document.getElementById('gauge-pct');
@@ -2473,11 +2479,12 @@ document.addEventListener('visibilitychange', async () => {
       }
     }catch(e){}
 
-    // Verifica progresso do atualizar_cache (cotações)
+    // Verifica cotações
     try{
       const rp = await fetch('/api/progresso');
       const pp = await rp.json();
       if(pp.atualizando){
+        algumAtivo = true;
         const gauge      = document.getElementById('gauge-overlay');
         const gaugeBar   = document.getElementById('gauge-bar');
         const gaugePct   = document.getElementById('gauge-pct');
@@ -2492,6 +2499,21 @@ document.addEventListener('visibilitychange', async () => {
         if(gaugeCont)  gaugeCont.textContent   = `${pp.atual}/${pp.total}`;
       }
     }catch(e){}
+
+    // Se nenhum processo ativo, para o polling e esconde gauge
+    if(!algumAtivo){
+      clearInterval(_gaugePollingAtivo);
+      _gaugePollingAtivo = null;
+      const gauge = document.getElementById('gauge-overlay');
+      if(gauge) gauge.classList.remove('ativo');
+    }
+  }, 5000);
+}
+
+// Inicia polling ao voltar para a aba
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible'){
+    iniciarGaugePolling();
   }
 });
 carregarDados();
