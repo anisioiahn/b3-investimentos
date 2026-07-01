@@ -7,7 +7,7 @@ from functools import wraps
 from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 import db, auth
 
-VERSION = "3.0.3"
+VERSION = "3.1.0"
 TZ_BRASILIA = timezone(timedelta(hours=-3))
 def agora(): return datetime.now(TZ_BRASILIA)
 
@@ -25,20 +25,44 @@ _intervalo_segundos = 3600
 _proximo_update = None
 _cache = {"atualizado_em": None, "setores": {}, "version": VERSION}
 
-SETORES = {
-    "petroleo":         {"nome":"Petróleo, Gás e Biocombustíveis","icone":"🛢️","cor_fundo":"#e8f5e9","tickers":{"PETR4":{"nome":"Petrobras PN","cor":"#005a2b"},"PETR3":{"nome":"Petrobras ON","cor":"#007a3d"},"PRIO3":{"nome":"PetroRio","cor":"#1b5e20"},"RECV3":{"nome":"Petrorecôncavo","cor":"#2e7d32"},"VBBR3":{"nome":"Vibra Energia","cor":"#388e3c"}}},
-    "utilidade":        {"nome":"Utilidade Pública","icone":"⚡","cor_fundo":"#fff8e1","tickers":{"ENGI11":{"nome":"Energisa","cor":"#f9a825"},"CPFE3":{"nome":"CPFL Energia","cor":"#b71c1c"},"TAEE11":{"nome":"Taesa","cor":"#00695c"},"EQTL3":{"nome":"Equatorial","cor":"#1565c0"},"CMIG4":{"nome":"Cemig","cor":"#7b1fa2"},"EGIE3":{"nome":"Engie Brasil","cor":"#0d47a1"},"CPLE3":{"nome":"Copel","cor":"#283593"}}},
-    "materiais":        {"nome":"Materiais Básicos","icone":"🪨","cor_fundo":"#efebe9","tickers":{"VALE3":{"nome":"Vale","cor":"#1a5276"},"CSAN3":{"nome":"Cosan","cor":"#1a237e"},"SUZB3":{"nome":"Suzano","cor":"#1b5e20"},"KLBN11":{"nome":"Klabin","cor":"#33691e"},"DXCO3":{"nome":"Dexco","cor":"#5d4037"},"GGBR4":{"nome":"Gerdau","cor":"#37474f"},"CSNA3":{"nome":"CSN","cor":"#263238"},"GOAU4":{"nome":"Metalúrgica Gerdau","cor":"#455a64"}}},
-    "industriais":      {"nome":"Bens Industriais","icone":"🏗️","cor_fundo":"#fffde7","tickers":{"WEGE3":{"nome":"WEG","cor":"#003366"},"EMBJ3":{"nome":"Embraer","cor":"#003a80"},"RAIL3":{"nome":"Rumo","cor":"#bf360c"},"UGPA3":{"nome":"Ultrapar","cor":"#e65100"},"CYRE3":{"nome":"Cyrela","cor":"#1565c0"},"MRVE3":{"nome":"MRV","cor":"#f57f17"},"EZTC3":{"nome":"EZTEC","cor":"#004d40"},"DIRR3":{"nome":"Direcional","cor":"#c62828"},"TEND3":{"nome":"Tenda","cor":"#1a237e"},"CCRO3":{"nome":"CCR","cor":"#0277bd"}}},
-    "financeiro":       {"nome":"Financeiro","icone":"🏦","cor_fundo":"#e3f2fd","tickers":{"ITUB4":{"nome":"Itaú Unibanco","cor":"#ff6600"},"BBDC4":{"nome":"Bradesco","cor":"#cc0000"},"BBAS3":{"nome":"Banco do Brasil","cor":"#003399"},"SANB11":{"nome":"Santander BR","cor":"#cc0000"},"B3SA3":{"nome":"B3 S.A.","cor":"#003a80"},"BPAC11":{"nome":"BTG Pactual","cor":"#1a1a2e"},"ITSA4":{"nome":"Itaúsa","cor":"#e65100"},"CIEL3":{"nome":"Cielo","cor":"#ffaa00"}}},
-    "consumo_nciclico": {"nome":"Consumo Não Cíclico","icone":"🌾","cor_fundo":"#f1f8e9","tickers":{"ABEV3":{"nome":"Ambev","cor":"#f9a825"},"JBSS3":{"nome":"JBS","cor":"#c62828"},"BEEF3":{"nome":"Minerva","cor":"#bf360c"},"SLCE3":{"nome":"SLC Agrícola","cor":"#33691e"},"SMTO3":{"nome":"São Martinho","cor":"#2e7d32"},"AGRO3":{"nome":"BrasilAgro","cor":"#1b5e20"},"MRFG3":{"nome":"Marfrig","cor":"#e53935"}}},
-    "consumo_ciclico":  {"nome":"Consumo Cíclico","icone":"🛍️","cor_fundo":"#f3e5f5","tickers":{"LREN3":{"nome":"Lojas Renner","cor":"#c62828"},"ASAI3":{"nome":"Assaí","cor":"#e53935"},"MGLU3":{"nome":"Magazine Luiza","cor":"#0000cc"},"SOMA3":{"nome":"Grupo Soma","cor":"#6a1b9a"},"ARZZ3":{"nome":"Arezzo","cor":"#880e4f"},"SBFG3":{"nome":"SBF Group","cor":"#e65100"},"ALPA4":{"nome":"Alpargatas","cor":"#0288d1"}}},
-    "saude":            {"nome":"Saúde","icone":"🏥","cor_fundo":"#ffebee","tickers":{"RDOR3":{"nome":"Rede D'Or","cor":"#c62828"},"HAPV3":{"nome":"Hapvida","cor":"#0277bd"},"FLRY3":{"nome":"Fleury","cor":"#1565c0"},"HYPE3":{"nome":"Hypera","cor":"#006064"},"DASA3":{"nome":"Dasa","cor":"#0288d1"},"QUAL3":{"nome":"Qualicorp","cor":"#00838f"}}},
-    "comunicacoes":     {"nome":"Comunicações","icone":"📡","cor_fundo":"#e0f2f1","tickers":{"VIVT3":{"nome":"Telefônica Vivo","cor":"#6200ea"},"TIMS3":{"nome":"TIM","cor":"#0000cc"},"OIBR3":{"nome":"Oi","cor":"#f57f17"}}},
-    "tecnologia":       {"nome":"Tecnologia da Informação","icone":"💻","cor_fundo":"#ede7f6","tickers":{"TOTS3":{"nome":"TOTVS","cor":"#e53935"},"LWSA3":{"nome":"Locaweb","cor":"#0033cc"},"INTB3":{"nome":"Intelbras","cor":"#1a237e"},"POSI3":{"nome":"Positivo","cor":"#1565c0"}}},
-    "imobiliario":      {"nome":"Imobiliário","icone":"🏢","cor_fundo":"#fce4ec","tickers":{"MULT3":{"nome":"Multiplan","cor":"#880e4f"},"IGTI11":{"nome":"Iguatemi","cor":"#4a148c"},"BRPR3":{"nome":"BR Properties","cor":"#37474f"}}},
-    "papel_celulose":   {"nome":"Papel e Celulose","icone":"🌲","cor_fundo":"#e8f5e9","tickers":{"SUZB3":{"nome":"Suzano","cor":"#1b5e20"},"KLBN11":{"nome":"Klabin","cor":"#33691e"},"DXCO3":{"nome":"Dexco","cor":"#5d4037"},"RANI3":{"nome":"Irani","cor":"#388e3c"}}},
+# ── Mapeamento dinâmico de setores (Brapi EN → PT-BR) ────────
+# Substitui o dicionário SETORES hardcoded anterior
+SETOR_META = {
+    "Finance":              {"id":"financeiro",       "nome":"Financeiro",                    "icone":"🏦","cor_fundo":"#e3f2fd"},
+    "Utilities":            {"id":"utilidade",        "nome":"Utilidade Pública",              "icone":"⚡","cor_fundo":"#fff8e1"},
+    "Energy Minerals":      {"id":"petroleo",         "nome":"Petróleo, Gás e Biocombustíveis","icone":"🛢️","cor_fundo":"#e8f5e9"},
+    "Non-Energy Minerals":  {"id":"minerais",         "nome":"Minerais e Mineração",           "icone":"🪨","cor_fundo":"#efebe9"},
+    "Process Industries":   {"id":"processo",         "nome":"Indústria de Processo",          "icone":"🏭","cor_fundo":"#f3e5f5"},
+    "Producer Manufacturing":{"id":"industriais",     "nome":"Bens Industriais",               "icone":"🏗️","cor_fundo":"#fffde7"},
+    "Consumer Non-Durables":{"id":"consumo_nciclico", "nome":"Consumo Não Cíclico",            "icone":"🌾","cor_fundo":"#f1f8e9"},
+    "Consumer Durables":    {"id":"consumo_duravel",  "nome":"Consumo Durável",                "icone":"🛋️","cor_fundo":"#fce4ec"},
+    "Consumer Services":    {"id":"servicos",         "nome":"Serviços ao Consumidor",         "icone":"🍽️","cor_fundo":"#fff3e0"},
+    "Retail Trade":         {"id":"varejo",           "nome":"Varejo",                         "icone":"🛍️","cor_fundo":"#f3e5f5"},
+    "Distribution Services":{"id":"distribuicao",     "nome":"Distribuição e Logística",       "icone":"📦","cor_fundo":"#e8eaf6"},
+    "Transportation":       {"id":"transporte",       "nome":"Transporte",                     "icone":"🚢","cor_fundo":"#e0f7fa"},
+    "Health Services":      {"id":"saude",            "nome":"Saúde",                          "icone":"🏥","cor_fundo":"#ffebee"},
+    "Health Technology":    {"id":"saude_tec",        "nome":"Tecnologia em Saúde",            "icone":"🔬","cor_fundo":"#fce4ec"},
+    "Commercial Services":  {"id":"comercial",        "nome":"Serviços Comerciais",            "icone":"💼","cor_fundo":"#e8f5e9"},
+    "Industrial Services":  {"id":"ind_servicos",     "nome":"Serviços Industriais",           "icone":"🔧","cor_fundo":"#fffde7"},
+    "Communications":       {"id":"comunicacoes",     "nome":"Comunicações",                   "icone":"📡","cor_fundo":"#e0f2f1"},
+    "Technology Services":  {"id":"tec_servicos",     "nome":"Serviços de Tecnologia",         "icone":"💻","cor_fundo":"#ede7f6"},
+    "Electronic Technology":{"id":"eletronicos",      "nome":"Tecnologia Eletrônica",          "icone":"📱","cor_fundo":"#e8eaf6"},
+    "Miscellaneous":        {"id":"outros",           "nome":"Outros",                         "icone":"📋","cor_fundo":"#f5f5f5"},
 }
+
+# Paleta de cores para tickers (ciclica, sem precisar mapear manualmente)
+_CORES = [
+    "#005a2b","#1a5276","#003399","#7b1fa2","#bf360c","#e65100","#006064",
+    "#0d47a1","#37474f","#880e4f","#1b5e20","#f57f17","#4a148c","#263238",
+    "#0277bd","#c62828","#33691e","#1565c0","#e53935","#00695c","#ff6600",
+    "#cc0000","#003a80","#1a1a2e","#f9a825","#2e7d32","#6200ea","#0000cc",
+]
+_cor_idx = 0
+def proxima_cor():
+    global _cor_idx
+    cor = _CORES[_cor_idx % len(_CORES)]
+    _cor_idx += 1
+    return cor
 
 def log(msg, tipo="info"):
     entry = {"ts": agora().strftime("%H:%M:%S"), "msg": msg, "tipo": tipo}
@@ -97,60 +121,112 @@ def buscar_lote(tickers):
         log(f"⚠️ Erro lote: {e}", "aviso")
     return {}
 
+def buscar_lista_completa_b3():
+    """Busca todos os ativos da B3 via Brapi (até 500), retorna lista de stocks."""
+    try:
+        r = requests.get(
+            f"https://brapi.dev/api/quote/list?token={TOKEN_BRAPI}&type=stock&limit=500&sortBy=volume&sortOrder=desc",
+            timeout=30
+        )
+        if r.status_code == 200:
+            stocks = r.json().get("stocks", [])
+            log(f"📋 {len(stocks)} ativos listados na B3", "info")
+            return stocks
+        log(f"⚠️ Erro ao listar ativos: {r.status_code}", "aviso")
+    except Exception as e:
+        log(f"⚠️ Erro ao buscar lista B3: {e}", "aviso")
+    return []
+
 def atualizar_cache():
-    global _cache, _atualizando, _proximo_update
+    global _cache, _atualizando, _proximo_update, _cor_idx
     _atualizando = True
     try:
         log(f"🔄 Buscando cotações v{VERSION}...", "info")
         novo = {"atualizado_em": agora().isoformat(), "setores": {}, "version": VERSION}
-        for sid, s in SETORES.items():
-            log(f"🔍 {s['nome']}", "setor")
-            tickers = list(s["tickers"].keys())
-            dados = {}
-            for i in range(0, len(tickers), 10):
-                dados.update(buscar_lote(tickers[i:i+10]))
-                if i + 10 < len(tickers): time.sleep(1)
+
+        # STEP 1: Busca lista completa da B3
+        stocks = buscar_lista_completa_b3()
+        if not stocks:
+            log("❌ Lista de ativos vazia, abortando", "erro")
+            return
+
+        # STEP 2: Organiza tickers por setor
+        tickers_por_setor = {}
+        ticker_meta = {}  # ticker → {nome, setor_en, cor}
+        _cor_idx = 0
+        for s in stocks:
+            ticker  = s.get("stock") or s.get("symbol")
+            nome    = s.get("name") or ticker
+            setor_en = s.get("sector") or "Miscellaneous"
+            if not ticker: continue
+            if setor_en not in tickers_por_setor:
+                tickers_por_setor[setor_en] = []
+            tickers_por_setor[setor_en].append(ticker)
+            ticker_meta[ticker] = {"nome": nome, "setor_en": setor_en, "cor": proxima_cor()}
+
+        total_tickers = len(ticker_meta)
+        log(f"📊 {total_tickers} ativos em {len(tickers_por_setor)} setores", "info")
+
+        # STEP 3: Busca cotações em lotes de 10 por setor
+        cotacoes = {}
+        todos_tickers = list(ticker_meta.keys())
+        for i in range(0, len(todos_tickers), 10):
+            lote = todos_tickers[i:i+10]
+            cotacoes.update(buscar_lote(lote))
+            time.sleep(0.3)
+
+        # STEP 4: Monta cache por setor em português
+        for setor_en, tickers in tickers_por_setor.items():
+            meta = SETOR_META.get(setor_en, SETOR_META["Miscellaneous"])
+            sid  = meta["id"]
             empresas = []
-            for ticker, meta in s["tickers"].items():
-                d = dados.get(ticker)
+
+            for ticker in tickers:
+                tm = ticker_meta[ticker]
+                d  = cotacoes.get(ticker)
                 if d:
                     preco = d.get("regularMarketPrice")
-                    pct = d.get("regularMarketChangePercent") or 0
-                    log(f"   {'▲' if pct>=0 else '▼'} {ticker}: R$ {preco} ({pct:+.2f}%)", "cotacao")
-                    empresas.append({"ticker":ticker,"nome":meta["nome"],"cor":meta["cor"],
-                        "preco":preco,"variacao":d.get("regularMarketChange") or 0,
-                        "variacao_pct":pct,"maxima_dia":d.get("regularMarketDayHigh"),
-                        "minima_dia":d.get("regularMarketDayLow"),
-                        "volume":d.get("regularMarketVolume"),"logo":d.get("logourl","")})
+                    pct   = d.get("regularMarketChangePercent") or 0
+                    if preco:
+                        log(f"   {'▲' if pct>=0 else '▼'} {ticker}: R$ {preco} ({pct:+.2f}%)", "cotacao")
+                    empresas.append({
+                        "ticker": ticker,
+                        "nome": tm["nome"],
+                        "cor": tm["cor"],
+                        "preco": preco,
+                        "variacao": d.get("regularMarketChange") or 0,
+                        "variacao_pct": pct,
+                        "maxima_dia": d.get("regularMarketDayHigh"),
+                        "minima_dia": d.get("regularMarketDayLow"),
+                        "volume": d.get("regularMarketVolume"),
+                        "logo": d.get("logourl", f"https://icons.brapi.dev/icons/{ticker}.svg"),
+                    })
                 else:
-                    empresas.append({"ticker":ticker,"nome":meta["nome"],"cor":meta["cor"],"preco":None})
-                time.sleep(0.1)
-            # Retry
-            sem = [e["ticker"] for e in empresas if not e.get("preco")]
-            if sem:
-                time.sleep(3)
-                retry = {}
-                for i in range(0,len(sem),10):
-                    retry.update(buscar_lote(sem[i:i+10])); time.sleep(1)
-                for e in empresas:
-                    if not e.get("preco") and e["ticker"] in retry:
-                        d = retry[e["ticker"]]
-                        preco = d.get("regularMarketPrice")
-                        pct = d.get("regularMarketChangePercent") or 0
-                        e.update({"preco":preco,"variacao":d.get("regularMarketChange") or 0,
-                            "variacao_pct":pct,"maxima_dia":d.get("regularMarketDayHigh"),
-                            "minima_dia":d.get("regularMarketDayLow"),"logo":d.get("logourl","")})
-                        log(f"   ✅ {e['ticker']}: R$ {preco} (retry)", "cotacao")
-            novo["setores"][sid] = {"nome":s["nome"],"icone":s["icone"],
-                "cor_fundo":s["cor_fundo"],
-                "empresas":sorted(empresas,key=lambda x:x.get("preco") or 0,reverse=True)}
+                    empresas.append({
+                        "ticker": ticker,
+                        "nome": tm["nome"],
+                        "cor": tm["cor"],
+                        "preco": None,
+                        "logo": f"https://icons.brapi.dev/icons/{ticker}.svg",
+                    })
+
+            novo["setores"][sid] = {
+                "nome":      meta["nome"],
+                "icone":     meta["icone"],
+                "cor_fundo": meta["cor_fundo"],
+                "empresas":  sorted(empresas, key=lambda x: x.get("preco") or 0, reverse=True),
+            }
+            com_preco = sum(1 for e in empresas if e.get("preco"))
+            log(f"🔍 {meta['nome']}: {com_preco}/{len(empresas)} com cotação", "setor")
+
         _cache = novo
         db.db_salvar_cache(novo)
         verificar_alertas_todos(novo)
-        total = sum(len(s["empresas"]) for s in novo["setores"].values())
-        com_preco = sum(1 for s in novo["setores"].values() for e in s["empresas"] if e.get("preco"))
-        log(f"✅ {com_preco}/{total} ativos em {len(novo['setores'])} setores", "sucesso")
+
+        total_com_preco = sum(1 for s in novo["setores"].values() for e in s["empresas"] if e.get("preco"))
+        log(f"✅ {total_com_preco}/{total_tickers} ativos atualizados em {len(novo['setores'])} setores", "sucesso")
         _proximo_update = agora().timestamp() + _intervalo_segundos
+
     except Exception as e:
         log(f"❌ Erro: {e}", "erro")
     finally:
