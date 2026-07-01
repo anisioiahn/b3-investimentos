@@ -57,7 +57,7 @@ def run_collector_com_progresso():
             # Atualiza progresso a cada 10 ativos
             if idx % 10 == 0:
                 _janus_progresso["atual"] = idx
-                _janus_progresso["pct"] = round(idx / len(lista) * 10)  # fase 1 = 0-10%
+                _janus_progresso["pct"] = round(idx / len(lista) * 30)  # fase 1 = 0-30%
                 _janus_progresso["ticker_atual"] = f"Registrando ativos... ({idx}/{len(lista)})"
 
         tickers_lista = list(asset_map.keys())
@@ -70,9 +70,9 @@ def run_collector_com_progresso():
             lote = tickers_lista[i:i+LOTE_FUNDAMENTALISTA]
             lote_num = i // LOTE_FUNDAMENTALISTA + 1
             _janus_progresso["ticker_atual"] = f"Lote {lote_num}/{total_lotes}: {', '.join(lote)}"
-            # fase 2 = 10-100%
+            # fase 2 = 30-100%
             _janus_progresso["atual"] = i
-            _janus_progresso["pct"] = 10 + round(i / len(tickers_lista) * 90)
+            _janus_progresso["pct"] = 30 + round(i / len(tickers_lista) * 70)
 
             time.sleep(DELAY_MS)
             dados_lote = buscar_dados_lote(lote)
