@@ -110,6 +110,24 @@ def run_collector_com_progresso():
 
 def registrar_rotas_janus(app, requer_auth):
 
+    # Limpeza de estado: marca coletas RUNNING como FAILED ao iniciar
+    # (evita mostrar "Atualizando..." após reinício do servidor)
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE data_ingestion_logs
+                SET status='FAILED', finished_at=%s,
+                    error_message='Servidor reiniciado durante a coleta'
+                WHERE job_name='janus-data-collector' AND status='RUNNING'
+            """, (agora().isoformat(),))
+            rows = cur.rowcount
+        conn.commit(); conn.close()
+        if rows > 0:
+            print(f"[JANUS] ⚠️ {rows} coleta(s) RUNNING marcada(s) como FAILED (servidor reiniciou)", flush=True)
+    except Exception as e:
+        print(f"[JANUS] Aviso ao limpar coletas travadas: {e}", flush=True)
+
     # ── GET /api/janus/status ─────────────────────────────────
     @app.route("/api/janus/status")
     @requer_auth
