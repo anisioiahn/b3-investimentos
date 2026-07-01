@@ -767,7 +767,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div style="display:flex;border-bottom:2px solid var(--border);margin:0;padding:0 1.5rem;overflow:hidden">
       <button class="painel-tab active" id="tab-cotacao" onclick="trocarAba('cotacao')">📈 Cotação</button>
       <button class="painel-tab" id="tab-noticias" onclick="trocarAba('noticias')">📰 Notícias</button>
-      <button class="painel-tab" id="tab-jaia" onclick="trocarAba('jaia')">🤖 JAIA</button>
+      <button class="painel-tab" id="tab-jaia" onclick="trocarAba('jaia')">🤖 AJIA</button>
     </div>
 
     <!-- ABA 1: COTAÇÃO -->
@@ -800,21 +800,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       </div>
     </div>
 
-    <!-- ABA 3: JAIA -->
+    <!-- ABA 3: AJIA -->
     <div class="painel-body" id="painel-jaia" style="display:none;padding:1.5rem">
       <div id="jaia-score-area" style="margin-bottom:1rem"></div>
       <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">
         <div style="background:linear-gradient(135deg,#1a237e,#283593);padding:12px 16px;display:flex;align-items:center;gap:10px">
           <span style="font-size:20px">🤖</span>
           <div>
-            <div style="font-size:13px;font-weight:700;color:#fff">JAIA — Janus Analista de IA</div>
+            <div style="font-size:13px;font-weight:700;color:#fff">AJIA — Analista Janus com Inteligência Artificial</div>
             <div style="font-size:11px;color:rgba(255,255,255,.7)">Especialista em investimentos B3</div>
           </div>
         </div>
         <div id="jaia-chat" style="height:300px;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:10px;background:var(--bg)">
           <div class="jaia-msg jaia-bot">
             <div class="jaia-avatar">🤖</div>
-            <div class="jaia-bubble">Olá! Sou a JAIA. Carregando dados de <strong id="jaia-ticker-nome"></strong>... Já pode perguntar!</div>
+            <div class="jaia-bubble">Carregando análise de <strong id="jaia-ticker-nome"></strong>...</div>
           </div>
         </div>
         <div style="padding:10px;border-top:1px solid var(--border);display:flex;gap:8px;background:#fff">
@@ -1174,8 +1174,8 @@ async function fetchComTimeout(url, ms=25000){
 // Estado global do painel
 let _painelTicker = null;
 let _painelCo = null;
-let _jaiaHistorico = []; // histórico de conversa da JAIA por sessão
-let _jaiaContexto = null; // contexto do ativo para a JAIA
+let _jaiaHistorico = []; // histórico de conversa da AJIA por sessão
+let _jaiaContexto = null; // contexto do ativo para a AJIA
 
 async function abrirGrafico(ticker){
   _painelTicker = ticker;
@@ -1242,13 +1242,13 @@ async function abrirGrafico(ticker){
     <div class="noticia-col"><div class="noticia-loading">Carregando...</div></div>
     <div class="rec-col"><div class="rec-loading">Gerando análise com IA...</div></div>`;
 
-  // Reset JAIA
+  // Reset AJIA
   const jaiaTickerNome = document.getElementById('jaia-ticker-nome');
   if(jaiaTickerNome) jaiaTickerNome.textContent = `${co.nome} (${ticker})`;
   const jaiaChat = document.getElementById('jaia-chat');
   if(jaiaChat) jaiaChat.innerHTML = `<div class="jaia-msg jaia-bot">
     <div class="jaia-avatar">🤖</div>
-    <div class="jaia-bubble">Olá! Sou a JAIA. Estou carregando os dados de <strong>${co.nome} (${ticker})</strong> para te ajudar com a análise. Aguarde um momento ou já pode fazer sua pergunta!</div>
+    <div class="jaia-bubble">Analisando <strong>${co.nome} (${ticker})</strong> ...</div>
   </div>`;
 
   // Busca tudo em paralelo
@@ -1286,7 +1286,7 @@ async function abrirGrafico(ticker){
   if(nots) renderNoticias(nots);
   else document.getElementById('noticias-grid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:1rem">Não foi possível carregar notícias.</div>';
 
-  // Monta contexto completo da JAIA
+  // Monta contexto completo da AJIA
   _jaiaContexto = {
     ticker, nome: co.nome, setor: co.setor_nome,
     preco: det?.preco || co.preco,
@@ -1301,10 +1301,10 @@ async function abrirGrafico(ticker){
     justificativa: nots?.recomendacao?.justificativa
   };
 
-  // Popula score na aba JAIA — passa janusItem E o score diretamente como fallback extra
+  // Popula score na aba AJIA — passa janusItem E o score diretamente como fallback extra
   renderJaiaScoreArea(scoreData, janusItem || {score: null});
 
-  // JAIA faz análise inicial automática em background
+  // AJIA faz análise inicial automática em background
   _enviarMensagemJaiaAuto();
 }
 
@@ -1377,7 +1377,7 @@ function renderJaiaScoreArea(scoreData, janusItem){
 }
 
 async function _enviarMensagemJaiaAuto(){
-  // Análise inicial automática — a JAIA já comenta o ativo ao abrir
+  // Análise inicial automática — a AJIA já comenta o ativo ao abrir
   const ctx = _jaiaContexto;
   if(!ctx) return;
 
@@ -1392,7 +1392,7 @@ async function _enviarMensagemJaiaAuto(){
   chat.scrollTop = chat.scrollHeight;
 
   try{
-    const sistemaPrompt = `Você é a JAIA (Janus Analista de IA), especialista em investimentos na bolsa brasileira B3.
+    const sistemaPrompt = `Você é a AJIA (Analista Janus com Inteligência Artificial), especialista em investimentos na bolsa brasileira B3.
 
 DADOS DO ATIVO ${ctx.ticker} - ${ctx.nome} (${ctx.setor || 'setor não identificado'}):
 - Preço atual: R$ ${ctx.preco?.toFixed(2) || 'N/D'}
@@ -1408,6 +1408,8 @@ Faça uma análise inicial objetiva e profissional deste ativo em 3-4 parágrafo
 2. Avaliação dos fundamentos (baseado no Janus Score e indicadores)
 3. Contexto de mercado (sentimento das notícias)
 4. Pontos de atenção ou oportunidade
+
+Ao final, adicione exatamente esta frase: "Pode fazer a sua pergunta!"
 
 Use linguagem de analista especializado. Não recomende compra/venda diretamente.`;
 
@@ -1445,7 +1447,7 @@ Use linguagem de analista especializado. Não recomende compra/venda diretamente
   chat.scrollTop = chat.scrollHeight;
 }
 
-// ── JAIA — Chat com IA ─────────────────────────────────────
+// ── AJIA — Chat com IA ─────────────────────────────────────
 async function enviarJaia(){
   const input = document.getElementById('jaia-input');
   const pergunta = input?.value?.trim();
@@ -1480,7 +1482,7 @@ async function _enviarMensagemJaia(pergunta){
   try{
     // Monta prompt com contexto completo do ativo
     const ctx = _jaiaContexto || {};
-    const sistemaPrompt = `Você é a JAIA (Janus Analista de IA), especialista em investimentos na bolsa brasileira B3.
+    const sistemaPrompt = `Você é a AJIA (Analista Janus com Inteligência Artificial), especialista em investimentos na bolsa brasileira B3.
 Você está analisando o ativo ${ctx.ticker} - ${ctx.nome} (${ctx.setor || 'setor não identificado'}).
 
 DADOS DO ATIVO:
@@ -1524,7 +1526,7 @@ Seja direto e use dados concretos quando disponíveis.`;
     document.getElementById(loadId)?.remove();
     chat.innerHTML += `<div class="jaia-msg jaia-bot">
       <div class="jaia-avatar">🤖</div>
-      <div class="jaia-bubble" style="color:#e53935">Erro ao conectar com a JAIA. Tente novamente.</div>
+      <div class="jaia-bubble" style="color:#e53935">Erro ao conectar com a AJIA. Tente novamente.</div>
     </div>`;
   }
   chat.scrollTop = chat.scrollHeight;
