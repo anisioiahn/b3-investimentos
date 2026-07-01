@@ -2005,22 +2005,61 @@ async function atualizarJanusIndex(){
   if(btn){ btn.disabled = true; }
   if(icon){ icon.classList.add('spin'); }
 
+  // Mostra gauge do Janus Index
+  const gauge      = document.getElementById('gauge-overlay');
+  const gaugeBar   = document.getElementById('gauge-bar');
+  const gaugePct   = document.getElementById('gauge-pct');
+  const gaugeSetor = document.getElementById('gauge-setor');
+  const gaugeCont  = document.getElementById('gauge-contagem');
+
+  const atualizarGauge = (prog) => {
+    if(gauge)      gauge.classList.add('ativo');
+    if(gaugeBar)   gaugeBar.style.width  = `${prog.pct}%`;
+    if(gaugePct)   gaugePct.textContent  = `${prog.pct}%`;
+    if(gaugeSetor) gaugeSetor.textContent = prog.ticker_atual || '...';
+    if(gaugeCont)  gaugeCont.textContent  = `${prog.atual}/${prog.total}`;
+    // Muda título do gauge
+    const titulo = document.querySelector('#gauge-overlay .gauge-titulo span:first-child');
+    if(titulo) titulo.textContent = '🎯 Atualizando Janus Index';
+  };
+
   try{
     await fetch('/api/admin/janus/coletar', {method:'POST', headers:{'Content-Type':'application/json'}});
   }catch(e){}
 
+  // Aguarda 2s para o collector iniciar antes de começar o polling
+  await new Promise(r => setTimeout(r, 2000));
+
   let tentativas = 0;
+  let ultimoRodando = true;
+
   const poll = setInterval(async ()=>{
     tentativas++;
-    await carregarJanusStatus();
-    const rodando = _janusStatus?.ultima_coleta?.status === 'RUNNING';
-    if(!rodando || tentativas >= 36){
+    try{
+      const rp = await fetch('/api/janus/progresso');
+      const prog = await rp.json();
+      atualizarGauge(prog);
+
+      // Terminou (estava rodando e parou, ou pct 100)
+      if((!prog.rodando && ultimoRodando) || prog.pct >= 100){
+        clearInterval(poll);
+        if(btn) btn.disabled = false;
+        if(icon) icon.classList.remove('spin');
+        setTimeout(()=>{ if(gauge) gauge.classList.remove('ativo'); }, 2000);
+        await carregarJanusStatus();
+        await carregarJanusRanking();
+        return;
+      }
+      ultimoRodando = prog.rodando;
+    }catch(e){}
+
+    if(tentativas >= 60){ // 5min de timeout
       clearInterval(poll);
       if(btn) btn.disabled = false;
       if(icon) icon.classList.remove('spin');
-      await carregarJanusRanking();
+      if(gauge) gauge.classList.remove('ativo');
     }
-  }, 10000);
+  }, 5000);
 }
 
 async function carregarJanusRanking(){
