@@ -21,6 +21,7 @@ VAPID_EMAIL = os.getenv("VAPID_EMAIL", "mailto:b3app@investimentos.com")
 
 _log_entries = []
 _atualizando = False
+_progresso = {"atual": 0, "total": 0, "setor_atual": ""}
 _intervalo_segundos = 3600
 _proximo_update = None
 _cache = {"atualizado_em": None, "setores": {}, "version": VERSION}
@@ -138,13 +139,15 @@ def buscar_lista_completa_b3():
     return []
 
 def atualizar_cache():
-    global _cache, _atualizando, _proximo_update, _cor_idx
+    global _cache, _atualizando, _proximo_update, _cor_idx, _progresso
     _atualizando = True
+    _progresso = {"atual": 0, "total": 0, "setor_atual": "Iniciando..."}
     try:
         log(f"🔄 Buscando cotações v{VERSION}...", "info")
         novo = {"atualizado_em": agora().isoformat(), "setores": {}, "version": VERSION}
 
         # STEP 1: Busca lista completa da B3
+        _progresso["setor_atual"] = "Buscando lista de ativos..."
         stocks = buscar_lista_completa_b3()
         if not stocks:
             log("❌ Lista de ativos vazia, abortando", "erro")
@@ -165,20 +168,25 @@ def atualizar_cache():
             ticker_meta[ticker] = {"nome": nome, "setor_en": setor_en, "cor": proxima_cor()}
 
         total_tickers = len(ticker_meta)
+        _progresso["total"] = total_tickers
         log(f"📊 {total_tickers} ativos em {len(tickers_por_setor)} setores", "info")
 
-        # STEP 3: Busca cotações em lotes de 10 por setor
+        # STEP 3: Busca cotações em lotes de 10
         cotacoes = {}
         todos_tickers = list(ticker_meta.keys())
         for i in range(0, len(todos_tickers), 10):
             lote = todos_tickers[i:i+10]
             cotacoes.update(buscar_lote(lote))
+            _progresso["atual"] = min(i + 10, total_tickers)
+            _progresso["setor_atual"] = f"Buscando cotações... ({_progresso['atual']}/{total_tickers})"
             time.sleep(0.3)
 
         # STEP 4: Monta cache por setor em português
+        ativos_processados = 0
         for setor_en, tickers in tickers_por_setor.items():
             meta = SETOR_META.get(setor_en, SETOR_META["Miscellaneous"])
             sid  = meta["id"]
+            _progresso["setor_atual"] = meta["nome"]
             empresas = []
 
             for ticker in tickers:
@@ -209,6 +217,8 @@ def atualizar_cache():
                         "preco": None,
                         "logo": f"https://icons.brapi.dev/icons/{ticker}.svg",
                     })
+                ativos_processados += 1
+                _progresso["atual"] = ativos_processados
 
             novo["setores"][sid] = {
                 "nome":      meta["nome"],
@@ -464,7 +474,23 @@ def api_status():
     total = sum(len(s.get("empresas",[])) for s in _cache.get("setores",{}).values())
     restante = max(0,int((_proximo_update or 0)-agora().timestamp())) if _proximo_update else None
     return jsonify({"pronto":total>0,"atualizando":_atualizando,"total_ativos":total,
-                    "version":VERSION,"intervalo_segundos":_intervalo_segundos,"segundos_para_proxima":restante})
+                    "version":VERSION,"intervalo_segundos":_intervalo_segundos,"segundos_para_proxima":restante,
+                    "progresso": _progresso if _atualizando else None})
+
+@app.route("/api/progresso")
+@requer_auth
+def api_progresso():
+    """Retorna o progresso atual da atualização de cotações."""
+    pct = 0
+    if _progresso["total"] > 0:
+        pct = round(_progresso["atual"] / _progresso["total"] * 100)
+    return jsonify({
+        "atualizando": _atualizando,
+        "atual": _progresso["atual"],
+        "total": _progresso["total"],
+        "pct": pct,
+        "setor_atual": _progresso["setor_atual"]
+    })
 
 @app.route("/api/atualizar", methods=["POST"])
 @requer_auth
