@@ -44,26 +44,35 @@ def run_collector_com_progresso():
             return
 
         _janus_progresso["total"] = len(lista)
+        _janus_progresso["ticker_atual"] = f"Registrando {len(lista)} ativos no banco..."
 
-        # Upsert todos os assets
+        # Upsert todos os assets com progresso
         asset_map = {}
-        for stock in lista:
+        for idx, stock in enumerate(lista):
             ticker = stock.get("stock") or stock.get("symbol")
             if not ticker: continue
             asset_id = upsert_asset(stock)
             if asset_id:
                 asset_map[ticker] = asset_id
+            # Atualiza progresso a cada 10 ativos
+            if idx % 10 == 0:
+                _janus_progresso["atual"] = idx
+                _janus_progresso["pct"] = round(idx / len(lista) * 10)  # fase 1 = 0-10%
+                _janus_progresso["ticker_atual"] = f"Registrando ativos... ({idx}/{len(lista)})"
 
         tickers_lista = list(asset_map.keys())
         total_processados = 0
         total_erros = 0
         rankings = []
+        total_lotes = (len(tickers_lista) + LOTE_FUNDAMENTALISTA - 1) // LOTE_FUNDAMENTALISTA
 
         for i in range(0, len(tickers_lista), LOTE_FUNDAMENTALISTA):
             lote = tickers_lista[i:i+LOTE_FUNDAMENTALISTA]
-            _janus_progresso["ticker_atual"] = f"Lote {i//LOTE_FUNDAMENTALISTA+1}: {', '.join(lote)}"
+            lote_num = i // LOTE_FUNDAMENTALISTA + 1
+            _janus_progresso["ticker_atual"] = f"Lote {lote_num}/{total_lotes}: {', '.join(lote)}"
+            # fase 2 = 10-100%
             _janus_progresso["atual"] = i
-            _janus_progresso["pct"] = round(i / len(tickers_lista) * 100)
+            _janus_progresso["pct"] = 10 + round(i / len(tickers_lista) * 90)
 
             time.sleep(DELAY_MS)
             dados_lote = buscar_dados_lote(lote)
