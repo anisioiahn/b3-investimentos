@@ -14,21 +14,20 @@ def iniciar_cron_janus():
         from apscheduler.schedulers.background import BackgroundScheduler
 
         def executar():
-            # Importa o wrapper com flag de controle (evita duplicatas)
-            from janus_routes import _janus_rodando, run_collector_com_progresso
+            from janus_routes import _janus_estado, _rodar_coleta
             hora = agora().strftime("%H:%M")
-            if _janus_rodando:
+            if _janus_estado["rodando"]:
                 print(f"[JANUS CRON] ⚠️ {hora} — coleta já em andamento, pulando...")
                 return
             print(f"[JANUS CRON] ⏰ {hora} — iniciando coleta agendada...")
-            threading.Thread(target=run_collector_com_progresso, daemon=True).start()
+            threading.Thread(target=_rodar_coleta, daemon=True).start()
 
         scheduler = BackgroundScheduler(
             timezone="America/Sao_Paulo",
             job_defaults={
-                'misfire_grace_time': None,  # não dispara jobs atrasados ao reiniciar
-                'coalesce': True,            # agrupa múltiplos disparos em um só
-                'max_instances': 1           # nunca mais de 1 instância simultânea
+                'misfire_grace_time': 60,  # descarta se atrasado mais de 60s (evita disparo no boot)
+                'coalesce': True,          # agrupa múltiplos disparos em um só
+                'max_instances': 1         # nunca mais de 1 instância simultânea
             }
         )
 
