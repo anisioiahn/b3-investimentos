@@ -329,7 +329,16 @@ def salvar_ranking(conn, rankings):
     print(f"[COLLECTOR] 🏆 Ranking salvo com {len(rankings)} ativos")
 
 # ── MAIN ─────────────────────────────────────────────────────
-def run_collector():
+def run_collector(on_progress=None):
+    """
+    on_progress(pct, atual, total, msg) — callback opcional para atualizar progresso.
+    """
+    def prog(pct, atual, total, msg):
+        print(f"[COLLECTOR] {pct}% ({atual}/{total}) {msg}", flush=True)
+        if on_progress:
+            try: on_progress(pct, atual, total, msg)
+            except: pass
+
     print(f"[COLLECTOR] 🚀 Janus Index Data Collector v1.3 iniciando...")
     print(f"[COLLECTOR] 📅 Data de referência: {hoje()}")
 
@@ -342,6 +351,7 @@ def run_collector():
         conn.commit()
 
         # STEP 1: Lista de ativos
+        prog(0, 0, 0, "Buscando lista de ativos da B3...")
         lista = buscar_lista_ativos()
         if not lista:
             finalizar_log(conn, log_id, "FAILED", 0, "Lista de ativos vazia")
@@ -349,6 +359,7 @@ def run_collector():
             return
 
         # STEP 2: Upsert batch (uma transação)
+        prog(5, 0, len(lista), f"Registrando {len(lista)} ativos no banco...")
         asset_map = upsert_assets_batch(conn, lista)
 
         # STEP 3 + 4 + 5: Busca dados e salva em lotes
@@ -363,7 +374,10 @@ def run_collector():
         for i in range(0, len(tickers_lista), LOTE_BRAPI):
             lote_tickers = tickers_lista[i:i+LOTE_BRAPI]
             lote_num     = i // LOTE_BRAPI + 1
-            print(f"[COLLECTOR] 📊 Lote {lote_num}/{total_lotes}: {', '.join(lote_tickers)}")
+            pct = 10 + round(i / len(tickers_lista) * 90)
+            msg = f"Lote {lote_num}/{total_lotes}: {', '.join(lote_tickers[:4])}..."
+            prog(pct, i + len(lote_tickers), len(tickers_lista), msg)
+            print(f"[COLLECTOR] 📊 {msg}")
 
             time.sleep(DELAY_MS)
             dados_lote = buscar_dados_lote(lote_tickers)
@@ -390,11 +404,14 @@ def run_collector():
 
         # STEP 6: Ranking final
         if rankings:
+            prog(99, len(tickers_lista), len(tickers_lista), "Salvando ranking...")
             salvar_ranking(conn, rankings)
 
         finalizar_log(conn, log_id, "SUCCESS", total_processados)
         conn.commit()
 
+        prog(100, len(tickers_lista), len(tickers_lista),
+             f"Concluído! {total_processados} ativos processados")
         print(f"[COLLECTOR] ✅ Coleta finalizada!")
         print(f"[COLLECTOR]    Total B3:    {len(lista)}")
         print(f"[COLLECTOR]    Processados: {total_processados}")
