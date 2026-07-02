@@ -1577,8 +1577,8 @@ function renderNoticias(data){
 
   // Recomendação
   const sinal=rec.sinal||'NEUTRO';
-  const clsSinal=sinal==='COMPRAR'?'rec-comprar':sinal==='VENDER'?'rec-vender':'rec-neutro';
-  const emoji=sinal==='COMPRAR'?'📈':sinal==='VENDER'?'📉':'⚖️';
+  const clsSinal=sinal==='POSITIVO'?'rec-comprar':sinal==='NEGATIVO'?'rec-vender':'rec-neutro';
+  const emoji=sinal==='POSITIVO'?'📈':sinal==='NEGATIVO'?'📉':'⚖️';
   html+=`<div class="rec-col">
     <div class="rec-col-header">
       <div class="noticia-fonte-dot" style="background:#6a1b9a"></div>
