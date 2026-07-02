@@ -896,7 +896,7 @@ def gerar_recomendacao(ticker, nome, noticias):
         resp = requests.post("https://api.anthropic.com/v1/messages",
             headers={"Content-Type":"application/json","x-api-key":ANTHROPIC_KEY,"anthropic-version":"2023-06-01"},
             json={"model":"claude-sonnet-4-6","max_tokens":300,"messages":[{"role":"user","content":
-                f"Analise notícias sobre {ticker} ({nome}) e responda APENAS com JSON:\n{chr(10).join(todas[:6])}\nFormato: {{\"sinal\":\"COMPRAR\",\"justificativa\":\"2-3 frases.\",\"confianca\":\"Alta\"}}"}]},
+                f"Analise o sentimento das notícias sobre {ticker} ({nome}) e responda APENAS com JSON.\n{chr(10).join(todas[:6])}\nFormato: {{\"sinal\":\"POSITIVO\",\"justificativa\":\"2-3 frases.\",\"confianca\":\"Alta\"}}\nO campo sinal deve ser exatamente POSITIVO, NEGATIVO ou NEUTRO — representa o sentimento das notícias, não uma recomendação de investimento."}]},
             timeout=30)
         if resp.status_code==200:
             return json.loads(resp.json()["content"][0]["text"].strip().replace("```json","").replace("```","").strip())
