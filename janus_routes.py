@@ -299,26 +299,26 @@ Escreva em português, tom profissional mas acessível, destacando os pontos for
                     ORDER BY reference_date DESC LIMIT 30
                 """, (asset_id,))
                 historico = [dict(r) for r in cur.fetchall()]
-            conn.close()
 
-                # Fallback: se não tem janus_scores, tenta ranking_snapshots
+                # Fallback: se não tem janus_scores, tenta engine_scores
                 if not score and engine_scores:
                     melhor_engine = engine_scores[0]
+                    s = melhor_engine["score"]
+                    classif = None
+                    if s is not None:
+                        s = float(s)
+                        if s >= 80: classif = "Muito Favorável"
+                        elif s >= 60: classif = "Favorável"
+                        elif s >= 40: classif = "Neutro"
+                        elif s >= 20: classif = "Desfavorável"
+                        else: classif = "Muito Desfavorável"
                     score = {
-                        "overall_score": melhor_engine["score"],
+                        "overall_score": s,
                         "confidence": melhor_engine["confidence"],
-                        "classification": None,
+                        "classification": classif,
                         "trend": melhor_engine["trend"],
                         "reference_date": melhor_engine["reference_date"]
                     }
-                    # Calcula classificação pelo score
-                    s = melhor_engine["score"]
-                    if s is not None:
-                        if s >= 80: score["classification"] = "Muito Favorável"
-                        elif s >= 60: score["classification"] = "Favorável"
-                        elif s >= 40: score["classification"] = "Neutro"
-                        elif s >= 20: score["classification"] = "Desfavorável"
-                        else: score["classification"] = "Muito Desfavorável"
 
             conn.close()
 
