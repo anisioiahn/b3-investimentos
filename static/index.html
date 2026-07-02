@@ -49,6 +49,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 /* SECTORS */
 .sectors-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
 .sector-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem;cursor:pointer;text-align:center;transition:all .15s;box-shadow:var(--shadow)}
+.sector-card.setor-alta{background:#f0fdf4;border-color:#86efac}
+.sector-card.setor-baixa{background:#fff1f2;border-color:#fca5a5}
+.sector-card.setor-neutro{background:#fff7ed;border-color:#fed7aa}
+.setor-termometro{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px;font-size:11px;font-weight:600}
+.setor-alta-txt{color:#16a34a}
+.setor-baixa-txt{color:#e53935}
+.setor-neutro-txt{color:#ea580c}
 .sector-card:hover{border-color:var(--green);transform:translateY(-2px)}
 .sector-icon{width:50px;height:50px;border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:26px}
 .sector-name{font-size:12.5px;font-weight:600;margin-bottom:3px;line-height:1.3}
@@ -1389,12 +1396,34 @@ function goBack(){currentSector=null;document.getElementById('tab-empresas').sty
 
 // ── SETORES ──────────────────────────────────────────────────
 function renderSectors(){
-  document.getElementById('sgrid').innerHTML=Object.entries(DADOS.setores||{}).map(([id,s])=>`
-    <div class="sector-card" onclick="abrirSetor('${id}')">
+  document.getElementById('sgrid').innerHTML=Object.entries(DADOS.setores||{}).map(([id,s])=>{
+    const comCotacao = s.empresas.filter(e=>e.preco!=null);
+    const alta   = comCotacao.filter(e=>(e.variacao||0)>0).length;
+    const baixa  = comCotacao.filter(e=>(e.variacao||0)<0).length;
+    const total  = comCotacao.length;
+
+    let classCard = '', termHtml = '';
+    if(total > 0){
+      const pctAlta = alta / total;
+      if(pctAlta >= 0.6){
+        classCard = 'setor-alta';
+        termHtml = `<div class="setor-termometro"><span class="setor-alta-txt">▲ ${alta} alta</span><span style="color:var(--text3)">·</span><span class="setor-baixa-txt">▼ ${baixa} baixa</span></div>`;
+      } else if(pctAlta <= 0.4){
+        classCard = 'setor-baixa';
+        termHtml = `<div class="setor-termometro"><span class="setor-baixa-txt">▼ ${baixa} baixa</span><span style="color:var(--text3)">·</span><span class="setor-alta-txt">▲ ${alta} alta</span></div>`;
+      } else {
+        classCard = 'setor-neutro';
+        termHtml = `<div class="setor-termometro"><span class="setor-neutro-txt">▲ ${alta} · ▼ ${baixa}</span></div>`;
+      }
+    }
+
+    return `<div class="sector-card ${classCard}" onclick="abrirSetor('${id}')">
       <div class="sector-icon" style="background:${s.cor_fundo}">${s.icone}</div>
       <div class="sector-name">${s.nome}</div>
-      <div class="sector-count">${s.empresas.filter(e=>e.preco).length}/${s.empresas.length} com cotação</div>
-    </div>`).join('');
+      <div class="sector-count">${total}/${s.empresas.length} com cotação</div>
+      ${termHtml}
+    </div>`;
+  }).join('');
 }
 
 // ── EMPRESAS ─────────────────────────────────────────────────
