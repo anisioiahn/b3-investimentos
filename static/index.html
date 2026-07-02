@@ -1190,39 +1190,39 @@ async function abrirAtivoDaBusca(ticker){
       <div class="sec-sub">${ticker}${setorNome ? ' · ' + setorNome : ''}</div>
     </div>`;
 
-  // Card do ativo
+  // Card do ativo — mesmo código de renderEmpresas
   const clist = document.getElementById('busca-clist');
   if(clist){
     const jiItem = (_janusRanking||[]).find(j => j.ticker === ticker);
     const jiBadge = jiItem?.score != null
-      ? `<div style="margin-top:4px"><span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(jiItem.score))}" style="font-size:10px;padding:2px 7px">${jiItem.score.toFixed(1)}</span></div>`
+      ? `<span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(jiItem.score))}" style="font-size:10px;padding:2px 7px">${jiItem.score.toFixed(1)}</span>`
       : '';
-    const logoHtml = `<img src="https://icons.brapi.dev/icons/${ticker}.svg"
-      style="width:100%;height:100%;object-fit:cover;border-radius:8px"
-      onerror="this.style.display='none';this.parentElement.textContent='${ticker.substring(0,4)}'">`;
+    const logoHtml = co.logo
+      ? `<img src="${co.logo}" alt="${co.nome}" onerror="this.parentElement.textContent='${ticker.substring(0,4)}'}">`
+      : ticker.substring(0,4);
     const altAcima  = _alertasServidor?.find(a=>a.ticker===ticker&&a.direcao==='acima');
     const altAbaixo = _alertasServidor?.find(a=>a.ticker===ticker&&a.direcao==='abaixo');
-    const alertasHtml = `<div class="tgt-lbl">Alertas de preço</div>
-      <div class="tgt-row">
-        ${altAcima
-          ? `<button class="tgt-set" onclick="toggleDirAlerta('${ticker}','acima',this)">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)}</button>`
-          : `<button class="tgt-btn" onclick="toggleDirAlerta('${ticker}','acima',this)">▲ Acima</button>`}
-        ${altAbaixo
-          ? `<button class="tgt-set" onclick="toggleDirAlerta('${ticker}','abaixo',this)">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)}</button>`
-          : `<button class="tgt-btn" onclick="toggleDirAlerta('${ticker}','abaixo',this)">▼ Abaixo</button>`}
-      </div>`;
+    const alertasHtml = `
+      <div class="tgt-lbl">Alertas de preço</div>
+      <div class="alerta-inline">
+        <button class="alerta-dir-btn acima ${altAcima?'ativo':''}" onclick="event.stopPropagation();toggleDirAlertaBusca('${ticker}','acima',this)" title="Alerta quando subir">▲ Acima</button>
+        <button class="alerta-dir-btn abaixo ${altAbaixo?'ativo':''}" onclick="event.stopPropagation();toggleDirAlertaBusca('${ticker}','abaixo',this)" title="Alerta quando cair">▼ Abaixo</button>
+      </div>
+      ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${ticker}','acima')">✕</button></div>`:''}
+      ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${ticker}','abaixo')">✕</button></div>`:''}`;
 
     if(co.preco){
       const vr=co.variacao||0, vp=co.variacao_pct||0;
-      const cls=vr>=0?'up':'dn', arrow=vr>=0?'▲':'▼', sign=vr>=0?'+':'';
+      const cls=vr>0?'up':vr<0?'dn':'flat', arrow=vr>0?'▲':vr<0?'▼':'—', sign=vr>=0?'+':'';
       clist.innerHTML = `<div class="co-row" style="cursor:default">
         <div class="co-logo" style="background:${co.cor}">${logoHtml}</div>
         <div class="co-info" style="flex:1.5">
           <div class="co-name">${co.nome}</div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">
             <span class="co-ticker">${ticker}</span>
-            ${setorNome?`<span style="font-size:10px;color:var(--text3)">· ${setorIcone} ${setorNome}</span>`:''}
-          </div>${jiBadge}
+            ${setorNome?`<span style="font-size:10px;color:var(--text3)">· ${setorNome}</span>`:''}
+          </div>
+          ${jiBadge?`<div style="margin-top:4px">${jiBadge}</div>`:''}
         </div>
         <div class="co-price-blk" style="text-align:right;flex:1">
           <div class="co-price">R$ ${co.preco.toFixed(2)}</div>
@@ -1230,20 +1230,20 @@ async function abrirAtivoDaBusca(ticker){
           <div class="co-range" style="font-size:10px">Min: ${co.minima_dia?.toFixed(2)||'—'} · Máx: ${co.maxima_dia?.toFixed(2)||'—'}</div>
         </div>
         <div class="co-target-blk" onclick="event.stopPropagation()">${alertasHtml}</div>
-        <div style="flex-shrink:0" onclick="event.stopPropagation()">
-          <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:8px 12px;font-size:13px"
-            onclick="abrirGrafico('${ticker}')">📊</button>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:center;flex-shrink:0" onclick="event.stopPropagation()">
+          <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:8px 12px;font-size:13px" onclick="abrirGrafico('${ticker}')">📊</button>
         </div>
       </div>`;
     } else {
       clist.innerHTML = `<div class="co-row" style="cursor:default">
         <div class="co-logo" style="background:${co.cor}">${logoHtml}</div>
         <div class="co-info" style="flex:1"><div class="co-name">${co.nome}</div>
-          <div class="co-ticker">${ticker}</div>${jiBadge}</div>
-        <div style="color:var(--text3);font-size:13px;flex:1">Cotação não disponível</div>
-        <div style="flex-shrink:0" onclick="event.stopPropagation()">
-          <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:8px 12px;font-size:13px"
-            onclick="abrirGrafico('${ticker}')">📊</button>
+          <div class="co-ticker">${ticker}</div>
+          ${jiBadge?`<div style="margin-top:4px">${jiBadge}</div>`:''}
+        </div>
+        <div style="color:var(--text3);font-size:13px;flex:1">Cotação não disponível no momento</div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:center;flex-shrink:0" onclick="event.stopPropagation()">
+          <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:8px 12px;font-size:13px" onclick="abrirGrafico('${ticker}')">📊</button>
         </div>
       </div>`;
     }
@@ -1263,6 +1263,52 @@ function fecharPaginaBusca(){
   const cartTab = document.querySelector('.tab[onclick*="carteira"]');
   if(cartTab) cartTab.classList.add('active');
   document.getElementById('page-carteira').classList.add('active');
+}
+
+function toggleDirAlertaBusca(ticker, direcao, btn){
+  // Mesmo que toggleDirAlerta mas sem depender de currentSector
+  const jaTemAlerta = _alertasServidor?.find(a=>a.ticker===ticker&&a.direcao===direcao);
+  if(jaTemAlerta){ removerAlerta(ticker, direcao); return; }
+  _alertaModalTicker = ticker;
+  _alertaModalDirecao = direcao;
+  // Busca preço atual
+  let precoAtual = 0;
+  for(const s of Object.values(DADOS.setores||{})){
+    const e = s.empresas?.find(e=>e.ticker===ticker);
+    if(e){ precoAtual = e.preco||0; break; }
+  }
+  document.querySelectorAll('.alerta-modal-inline').forEach(el=>el.remove());
+  const modal = document.createElement('div');
+  modal.className = 'alerta-modal-inline';
+  modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border:1px solid var(--border);border-radius:14px;padding:1.25rem;z-index:200;box-shadow:0 8px 32px rgba(0,0,0,.15);min-width:260px';
+  const dirLabel = direcao==='acima'?'▲ Alertar quando subir acima de':'▼ Alertar quando cair abaixo de';
+  const dirCor = direcao==='acima'?'#16a34a':'#e53935';
+  modal.innerHTML = `
+    <div style="font-size:13px;font-weight:700;margin-bottom:4px">${ticker}</div>
+    <div style="font-size:12px;color:${dirCor};font-weight:600;margin-bottom:12px">${dirLabel}</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Preço atual: R$ ${precoAtual.toFixed(2)}</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+      <span style="font-size:13px;font-weight:600">R$</span>
+      <input type="number" id="alerta-val-busca" step="0.01" min="0"
+        value="${precoAtual.toFixed(2)}"
+        style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:700">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="this.closest('.alerta-modal-inline').remove()"
+        style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-size:13px">Cancelar</button>
+      <button onclick="confirmarAlertaBusca('${ticker}','${direcao}')"
+        style="flex:1;padding:9px;border:none;border-radius:8px;background:${dirCor};color:#fff;cursor:pointer;font-size:13px;font-weight:600">Confirmar</button>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function confirmarAlertaBusca(ticker, direcao){
+  const val = parseFloat(document.getElementById('alerta-val-busca')?.value);
+  document.querySelectorAll('.alerta-modal-inline').forEach(el=>el.remove());
+  if(!val || val <= 0) return;
+  await salvarAlerta(ticker, val, direcao);
+  // Re-abre a página para atualizar os botões
+  await abrirAtivoDaBusca(ticker);
 }
 
 function fecharBusca(){
