@@ -438,6 +438,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <div class="hsub" id="last-upd">Passado e Futuro. Melhores Escolhas.</div>
       </div>
     </div>
+
+    <!-- BUSCA DE ATIVOS -->
+    <div style="flex:1;max-width:360px;margin:0 1rem;position:relative">
+      <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:6px 14px;gap:8px">
+        <span style="color:var(--text3)">🔍</span>
+        <input type="text" id="busca-input" placeholder="Buscar ativo ou empresa..."
+          style="border:none;background:none;outline:none;font-size:13px;width:100%;color:var(--text)"
+          oninput="buscarAtivo(this.value)"
+          onkeydown="if(event.key==='Escape')fecharBusca()"
+          autocomplete="off">
+        <button id="busca-limpar" onclick="limparBusca()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px">✕</button>
+      </div>
+      <!-- Dropdown de resultados -->
+      <div id="busca-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:500;max-height:400px;overflow-y:auto"></div>
+    </div>
+
     <div class="hright">
       <span id="user-nome" style="font-size:12px;color:var(--text2);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
       <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener" class="btn" style="text-decoration:none" title="Ver saldo de créditos da IA">💰 Saldo IA</a>
@@ -1033,6 +1049,131 @@ async function carregarFontes(){
 
 // ── NAV ──────────────────────────────────────────────────────
 let _paginaAtiva = 'carteira';
+
+// ── BUSCA DE ATIVOS ──────────────────────────────────────────
+let _buscaTimer = null;
+
+function buscarAtivo(q){
+  const limpar = document.getElementById('busca-limpar');
+  if(limpar) limpar.style.display = q ? 'block' : 'none';
+  clearTimeout(_buscaTimer);
+  if(!q || q.length < 2){ fecharBusca(); return; }
+  _buscaTimer = setTimeout(()=> _executarBusca(q), 300);
+}
+
+function _executarBusca(q){
+  const ql = q.toLowerCase().trim();
+  const resultados = [];
+
+  // Busca no cache de setores (cotações)
+  for(const [sid, setor] of Object.entries(DADOS.setores || {})){
+    for(const e of setor.empresas || []){
+      if(e.ticker?.toLowerCase().includes(ql) || e.nome?.toLowerCase().includes(ql)){
+        resultados.push({
+          ticker: e.ticker,
+          nome: e.nome,
+          cor: e.cor,
+          setor_nome: setor.nome,
+          setor_icone: setor.icone,
+          preco: e.preco,
+          variacao_pct: e.variacao_pct,
+          minima_dia: e.minima_dia,
+          maxima_dia: e.maxima_dia,
+          logo: e.logo,
+          fonte: 'cotacoes'
+        });
+      }
+    }
+  }
+
+  // Busca também no ranking Janus Index
+  for(const item of _janusRanking || []){
+    if(!resultados.find(r => r.ticker === item.ticker)){
+      if(item.ticker?.toLowerCase().includes(ql) || item.empresa?.toLowerCase().includes(ql)){
+        resultados.push({
+          ticker: item.ticker,
+          nome: item.empresa,
+          cor: '#0066cc',
+          setor_nome: item.setor,
+          setor_icone: '🎯',
+          preco: null,
+          variacao_pct: null,
+          fonte: 'janus'
+        });
+      }
+    }
+  }
+
+  _renderBuscaDropdown(resultados.slice(0, 10), q);
+}
+
+function _renderBuscaDropdown(resultados, q){
+  const dd = document.getElementById('busca-dropdown');
+  if(!dd) return;
+
+  if(!resultados.length){
+    dd.style.display = 'block';
+    dd.innerHTML = `<div style="padding:16px;text-align:center;color:var(--text2);font-size:13px">Nenhum ativo encontrado para "${q}"</div>`;
+    return;
+  }
+
+  dd.style.display = 'block';
+  dd.innerHTML = resultados.map(r => {
+    const jiItem = (_janusRanking||[]).find(j => j.ticker === r.ticker);
+    const jiBadge = jiItem?.score != null
+      ? `<span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(jiItem.score))}" style="font-size:10px;padding:2px 7px">${jiItem.score.toFixed(1)}</span>`
+      : '';
+    const precoHtml = r.preco
+      ? `<span style="font-size:13px;font-weight:700">R$ ${r.preco.toFixed(2)}</span>
+         <span style="font-size:11px;color:${(r.variacao_pct||0)>=0?'var(--green)':'#e53935'};margin-left:4px">${(r.variacao_pct||0)>=0?'+':''}${(r.variacao_pct||0).toFixed(2)}%</span>`
+      : `<span style="font-size:11px;color:var(--text3)">sem cotação</span>`;
+
+    return `<div onclick="abrirAtivoDaBusca('${r.ticker}')"
+      style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
+      onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+      <div class="co-logo" style="background:${r.cor};width:36px;height:36px;flex-shrink:0">
+        <img src="https://icons.brapi.dev/icons/${r.ticker}.svg" style="width:100%;height:100%;object-fit:cover;border-radius:8px"
+          onerror="this.style.display='none';this.parentElement.textContent='${r.ticker.substring(0,4)}'">
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:13px;font-weight:700">${r.ticker}</span>
+          ${jiBadge}
+        </div>
+        <div style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.setor_icone || ''} ${r.setor_nome || ''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">${precoHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+async function abrirAtivoDaBusca(ticker){
+  fecharBusca();
+  await abrirGrafico(ticker);
+}
+
+function fecharBusca(){
+  const dd = document.getElementById('busca-dropdown');
+  if(dd) dd.style.display = 'none';
+}
+
+function limparBusca(){
+  const input = document.getElementById('busca-input');
+  const limpar = document.getElementById('busca-limpar');
+  if(input) input.value = '';
+  if(limpar) limpar.style.display = 'none';
+  fecharBusca();
+}
+
+// Fecha busca ao clicar fora
+document.addEventListener('click', e => {
+  const busca = document.getElementById('busca-input');
+  const dd = document.getElementById('busca-dropdown');
+  if(busca && dd && !busca.contains(e.target) && !dd.contains(e.target)){
+    fecharBusca();
+  }
+});
 
 function toggleMenuSec(){
   const m = document.getElementById('menu-sec');
