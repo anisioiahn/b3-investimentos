@@ -8,7 +8,6 @@ LIST_URL = "https://brapi.dev/api/quote/list"
 OUTPUT_FILE = "cotacoes.json"
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 
-# Mapeamento dos nomes de setores da brapi para português
 SETOR_MAP = {
     "Finance": {"nome": "Financeiro", "icone": "🏦", "cor_fundo": "#e3f2fd"},
     "Energy": {"nome": "Petróleo, Gás e Biocombustíveis", "icone": "🛢️", "cor_fundo": "#e8f5e9"},
@@ -23,7 +22,6 @@ SETOR_MAP = {
     "Real Estate": {"nome": "Imobiliário", "icone": "🏢", "cor_fundo": "#fce4ec"},
 }
 
-# Cores por ticker para logos
 CORES = [
     "#005a2b","#1565c0","#c62828","#e65100","#6a1b9a","#00695c",
     "#37474f","#f57f17","#283593","#bf360c","#33691e","#1a237e",
@@ -34,18 +32,15 @@ def cor_para_ticker(ticker):
     return CORES[idx]
 
 def buscar_setores_disponiveis():
-    """Busca os setores disponíveis na brapi."""
     try:
         resp = requests.get(f"{LIST_URL}?limit=1&token={TOKEN}", timeout=15)
         if resp.status_code == 200:
-            data = resp.json()
-            return data.get("availableSectors", [])
+            return resp.json().get("availableSectors", [])
     except Exception as e:
         print(f"Erro ao buscar setores: {e}")
     return list(SETOR_MAP.keys())
 
 def buscar_ativos_por_setor(setor, pagina=1, limite=50):
-    """Busca ativos de um setor específico com cotação."""
     try:
         url = f"{LIST_URL}?sector={setor}&type=stock&sortBy=market_cap_basic&sortOrder=desc&limit={limite}&page={pagina}&token={TOKEN}"
         resp = requests.get(url, timeout=15)
@@ -61,7 +56,6 @@ def buscar_ativos_por_setor(setor, pagina=1, limite=50):
     return [], False
 
 def buscar_ticker(ticker):
-    """Busca cotação detalhada de 1 ticker."""
     for tentativa in range(3):
         try:
             resp = requests.get(f"{BASE_URL}/{ticker}", headers=HEADERS, timeout=15)
@@ -70,18 +64,14 @@ def buscar_ticker(ticker):
                 return results[0] if results else None
             elif resp.status_code == 429:
                 wait = 15 * (tentativa + 1)
-                print(f"  ⏳ {ticker}: rate limit, aguardando {wait}s...")
                 time.sleep(wait)
                 continue
-            else:
-                return None
         except Exception as e:
             print(f"  ⚠️ {ticker}: {e}")
             return None
     return None
 
 def buscar_historico(ticker):
-    """Busca histórico de 1 ano."""
     try:
         url = f"{BASE_URL}/{ticker}?range=1y&interval=1d"
         resp = requests.get(url, headers=HEADERS, timeout=15)
@@ -94,96 +84,111 @@ def buscar_historico(ticker):
         print(f"  ⚠️ Histórico {ticker}: {e}")
     return []
 
+def _parse_rss(content, ticker, nome_empresa, max_items=3):
+    """Parseia XML RSS e filtra por ticker/nome."""
+    noticias = []
+    try:
+        root = ET.fromstring(content)
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        items = root.findall(".//item") or root.findall(".//atom:entry", ns)
+        ticker_lower = ticker.lower()
+        nome_lower = nome_empresa.lower().split()[0] if nome_empresa else ticker_lower
+        for item in items[:30]:
+            titulo = (item.findtext("title") or item.findtext("atom:title", namespaces=ns) or "").strip()
+            link   = (item.findtext("link")  or item.findtext("atom:link",  namespaces=ns) or "").strip()
+            desc   = (item.findtext("description") or item.findtext("atom:summary", namespaces=ns) or "").strip()
+            data   = (item.findtext("pubDate") or item.findtext("atom:published", namespaces=ns) or "").strip()
+            texto  = (titulo + " " + desc).lower()
+            if ticker_lower in texto or nome_lower in texto:
+                noticias.append({
+                    "titulo": titulo[:120],
+                    "link": link,
+                    "data": data[:16],
+                    "resumo": desc[:200]
+                })
+            if len(noticias) >= max_items:
+                break
+    except Exception:
+        pass
+    return noticias
+
+def _buscar_google_news(ticker, nome_empresa, max_items=3):
+    """Google News RSS — sempre filtra por ticker+nome, muito atualizado."""
+    try:
+        query = f"{ticker} {nome_empresa.split()[0] if nome_empresa else ticker}"
+        url = f"https://news.google.com/rss/search?q={requests.utils.quote(query)}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        if resp.status_code == 200:
+            return _parse_rss(resp.content, ticker, nome_empresa, max_items)
+    except Exception as e:
+        print(f"  ⚠️ Google News {ticker}: {e}")
+    return []
+
 def buscar_noticias_rss(ticker, nome_empresa, fontes):
-    """Busca notícias de cada fonte RSS configurada."""
+    """
+    Busca notícias de cada fonte RSS configurada.
+    - Se a URL da fonte contém {ticker}, substitui e filtra normalmente.
+    - Se a URL é genérica (sem {ticker}), filtra os itens pelo ticker/nome.
+    - Google News é sempre usado como complemento para garantir notícias recentes.
+    """
     noticias_por_fonte = {}
-    
+    hdrs = {"User-Agent": "Mozilla/5.0"}
+
     for fonte in fontes:
         noticias = []
         try:
-            url_rss = montar_url_rss(fonte, ticker)
-            resp = requests.get(url_rss, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-            if resp.status_code == 200:
-                root = ET.fromstring(resp.content)
-                ns = {"atom": "http://www.w3.org/2005/Atom"}
-                items = root.findall(".//item") or root.findall(".//atom:entry", ns)
-                ticker_lower = ticker.lower()
-                nome_lower = nome_empresa.lower().split()[0] if nome_empresa else ticker_lower
-                for item in items[:20]:
-                    titulo = (item.findtext("title") or item.findtext("atom:title", namespaces=ns) or "").strip()
-                    link = (item.findtext("link") or item.findtext("atom:link", namespaces=ns) or "").strip()
-                    desc = (item.findtext("description") or item.findtext("atom:summary", namespaces=ns) or "").strip()
-                    data = (item.findtext("pubDate") or item.findtext("atom:published", namespaces=ns) or "").strip()
-                    texto = (titulo + " " + desc).lower()
-                    if ticker_lower in texto or nome_lower in texto:
-                        noticias.append({"titulo": titulo[:120], "link": link, "data": data[:16], "resumo": desc[:200]})
-                    if len(noticias) >= 3:
-                        break
+            url_rss = fonte.get("url", "").replace("{ticker}", ticker.lower())
+            if url_rss:
+                resp = requests.get(url_rss, timeout=10, headers=hdrs)
+                if resp.status_code == 200:
+                    noticias = _parse_rss(resp.content, ticker, nome_empresa)
         except Exception as e:
             print(f"  ⚠️ RSS {fonte['nome']}: {e}")
+
+        # Se não encontrou notícias pela URL configurada, tenta Google News filtrado
+        if not noticias:
+            noticias = _buscar_google_news(ticker, nome_empresa)
+
         noticias_por_fonte[fonte["nome"]] = noticias[:3]
-    
+
     return noticias_por_fonte
 
 def montar_url_rss(fonte, ticker):
-    """Monta a URL do RSS de acordo com a fonte configurada."""
     base = fonte.get("url", "")
     if "{ticker}" in base:
         return base.replace("{ticker}", ticker.lower())
     return base
 
 def buscar_todas_cotacoes():
-    """Busca todos os setores e ativos dinamicamente da brapi."""
     resultado = {"atualizado_em": datetime.now().isoformat(), "setores": {}}
-    
     setores_api = buscar_setores_disponiveis()
     print(f"Setores encontrados na brapi: {setores_api}")
 
     for setor_api in setores_api:
-        info = SETOR_MAP.get(setor_api, {
-            "nome": setor_api,
-            "icone": "📈",
-            "cor_fundo": "#f5f5f5",
-        })
+        info = SETOR_MAP.get(setor_api, {"nome": setor_api, "icone": "📈", "cor_fundo": "#f5f5f5"})
         print(f"\n🔍 {info['nome']}")
-        
         ativos, _ = buscar_ativos_por_setor(setor_api, limite=30)
         empresas = []
-        
         for ativo in ativos:
             ticker = ativo.get("stock", "")
-            if not ticker:
-                continue
+            if not ticker: continue
             preco = ativo.get("close")
-            variacao = ativo.get("change_abs")
             variacao_pct = ativo.get("change")
             nome = ativo.get("name", ticker)
-            logo = ativo.get("logourl", "")
-            
             if preco:
                 print(f"   ✅ {ticker}: R$ {preco} ({variacao_pct:+.2f}%)" if variacao_pct else f"   ✅ {ticker}: R$ {preco}")
-            else:
-                print(f"   ⚠️  {ticker}: sem preço")
-            
             empresas.append({
-                "ticker": ticker,
-                "nome": nome,
-                "cor": cor_para_ticker(ticker),
-                "preco": preco,
-                "variacao": variacao,
-                "variacao_pct": variacao_pct,
-                "maxima_dia": ativo.get("high"),
-                "minima_dia": ativo.get("low"),
-                "volume": ativo.get("volume"),
-                "logo": logo,
+                "ticker": ticker, "nome": nome, "cor": cor_para_ticker(ticker),
+                "preco": preco, "variacao": ativo.get("change_abs"),
+                "variacao_pct": variacao_pct, "maxima_dia": ativo.get("high"),
+                "minima_dia": ativo.get("low"), "volume": ativo.get("volume"),
+                "logo": ativo.get("logourl", ""),
             })
             time.sleep(0.3)
 
         setor_id = setor_api.lower().replace(" ", "_")
         resultado["setores"][setor_id] = {
-            "nome": info["nome"],
-            "icone": info["icone"],
-            "cor_fundo": info["cor_fundo"],
+            "nome": info["nome"], "icone": info["icone"], "cor_fundo": info["cor_fundo"],
             "empresas": sorted(empresas, key=lambda x: x.get("preco") or 0, reverse=True),
         }
 
