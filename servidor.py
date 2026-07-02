@@ -508,34 +508,69 @@ def api_intervalo():
         return jsonify({"ok":True,"intervalo_segundos":_intervalo_segundos})
     return jsonify({"intervalo_segundos":_intervalo_segundos})
 
+_cache_historico = {}  # ticker → {data, ts}
+CACHE_HISTORICO_TTL = 300  # 5 minutos
+
 @app.route("/api/historico/<ticker>")
 @requer_auth
 def api_historico(ticker):
+    ticker = ticker.upper()
+    agora_ts = time.time()
+    # Retorna do cache se ainda válido
+    if ticker in _cache_historico:
+        cached = _cache_historico[ticker]
+        if agora_ts - cached["ts"] < CACHE_HISTORICO_TTL:
+            return jsonify(cached["data"])
     try:
-        r = requests.get(f"{QUOTE_URL}/{ticker}?range=1y&interval=1d",
-                         headers={"Authorization":f"Bearer {TOKEN_BRAPI}"},timeout=20)
-        if r.status_code==200:
-            results = r.json().get("results",[])
-            if results and results[0].get("historicalDataPrice"):
-                hist = results[0]["historicalDataPrice"]
-                return jsonify({"ticker":ticker,"historico":[{"date":h.get("date"),"close":h.get("close")} for h in hist if h.get("close")]})
+        # Uma única chamada retorna preço atual + histórico
+        r = requests.get(
+            f"{QUOTE_URL}/{ticker}?range=1y&interval=1d&token={TOKEN_BRAPI}",
+            timeout=15)
+        if r.status_code == 200:
+            results = r.json().get("results", [])
+            if results:
+                d = results[0]
+                hist = d.get("historicalDataPrice", [])
+                resp = {
+                    "ticker": ticker,
+                    "preco": d.get("regularMarketPrice"),
+                    "variacao": d.get("regularMarketChange"),
+                    "variacao_pct": d.get("regularMarketChangePercent"),
+                    "minima_dia": d.get("regularMarketDayLow"),
+                    "maxima_dia": d.get("regularMarketDayHigh"),
+                    "historico": [{"date": h.get("date"), "close": h.get("close")} for h in hist if h.get("close")]
+                }
+                _cache_historico[ticker] = {"data": resp, "ts": agora_ts}
+                return jsonify(resp)
     except: pass
-    return jsonify({"ticker":ticker,"historico":[]})
+    return jsonify({"ticker": ticker, "historico": []})
 
 @app.route("/api/detalhe/<ticker>")
 @requer_auth
 def api_detalhe(ticker):
+    ticker = ticker.upper()
+    # Aproveita cache do histórico se disponível e recente
+    if ticker in _cache_historico:
+        cached = _cache_historico[ticker]
+        if time.time() - cached["ts"] < CACHE_HISTORICO_TTL:
+            d = cached["data"]
+            return jsonify({"ticker": ticker, "preco": d.get("preco"),
+                "variacao": d.get("variacao"), "variacao_pct": d.get("variacao_pct"),
+                "minima_dia": d.get("minima_dia"), "maxima_dia": d.get("maxima_dia")})
     try:
-        r = requests.get(f"{QUOTE_URL}/{ticker}",headers={"Authorization":f"Bearer {TOKEN_BRAPI}"},timeout=15)
-        if r.status_code==200:
-            results = r.json().get("results",[])
+        r = requests.get(f"{QUOTE_URL}/{ticker}?token={TOKEN_BRAPI}", timeout=10)
+        if r.status_code == 200:
+            results = r.json().get("results", [])
             if results:
-                d=results[0]
-                return jsonify({"ticker":ticker,"preco":d.get("regularMarketPrice"),
-                    "variacao":d.get("regularMarketChange"),"variacao_pct":d.get("regularMarketChangePercent"),
-                    "minima_dia":d.get("regularMarketDayLow"),"maxima_dia":d.get("regularMarketDayHigh")})
+                d = results[0]
+                return jsonify({"ticker": ticker,
+                    "preco": d.get("regularMarketPrice"),
+                    "variacao": d.get("regularMarketChange"),
+                    "variacao_pct": d.get("regularMarketChangePercent"),
+                    "minima_dia": d.get("regularMarketDayLow"),
+                    "maxima_dia": d.get("regularMarketDayHigh")})
     except: pass
-    return jsonify({"erro":"não encontrado"}),404
+    return jsonify({"erro": "não encontrado"}), 404
 
 @app.route("/api/noticias/<ticker>")
 @requer_auth
