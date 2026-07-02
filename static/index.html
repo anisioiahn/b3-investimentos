@@ -469,10 +469,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
 
   <div class="tabs">
-    <div class="tab" onclick="goPage('carteira',this)">💼 Carteira</div>
+    <div class="tab active" onclick="goPage('carteira',this)">💼 Carteira</div>
     <div class="tab" onclick="goPage('alertas',this)">🔔 Alertas <span class="tab-badge" id="alt-cnt" style="display:none">0</span></div>
     <div class="tab" onclick="goPage('janus',this)">🎯 Janus Index</div>
-    <div class="tab active" onclick="goPage('setores',this)">📊 Setores</div>
+    <div class="tab" onclick="goPage('setores',this)">📊 Setores</div>
     <div class="tab" onclick="goPage('empresas',this)" id="tab-empresas" style="display:none">🏢 <span id="tab-sname">Empresas</span></div>
   </div>
 
@@ -484,7 +484,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   </div>
 
   <div class="content">
-    <div class="page active" id="page-setores"><div class="sectors-grid" id="sgrid"></div></div>
+    <div class="page" id="page-setores"><div class="sectors-grid" id="sgrid"></div></div>
     <div class="page" id="page-empresas">
       <div class="back-btn" onclick="goBack()">← Voltar</div>
       <div class="sec-hdr" id="shdr"></div>
@@ -493,7 +493,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     </div>
 
     <!-- CARTEIRA -->
-    <div class="page" id="page-carteira">
+    <div class="page active" id="page-carteira">
       <div class="carteira-resumo" id="carteira-resumo"></div>
       <div class="carteira-toolbar">
         <div class="carteira-title">💼 Minha Carteira</div>
@@ -1032,7 +1032,7 @@ async function carregarFontes(){
 }
 
 // ── NAV ──────────────────────────────────────────────────────
-let _paginaAtiva = 'setores';
+let _paginaAtiva = 'carteira';
 
 function toggleMenuSec(){
   const m = document.getElementById('menu-sec');
