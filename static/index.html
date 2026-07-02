@@ -14,6 +14,39 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root{--green:#0066cc;--green-light:#e6f0ff;--bg:#f5f5f5;--card:#fff;--border:#e0e0e0;--text:#1a1a1a;--text2:#666;--text3:#999;--radius:14px;--shadow:0 2px 12px rgba(0,0,0,.07)}
+[data-tema="escuro"]{--green:#4da6ff;--green-light:#0d2137;--bg:#0f1117;--card:#1a1d27;--border:#2a2d3a;--text:#e8e8e8;--text2:#a0a0b0;--text3:#606070;--shadow:0 2px 12px rgba(0,0,0,.3)}
+[data-tema="escuro"] body{background:var(--bg);color:var(--text)}
+[data-tema="escuro"] .header{background:#13151f;border-color:var(--border)}
+[data-tema="escuro"] .tabs{background:#13151f;border-color:var(--border)}
+[data-tema="escuro"] .tab.active{color:var(--green)}
+[data-tema="escuro"] .modal,[data-tema="escuro"] .ji-modal{background:#1a1d27;color:var(--text)}
+[data-tema="escuro"] .co-row,[data-tema="escuro"] .sector-card{background:var(--card);border-color:var(--border)}
+[data-tema="escuro"] .sector-card.setor-alta{background:#0d2137;border-color:#1e4d6b}
+[data-tema="escuro"] .sector-card.setor-baixa{background:#1f0d0d;border-color:#6b1e1e}
+[data-tema="escuro"] .sector-card.setor-neutro{background:#1f1a0d;border-color:#6b4e1e}
+[data-tema="escuro"] input,[data-tema="escuro"] select{background:var(--card);color:var(--text);border-color:var(--border)}
+[data-tema="escuro"] .stat-box{background:#222536}
+[data-tema="escuro"] .jaia-bubble{background:#222536;border-color:var(--border);color:var(--text)}
+[data-tema="escuro"] #jaia-chat{background:#13151f}
+[data-tema="escuro"] #jaia-input{background:#222536;color:var(--text)}
+[data-tema="escuro"] #busca-input{background:transparent;color:var(--text)}
+[data-tema="escuro"] .busca-input-wrap{background:#222536;border-color:var(--border)}
+[data-tema="escuro"] #busca-dropdown{background:#1a1d27}
+[data-tema="escuro"] .noticia-item{background:#222536}
+[data-tema="escuro"] .rec-box{background:#222536}
+[data-tema="escuro"] .painel-tab{color:var(--text2)}
+[data-tema="escuro"] .painel-tab.active{color:var(--green)}
+[data-tema="escuro"] #menu-sec{background:#1a1d27;border-color:var(--border)}
+[data-tema="escuro"] .timerbar{background:#13151f;border-color:var(--border)}
+[data-tema="escuro"] .countdown-pill{background:#222536}
+[data-tema="escuro"] .btn{background:#222536;color:var(--text);border-color:var(--border)}
+[data-tema="escuro"] .btn:hover{background:#2a2d3a}
+[data-tema="escuro"] .ji-table{background:var(--card)}
+[data-tema="escuro"] .ji-table th{background:#222536}
+[data-tema="escuro"] .ji-table tr:hover td{background:#222536}
+[data-tema="escuro"] .ji-mini-card{background:var(--card)}
+[data-tema="escuro"] .resumo-card{background:var(--card)}
+[data-tema="escuro"] .carteira-toolbar{background:#13151f}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .app{max-width:960px;margin:0 auto;background:var(--card);min-height:100vh;box-shadow:var(--shadow);overflow-x:hidden}
@@ -469,6 +502,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="hright">
       <span id="user-nome" style="font-size:12px;color:var(--text2);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
       <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener" class="btn" style="text-decoration:none" title="Ver saldo de créditos da IA">💰 Saldo IA</a>
+      <button class="btn" id="btn-tema" onclick="alternarTema()" title="Alternar tema claro/escuro" style="font-size:16px;padding:6px 10px">🌙</button>
       <button class="btn" onclick="toggleMenuSec()" title="Log e Parâmetros" style="font-size:16px;padding:6px 10px">⚙️</button>
       <div class="status-pill"><span class="dot" id="sdot"></span><span id="status-txt">Conectando</span></div>
       <button class="btn" onclick="forcarAtualizacao()">↻ Atualizar</button>
@@ -1368,6 +1402,30 @@ document.addEventListener('click', e => {
     fecharBusca();
   }
 });
+
+function alternarTema(){
+  const atual = document.documentElement.getAttribute('data-tema');
+  const novo = atual === 'escuro' ? 'claro' : 'escuro';
+  aplicarTema(novo);
+  localStorage.setItem('janus-tema', novo);
+}
+
+function aplicarTema(tema){
+  document.documentElement.setAttribute('data-tema', tema);
+  const btn = document.getElementById('btn-tema');
+  if(btn) btn.textContent = tema === 'escuro' ? '☀️' : '🌙';
+  if(btn) btn.title = tema === 'escuro' ? 'Mudar para tema claro' : 'Mudar para tema escuro';
+}
+
+// Aplica tema salvo ou preferência do sistema ao carregar
+(function(){
+  const salvo = localStorage.getItem('janus-tema');
+  if(salvo){
+    aplicarTema(salvo);
+  } else if(window.matchMedia('(prefers-color-scheme: dark)').matches){
+    aplicarTema('escuro');
+  }
+})();
 
 function toggleMenuSec(){
   const m = document.getElementById('menu-sec');
