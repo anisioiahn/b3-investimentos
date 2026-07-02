@@ -210,7 +210,7 @@ Escreva em português, tom profissional mas acessível, destacando os pontos for
     @requer_auth
     def api_janus_ranking():
         try:
-            limite = int(request.args.get("limit", 50))
+            limite = int(request.args.get("limit", 1000))
             tipo   = request.args.get("tipo", "GERAL")
 
             conn = get_conn()
@@ -301,19 +301,38 @@ Escreva em português, tom profissional mas acessível, destacando os pontos for
                 historico = [dict(r) for r in cur.fetchall()]
             conn.close()
 
+                # Fallback: se não tem janus_scores, tenta ranking_snapshots
+                if not score and engine_scores:
+                    melhor_engine = engine_scores[0]
+                    score = {
+                        "overall_score": melhor_engine["score"],
+                        "confidence": melhor_engine["confidence"],
+                        "classification": None,
+                        "trend": melhor_engine["trend"],
+                        "reference_date": melhor_engine["reference_date"]
+                    }
+                    # Calcula classificação pelo score
+                    s = melhor_engine["score"]
+                    if s is not None:
+                        if s >= 80: score["classification"] = "Muito Favorável"
+                        elif s >= 60: score["classification"] = "Favorável"
+                        elif s >= 40: score["classification"] = "Neutro"
+                        elif s >= 20: score["classification"] = "Desfavorável"
+                        else: score["classification"] = "Muito Desfavorável"
+
+            conn.close()
+
             return jsonify({
                 "ticker":        ticker,
                 "empresa":       asset["trading_name"],
                 "setor":         asset["sector"],
-                "janus_score":   dict(score) if score else None,
+                "janus_score":   score if isinstance(score, dict) else (dict(score) if score else None),
                 "engine_scores": engine_scores,
                 "indicadores":   indicadores,
                 "historico":     historico
             })
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
-
-    # ── GET /api/janus/evidence/<ticker> ──────────────────────
     @app.route("/api/janus/evidence/<ticker>")
     @requer_auth
     def api_janus_evidence(ticker):
