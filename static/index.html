@@ -1622,6 +1622,8 @@ async function carregarUsuario(){
     const d = await r.json();
     const el = document.getElementById('user-nome');
     if(el) el.textContent = d.nome || d.email;
+    // Carteira é a aba inicial — carrega após autenticação confirmada
+    await carregarCarteira();
   }catch(e){}
 }
 
@@ -2836,8 +2838,6 @@ function carregarJanusIndex(){
 }
 
 carregarUsuario();
-// Carteira é a aba inicial — carrega imediatamente
-carregarCarteira();
 
 // Polling de progresso ativo — continua enquanto alguma coleta estiver rodando
 let _gaugePollingAtivo = null;
