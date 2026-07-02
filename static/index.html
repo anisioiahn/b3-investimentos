@@ -1626,13 +1626,13 @@ async function abrirGrafico(ticker){
     <div class="jaia-bubble">Analisando <strong>${co.nome} (${ticker})</strong> ...</div>
   </div>`;
 
-  // Busca tudo em paralelo
-  const [det, hist, nots, scoreData] = await Promise.all([
-    fetchComTimeout(`/api/detalhe/${ticker}`, 20000),
-    fetchComTimeout(`/api/historico/${ticker}`, 30000),
+  // Busca tudo em paralelo — /api/historico já retorna preço + histórico numa chamada só
+  const [hist, nots, scoreData] = await Promise.all([
+    fetchComTimeout(`/api/historico/${ticker}`, 20000),
     fetchComTimeout(`/api/noticias/${ticker}`, 40000),
     fetchComTimeout(`/api/janus/score/${ticker}`, 15000),
   ]);
+  const det = hist; // mesmo objeto tem preço e histórico
 
   // Atualiza stats com detalhe
   if(det && !det.erro){
