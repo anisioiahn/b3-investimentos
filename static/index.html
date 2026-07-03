@@ -81,6 +81,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
 /* SECTORS */
 .sectors-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
+.cockpit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+@media(max-width:900px){.cockpit-grid{grid-template-columns:1fr}}
+.cockpit-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.25rem;box-shadow:var(--shadow)}
+.cockpit-card-title{font-size:13px;font-weight:700;color:var(--text2);margin-bottom:1rem;display:flex;align-items:center;gap:6px}
+.ck-hm-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:opacity .15s}
+.ck-hm-row:last-child{border-bottom:none}
+.ck-hm-row:hover{opacity:.8}
+.ck-hm-nome{font-size:12px;flex:1;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ck-hm-bar-wrap{width:60px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;flex-shrink:0}
+.ck-hm-bar{height:100%;border-radius:3px}
+.ck-hm-pct{font-size:11px;font-weight:700;min-width:36px;text-align:right;flex-shrink:0}
+.ck-op-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.ck-op-row:last-child{border-bottom:none}
+.ck-op-row:hover{opacity:.8}
+.ck-op-pos{font-size:11px;color:var(--text3);min-width:18px;font-weight:700}
+.ck-op-info{flex:1;min-width:0}
+.ck-op-ticker{font-size:13px;font-weight:700;color:var(--text)}
+.ck-op-empresa{font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ck-cart-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+.ck-cart-row:last-child{border-bottom:none}
+.ck-cart-total{margin-top:12px;padding-top:12px;border-top:2px solid var(--border)}
+.cockpit-empty{text-align:center;padding:2rem;color:var(--text3);font-size:13px}
 .sector-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem;cursor:pointer;text-align:center;transition:all .15s;box-shadow:var(--shadow)}
 .sector-card.setor-alta{background:#f0fdf4;border-color:#86efac}
 .sector-card.setor-baixa{background:#fff1f2;border-color:#fca5a5}
@@ -538,7 +560,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
 
   <div class="tabs">
-    <div class="tab active" onclick="goPage('carteira',this)">💼 Carteira</div>
+    <div class="tab active" onclick="goPage('cockpit',this)">🚀 Cockpit</div>
+    <div class="tab" onclick="goPage('carteira',this)">💼 Carteira</div>
     <div class="tab" onclick="goPage('alertas',this)">🔔 Alertas <span class="tab-badge" id="alt-cnt" style="display:none">0</span></div>
     <div class="tab" onclick="goPage('janus',this)">🎯 Janus Index</div>
     <div class="tab" onclick="goPage('setores',this)">📊 Setores</div>
@@ -559,6 +582,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   </div>
 
   <div class="content">
+    <!-- PÁGINA COCKPIT -->
+    <div class="page active" id="page-cockpit">
+      <!-- Saudação -->
+      <div id="cockpit-header" style="margin-bottom:1.5rem">
+        <div style="font-size:20px;font-weight:700;color:var(--text)" id="cockpit-saudacao">Bom dia! 👋</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:4px" id="cockpit-resumo-dia">Carregando resumo do mercado...</div>
+      </div>
+      <!-- Grid 3 módulos -->
+      <div class="cockpit-grid">
+        <!-- Módulo 1: Heat Map Setorial -->
+        <div class="cockpit-card">
+          <div class="cockpit-card-title">🌡️ Termômetro do Mercado</div>
+          <div id="cockpit-heatmap"></div>
+        </div>
+        <!-- Módulo 2: Top Oportunidades -->
+        <div class="cockpit-card">
+          <div class="cockpit-card-title">⭐ Top 5 Oportunidades</div>
+          <div id="cockpit-oportunidades"></div>
+        </div>
+        <!-- Módulo 3: Evolução da Carteira -->
+        <div class="cockpit-card">
+          <div class="cockpit-card-title">📈 Minha Carteira</div>
+          <div id="cockpit-carteira"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="page" id="page-setores"><div class="sectors-grid" id="sgrid"></div></div>
     <div class="page" id="page-empresas">
       <div class="back-btn" onclick="goBack()">← Voltar</div>
@@ -1047,6 +1097,7 @@ async function carregarDados(){
     renderSectors();
     if(currentSector && _paginaAtiva !== 'carteira') renderEmpresas(true);
     if(_paginaAtiva !== 'carteira') { renderAlerts(); updateAltCnt(); }
+    if(_paginaAtiva === 'cockpit') renderCockpit();
   }catch(e){
     document.getElementById('status-txt').textContent='Erro de conexão';
     document.getElementById('sdot').className='dot err';
@@ -1122,7 +1173,7 @@ async function carregarFontes(){
 }
 
 // ── NAV ──────────────────────────────────────────────────────
-let _paginaAtiva = 'carteira';
+let _paginaAtiva = 'cockpit';
 
 // ── BUSCA DE ATIVOS ──────────────────────────────────────────
 let _buscaTimer = null;
@@ -1442,6 +1493,142 @@ function aplicarTema(tema){
   }
 })();
 
+// ── COCKPIT ──────────────────────────────────────────────────
+function renderCockpit(){
+  _renderCockpitSaudacao();
+  _renderCockpitHeatmap();
+  _renderCockpitOportunidades();
+  _renderCockpitCarteira();
+}
+
+function _renderCockpitSaudacao(){
+  const hora = new Date().getHours();
+  const saud = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  const nomeEl = document.getElementById('user-nome');
+  const nome = nomeEl?.textContent?.split(' ')[0] || '';
+  document.getElementById('cockpit-saudacao').textContent = `${saud}${nome ? ', ' + nome : ''}! 👋`;
+
+  // Resumo do mercado
+  const setores = Object.values(DADOS.setores||{});
+  if(!setores.length){
+    document.getElementById('cockpit-resumo-dia').textContent = 'Aguardando dados do mercado...';
+    return;
+  }
+  const todasEmpresas = setores.flatMap(s=>s.empresas||[]).filter(e=>e.preco!=null);
+  const emAlta = todasEmpresas.filter(e=>(e.variacao||0)>0).length;
+  const emBaixa = todasEmpresas.filter(e=>(e.variacao||0)<0).length;
+  const humor = emAlta > emBaixa ? '🟢 mercado majoritariamente em alta' : emBaixa > emAlta ? '🔴 mercado majoritariamente em baixa' : '🟡 mercado equilibrado';
+  document.getElementById('cockpit-resumo-dia').textContent =
+    `${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})} · ${humor} (▲${emAlta} · ▼${emBaixa} ativos)`;
+}
+
+function _renderCockpitHeatmap(){
+  const el = document.getElementById('cockpit-heatmap');
+  const setores = Object.values(DADOS.setores||{});
+  if(!setores.length){
+    el.innerHTML = '<div class="cockpit-empty">Aguardando dados...</div>'; return;
+  }
+
+  // Calcula % de alta por setor e ordena do maior para menor
+  const dados = setores.map(s=>{
+    const comCot = s.empresas?.filter(e=>e.preco!=null)||[];
+    const alta = comCot.filter(e=>(e.variacao||0)>0).length;
+    const total = comCot.length || 1;
+    const pct = Math.round(alta/total*100);
+    return {nome:s.nome, icone:s.icone, pct, alta, total, cor: pct>=60?'#16a34a':pct<=40?'#e53935':'#f59e0b'};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  el.innerHTML = dados.map(d=>`
+    <div class="ck-hm-row" onclick="abrirSetorPorNome('${d.nome}')">
+      <span style="font-size:14px;flex-shrink:0">${d.icone}</span>
+      <span class="ck-hm-nome" title="${d.nome}">${d.nome}</span>
+      <div class="ck-hm-bar-wrap">
+        <div class="ck-hm-bar" style="width:${d.pct}%;background:${d.cor}"></div>
+      </div>
+      <span class="ck-hm-pct" style="color:${d.cor}">${d.pct}%</span>
+    </div>`).join('');
+}
+
+function abrirSetorPorNome(nome){
+  const entry = Object.entries(DADOS.setores||{}).find(([,s])=>s.nome===nome);
+  if(entry) abrirSetor(entry[0]);
+}
+
+function _renderCockpitOportunidades(){
+  const el = document.getElementById('cockpit-oportunidades');
+  if(!_janusRanking?.length){
+    el.innerHTML = '<div class="cockpit-empty">Execute o Janus Index para ver oportunidades</div>'; return;
+  }
+  const top5 = _janusRanking
+    .filter(i=>i.score!=null)
+    .sort((a,b)=>b.score-a.score)
+    .slice(0,5);
+
+  el.innerHTML = top5.map((item,i)=>{
+    const slug = ji_classSlug(janusClassificacaoPorScore(item.score));
+    return `<div class="ck-op-row" onclick="abrirGrafico('${item.ticker}')">
+      <span class="ck-op-pos">${i+1}º</span>
+      <div class="ji-logo" style="background:#0066cc;width:28px;height:28px;flex-shrink:0">${ji_logoHtml(item.ticker)}</div>
+      <div class="ck-op-info">
+        <div class="ck-op-ticker">${item.ticker}</div>
+        <div class="ck-op-empresa">${item.empresa}</div>
+      </div>
+      <span class="ji-score-badge ji-score-${slug}" style="font-size:11px;padding:2px 8px">${item.score.toFixed(1)}</span>
+    </div>`;
+  }).join('');
+}
+
+function _renderCockpitCarteira(){
+  const el = document.getElementById('cockpit-carteira');
+  const confirmadas = (_carteira||[]).filter(p=>p.status==='confirmada');
+  if(!confirmadas.length){
+    el.innerHTML = '<div class="cockpit-empty">Sua carteira está vazia<br><small>Adicione posições na aba Carteira</small></div>'; return;
+  }
+
+  const totalInvestido = confirmadas.reduce((s,p)=>s+(p.valor_investido||0),0);
+  const totalAtual = confirmadas.reduce((s,p)=>s+(p.valor_atual||p.valor_investido||0),0);
+  const lucro = totalAtual - totalInvestido;
+  const lucroP = totalInvestido>0?(lucro/totalInvestido*100):0;
+  const lucroClass = lucro>0?'lucro-pos':lucro<0?'lucro-neg':'';
+
+  // Top 3 melhores e piores da carteira
+  const comLucro = confirmadas.filter(p=>p.lucro_pct!=null).sort((a,b)=>b.lucro_pct-a.lucro_pct);
+  const melhores = comLucro.slice(0,3);
+  const piores = comLucro.slice(-2).reverse();
+
+  el.innerHTML = `
+    <div class="ck-cart-total">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:12px;color:var(--text2)">Total investido</span>
+        <span style="font-size:13px;font-weight:700">R$ ${fmt(totalInvestido)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:12px;color:var(--text2)">Valor atual</span>
+        <span style="font-size:13px;font-weight:700">R$ ${fmt(totalAtual)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between">
+        <span style="font-size:12px;color:var(--text2)">Resultado</span>
+        <span class="${lucroClass}" style="font-size:14px;font-weight:700">${lucro>=0?'+':''}R$ ${fmt(lucro)} <small>(${lucroP>=0?'+':''}${lucroP.toFixed(2)}%)</small></span>
+      </div>
+    </div>
+    ${melhores.length?`
+    <div style="margin-top:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🏆 MELHORES</div>
+      ${melhores.map(p=>`<div class="ck-cart-row" style="cursor:pointer" onclick="abrirGrafico('${p.ticker}')">
+        <span style="font-weight:700;font-size:12px">${p.ticker}</span>
+        <span class="lucro-pos" style="font-size:12px;font-weight:700">+${p.lucro_pct?.toFixed(2)||0}%</span>
+      </div>`).join('')}
+    </div>`:''}
+    ${piores.length?`
+    <div style="margin-top:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">⚠️ ATENÇÃO</div>
+      ${piores.map(p=>`<div class="ck-cart-row" style="cursor:pointer" onclick="abrirGrafico('${p.ticker}')">
+        <span style="font-weight:700;font-size:12px">${p.ticker}</span>
+        <span class="lucro-neg" style="font-size:12px;font-weight:700">${p.lucro_pct?.toFixed(2)||0}%</span>
+      </div>`).join('')}
+    </div>`:''}`;
+}
+
 function toggleMenuSec(){
   const m = document.getElementById('menu-sec');
   const o = document.getElementById('menu-sec-overlay');
@@ -1460,6 +1647,7 @@ function goPage(p,el){
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   if(el) el.classList.add('active');
+  if(p==='cockpit') renderCockpit();
   if(p==='alertas') renderAlerts();
   if(p==='params') renderFontes();
   if(p==='carteira'){ renderCarteira(); carregarCarteira(); }
@@ -2052,9 +2240,10 @@ async function carregarUsuario(){
     const d = await r.json();
     const el = document.getElementById('user-nome');
     if(el) el.textContent = d.nome || d.email;
-    // Carteira é a aba inicial — carrega após autenticação confirmada
+    // Cockpit é a tela inicial
     await carregarCategorias();
     await carregarCarteira();
+    renderCockpit();
   }catch(e){}
 }
 
