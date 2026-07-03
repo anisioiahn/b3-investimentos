@@ -656,6 +656,45 @@ def api_carteira_delete(ticker):
     db.db_remover_posicao(uid(), ticker.upper())
     return jsonify({"ok":True})
 
+# ── CATEGORIAS DE CARTEIRA ───────────────────────────────────
+@app.route("/api/carteira/categorias", methods=["GET"])
+@requer_auth
+def api_categorias_get():
+    return jsonify(db.db_listar_categorias(uid()))
+
+@app.route("/api/carteira/categorias", methods=["POST"])
+@requer_auth
+def api_categorias_post():
+    d = request.json or {}
+    nome = d.get("nome","").strip()
+    if not nome: return jsonify({"erro":"Nome obrigatório"}), 400
+    cat_id = db.db_criar_categoria(uid(), nome, d.get("cor","#0066cc"), d.get("icone","📁"))
+    if not cat_id: return jsonify({"erro":"Categoria já existe ou erro ao criar"}), 409
+    return jsonify({"ok": True, "id": cat_id})
+
+@app.route("/api/carteira/categorias/<int:cat_id>", methods=["PUT"])
+@requer_auth
+def api_categorias_put(cat_id):
+    d = request.json or {}
+    nome = d.get("nome","").strip()
+    if not nome: return jsonify({"erro":"Nome obrigatório"}), 400
+    db.db_editar_categoria(uid(), cat_id, nome, d.get("cor","#0066cc"), d.get("icone","📁"))
+    return jsonify({"ok": True})
+
+@app.route("/api/carteira/categorias/<int:cat_id>", methods=["DELETE"])
+@requer_auth
+def api_categorias_delete(cat_id):
+    db.db_excluir_categoria(uid(), cat_id)
+    return jsonify({"ok": True})
+
+@app.route("/api/carteira/<ticker>/categoria", methods=["PUT"])
+@requer_auth
+def api_mover_ativo_categoria(ticker):
+    d = request.json or {}
+    categoria_id = d.get("categoria_id")  # None = Geral
+    db.db_mover_ativo_categoria(uid(), ticker, categoria_id)
+    return jsonify({"ok": True})
+
 @app.route("/api/carteira/resumo")
 @requer_auth
 def api_carteira_resumo():
