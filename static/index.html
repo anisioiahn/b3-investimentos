@@ -2450,14 +2450,78 @@ function filtrarChart(dias,btn){
   renderChart(chartDataFull.filter(d=>(d.date*1000)>=cutoff));
 }
 function renderChart(dados){
-  if(!dados.length)return;
-  const labels=dados.map(d=>{const dt=new Date(d.date*1000);return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});});
-  const prices=dados.map(d=>d.close);
-  const cor=prices[prices.length-1]>=prices[0]?'#16a34a':'#e53935';
-  const corBg=prices[prices.length-1]>=prices[0]?'rgba(22,163,74,.08)':'rgba(229,57,53,.08)';
-  if(chartInstance)chartInstance.destroy();
-  const ctx=document.getElementById('priceChart').getContext('2d');
-  chartInstance=new Chart(ctx,{type:'line',data:{labels,datasets:[{data:prices,borderColor:cor,backgroundColor:corBg,borderWidth:2,pointRadius:0,pointHoverRadius:4,fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:c=>`R$ ${c.parsed.y.toFixed(2)}`}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:8,font:{size:10}}},y:{grid:{color:'#f0f0f0'},ticks:{callback:v=>`R$ ${v.toFixed(2)}`,font:{size:10}}}}}});
+  if(!dados.length) return;
+  const labels = dados.map(d=>{
+    const dt = new Date(d.date*1000);
+    return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+  });
+  const prices = dados.map(d=>d.close);
+  const subindo = prices[prices.length-1] >= prices[0];
+  const corLinha = subindo ? '#16a34a' : '#e53935';
+
+  if(chartInstance) chartInstance.destroy();
+  const ctx = document.getElementById('priceChart').getContext('2d');
+
+  // Gradiente estilo montanha — do topo colorido até transparente na base
+  const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.clientHeight || 300);
+  if(subindo){
+    gradient.addColorStop(0,   'rgba(22,163,74,0.55)');
+    gradient.addColorStop(0.4, 'rgba(22,163,74,0.25)');
+    gradient.addColorStop(1,   'rgba(22,163,74,0.02)');
+  } else {
+    gradient.addColorStop(0,   'rgba(229,57,53,0.55)');
+    gradient.addColorStop(0.4, 'rgba(229,57,53,0.25)');
+    gradient.addColorStop(1,   'rgba(229,57,53,0.02)');
+  }
+
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets:[{
+        data: prices,
+        borderColor: corLinha,
+        backgroundColor: gradient,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: corLinha,
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2,
+        fill: true,
+        tension: 0.4,  // mais suave = mais montanha
+      }]
+    },
+    options:{
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ display:false },
+        tooltip:{
+          backgroundColor: 'rgba(0,0,0,0.75)',
+          titleColor: '#fff',
+          bodyColor: '#fff',
+          padding: 10,
+          cornerRadius: 8,
+          callbacks:{ label: c=>`R$ ${c.parsed.y.toFixed(2)}` }
+        }
+      },
+      scales:{
+        x:{
+          grid:{ display:false },
+          border:{ display:false },
+          ticks:{ maxTicksLimit:8, font:{size:10}, color:'#999' }
+        },
+        y:{
+          position:'right',
+          grid:{ color:'rgba(0,0,0,0.04)' },
+          border:{ display:false },
+          ticks:{ callback: v=>`R$ ${v.toFixed(2)}`, font:{size:10}, color:'#999' }
+        }
+      }
+    }
+  });
 }
 function fecharModal(e){if(!e||e.target===document.getElementById('modal')){document.getElementById('modal').classList.remove('open');}}
 
@@ -4108,10 +4172,31 @@ async function abrirModalDetalhe(ticker){
       if(_jiHistoricoChart){ _jiHistoricoChart.destroy(); _jiHistoricoChart = null; }
       const ctx = document.getElementById('ji-historico-canvas')?.getContext('2d');
       if(ctx){
+        const gradJanus = ctx.createLinearGradient(0, 0, 0, ctx.canvas.clientHeight || 150);
+        gradJanus.addColorStop(0,   'rgba(0,102,204,0.5)');
+        gradJanus.addColorStop(0.5, 'rgba(0,102,204,0.2)');
+        gradJanus.addColorStop(1,   'rgba(0,102,204,0.02)');
         _jiHistoricoChart = new Chart(ctx, {
           type: 'line',
-          data: { labels, datasets: [{ data: valores, borderColor: '#0066cc', backgroundColor: 'rgba(0,102,204,.08)', borderWidth: 2, pointRadius: 2, fill: true, tension: 0.3 }] },
-          options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{min:0,max:100,ticks:{font:{size:9}}}, x:{ticks:{font:{size:9},maxTicksLimit:8}} } }
+          data: { labels, datasets: [{
+            data: valores,
+            borderColor: '#0066cc',
+            backgroundColor: gradJanus,
+            borderWidth: 2,
+            pointRadius: 3,
+            pointBackgroundColor: '#0066cc',
+            pointHoverRadius: 5,
+            fill: true,
+            tension: 0.4
+          }]},
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c=>`Score: ${c.parsed.y.toFixed(1)}` } } },
+            scales:{
+              y:{ min:0, max:100, grid:{color:'rgba(0,0,0,0.04)'}, border:{display:false}, ticks:{font:{size:9},color:'#999'} },
+              x:{ grid:{display:false}, border:{display:false}, ticks:{font:{size:9},color:'#999',maxTicksLimit:8} }
+            }
+          }
         });
       }
     } else {
