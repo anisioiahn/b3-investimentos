@@ -1837,7 +1837,10 @@ function renderDividendRanking(dados){
           <td>${grow}</td>
           <td><span class="div-score-badge div-score-${slug}">${score!=null?score.toFixed(1):'—'}</span></td>
           <td onclick="event.stopPropagation()">
-            <button onclick="abrirGrafico('${d.ticker}')" class="btn" style="padding:4px 8px;font-size:11px">📊</button>
+            <div style="display:flex;gap:4px;justify-content:flex-end">
+              <button onclick="abrirGrafico('${d.ticker}')" class="btn" style="padding:4px 8px;font-size:11px">📊</button>
+              <button onclick="abrirModalPosicao('${d.ticker}')" class="btn" style="padding:4px 8px;font-size:11px" title="Adicionar à carteira">➕</button>
+            </div>
           </td>
         </tr>`;
       }).join('')}
@@ -2024,6 +2027,7 @@ function renderEmpresas(silencioso){
       <div class="co-target-blk" onclick="event.stopPropagation()">${alertasHtml}</div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:center;flex-shrink:0" onclick="event.stopPropagation()">
         <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:8px 12px;font-size:13px" onclick="abrirGrafico('${c.ticker}')" title="Ver análise completa">📊</button>
+        <button class="btn" style="padding:8px 12px;font-size:13px" onclick="abrirModalPosicao('${c.ticker}')" title="Adicionar à carteira">➕</button>
       </div>
     </div>`;
   }).join('');
@@ -3925,6 +3929,7 @@ function renderJanusMiniRankings(){
       <span class="ji-mini-ticker">${item.ticker}<span class="ji-mini-empresa">${item.empresa}</span></span>
       <span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(item.score))} ji-score-clicavel" onclick="abrirModalDetalhe('${item.ticker}')" title="Ver detalhes do score">${item.score?.toFixed(1) ?? '—'}</span>
       <button onclick="abrirGrafico('${item.ticker}')" title="Ver análise completa" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;flex-shrink:0">📊</button>
+      <button onclick="event.stopPropagation();abrirModalPosicao('');document.getElementById('pos-ticker').value='${item.ticker}';document.getElementById('pos-ticker').disabled=false;buscarTickerCarteira('${item.ticker}')" title="Adicionar à carteira" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;flex-shrink:0">➕</button>
     </div>`;
 
   elMelhores.innerHTML = melhores.map(renderRow).join('');
@@ -4009,7 +4014,10 @@ function renderJanusTabela(){
         <div class="ji-classificacao-txt">${classificacao}</div>
       </td>
       <td class="num">
-        <button onclick="abrirGrafico('${item.ticker}')" title="Ver análise completa" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px;transition:background .2s" onmouseover="this.style.background='var(--green-light)'" onmouseout="this.style.background='none'">📊</button>
+        <div style="display:flex;gap:4px;justify-content:flex-end">
+          <button onclick="abrirGrafico('${item.ticker}')" title="Ver análise" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;border-radius:6px;transition:background .2s" onmouseover="this.style.background='var(--green-light)'" onmouseout="this.style.background='none'">📊</button>
+          <button onclick="event.stopPropagation();abrirModalPosicao('${item.ticker}')" title="Adicionar à carteira" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;border-radius:6px;transition:background .2s" onmouseover="this.style.background='var(--green-light)'" onmouseout="this.style.background='none'">➕</button>
+        </div>
       </td>
     </tr>`;
   });
