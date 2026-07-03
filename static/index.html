@@ -3590,25 +3590,38 @@ function abrirModalPosicao(ticker=''){
   if(ticker){
     const pos = _carteira.find(p=>p.ticker===ticker);
     if(pos){
+      // Editando posição existente — carrega dados atuais
       document.getElementById('pos-preco').value = pos.preco_medio;
       document.getElementById('pos-qtd').value = pos.quantidade;
       document.getElementById('pos-data').value = pos.data_compra || '';
       document.getElementById('pos-corretora').value = pos.corretora || '';
       if(sel && pos.categoria_id) sel.value = pos.categoria_id;
-    }
-  } else {
-    // Novos ativos: quantidade padrão 100, preço atual do cache se disponível
-    document.getElementById('pos-qtd').value = 100;
-    // Preço atual: tenta buscar do cache de cotações
-    const tickerInput = ticker || '';
-    if(tickerInput){
+    } else {
+      // Novo ativo com ticker pré-definido (vindo do Janus, Setores, Dividendos)
+      document.getElementById('pos-qtd').value = 100;
+      // Busca preço atual no cache de cotações
       let precoAtual = null;
       for(const s of Object.values(DADOS.setores||{})){
-        const e = s.empresas?.find(e=>e.ticker===tickerInput.toUpperCase());
+        const e = s.empresas?.find(e=>e.ticker===ticker.toUpperCase());
         if(e?.preco){ precoAtual = e.preco; break; }
       }
+      // Fallback: tenta no cache de histórico
+      if(!precoAtual){
+        const jiItem = (_janusRanking||[]).find(j=>j.ticker===ticker);
+        if(jiItem?.preco) precoAtual = jiItem.preco;
+      }
       if(precoAtual) document.getElementById('pos-preco').value = precoAtual.toFixed(2);
+      // Se não achou no cache, busca na API
+      if(!precoAtual){
+        fetch(`/api/detalhe/${ticker}`)
+          .then(r=>r.json())
+          .then(d=>{ if(d.preco) document.getElementById('pos-preco').value = d.preco.toFixed(2); })
+          .catch(()=>{});
+      }
     }
+  } else {
+    // Modal aberto sem ticker — quantidade padrão 100
+    document.getElementById('pos-qtd').value = 100;
   }
   document.getElementById('pos-modal').classList.add('open');
   setTimeout(()=> document.getElementById('pos-ticker').focus(), 100);
