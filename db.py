@@ -725,3 +725,157 @@ def db_mover_ativo_categoria(uid, ticker, categoria_id):
     except Exception as e:
         print(f"[DB] Erro mover ativo: {e}", flush=True)
         return False
+
+# ── DIVIDEND PROFILE ──────────────────────────────────────────
+def db_init_dividend_tables(conn):
+    """Cria tabelas de dividendos se não existirem."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS dividend_profile (
+                id SERIAL PRIMARY KEY,
+                asset_id INTEGER REFERENCES assets(asset_id) ON DELETE CASCADE,
+                ticker TEXT NOT NULL,
+                reference_date TEXT NOT NULL,
+                -- Dados básicos
+                last_dividend_date TEXT,
+                last_dividend_value NUMERIC,
+                dividend_yield_12m NUMERIC,
+                dividend_yield_5y NUMERIC,
+                trailing_annual_rate NUMERIC,
+                payout_ratio NUMERIC,
+                -- Dados calculados pelo Janus
+                payments_per_year INTEGER,
+                years_paying INTEGER,
+                growing_dividends BOOLEAN,
+                dividend_consistency NUMERIC,  -- % de períodos que pagou (0-100)
+                average_yield NUMERIC,
+                -- Janus Dividend Score
+                janus_dividend_score NUMERIC,
+                score_yield NUMERIC,
+                score_growth NUMERIC,
+                score_consistency NUMERIC,
+                score_payout NUMERIC,
+                score_coverage NUMERIC,
+                -- Controle
+                created_at TEXT,
+                updated_at TEXT,
+                UNIQUE(asset_id, reference_date)
+            );
+
+            CREATE TABLE IF NOT EXISTS dividend_history (
+                id SERIAL PRIMARY KEY,
+                asset_id INTEGER REFERENCES assets(asset_id) ON DELETE CASCADE,
+                ticker TEXT NOT NULL,
+                payment_date TEXT,
+                ex_date TEXT,
+                value NUMERIC,
+                dividend_type TEXT DEFAULT 'DIVIDENDO',
+                created_at TEXT,
+                UNIQUE(asset_id, ex_date)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_dividend_profile_asset ON dividend_profile(asset_id);
+            CREATE INDEX IF NOT EXISTS idx_dividend_history_asset ON dividend_history(asset_id);
+            CREATE INDEX IF NOT EXISTS idx_dividend_history_date ON dividend_history(payment_date);
+        """)
+    conn.commit()
+
+def db_salvar_dividend_profile(conn, asset_id, ticker, data):
+    """Salva ou atualiza o perfil de dividendos de um ativo."""
+    from datetime import datetime, timezone, timedelta
+    ref = datetime.now(timezone(timedelta(hours=-3))).strftime("%Y-%m-%d")
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO dividend_profile (
+                asset_id, ticker, reference_date,
+                last_dividend_date, last_dividend_value,
+                dividend_yield_12m, dividend_yield_5y, trailing_annual_rate,
+                payout_ratio, payments_per_year, years_paying,
+                growing_dividends, dividend_consistency, average_yield,
+                janus_dividend_score, score_yield, score_growth,
+                score_consistency, score_payout, score_coverage,
+                created_at, updated_at
+            ) VALUES (
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+            )
+            ON CONFLICT (asset_id, reference_date) DO UPDATE SET
+                last_dividend_date=EXCLUDED.last_dividend_date,
+                last_dividend_value=EXCLUDED.last_dividend_value,
+                dividend_yield_12m=EXCLUDED.dividend_yield_12m,
+                dividend_yield_5y=EXCLUDED.dividend_yield_5y,
+                trailing_annual_rate=EXCLUDED.trailing_annual_rate,
+                payout_ratio=EXCLUDED.payout_ratio,
+                payments_per_year=EXCLUDED.payments_per_year,
+                years_paying=EXCLUDED.years_paying,
+                growing_dividends=EXCLUDED.growing_dividends,
+                dividend_consistency=EXCLUDED.dividend_consistency,
+                average_yield=EXCLUDED.average_yield,
+                janus_dividend_score=EXCLUDED.janus_dividend_score,
+                score_yield=EXCLUDED.score_yield,
+                score_growth=EXCLUDED.score_growth,
+                score_consistency=EXCLUDED.score_consistency,
+                score_payout=EXCLUDED.score_payout,
+                score_coverage=EXCLUDED.score_coverage,
+                updated_at=EXCLUDED.updated_at
+        """, (
+            asset_id, ticker, ref,
+            data.get("last_dividend_date"), data.get("last_dividend_value"),
+            data.get("dividend_yield_12m"), data.get("dividend_yield_5y"),
+            data.get("trailing_annual_rate"), data.get("payout_ratio"),
+            data.get("payments_per_year"), data.get("years_paying"),
+            data.get("growing_dividends"), data.get("dividend_consistency"),
+            data.get("average_yield"), data.get("janus_dividend_score"),
+            data.get("score_yield"), data.get("score_growth"),
+            data.get("score_consistency"), data.get("score_payout"),
+            data.get("score_coverage"), now, now
+        ))
+    conn.commit()
+
+def db_salvar_dividend_history(conn, asset_id, ticker, pagamentos):
+    """Salva histórico de pagamentos de dividendos."""
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    with conn.cursor() as cur:
+        for pag in pagamentos:
+            try:
+                cur.execute("""
+                    INSERT INTO dividend_history
+                        (asset_id, ticker, payment_date, ex_date, value, dividend_type, created_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (asset_id, ex_date) DO UPDATE SET
+                        value=EXCLUDED.value, payment_date=EXCLUDED.payment_date
+                """, (
+                    asset_id, ticker,
+                    pag.get("paymentDate"), pag.get("exDate") or pag.get("date"),
+                    pag.get("rate") or pag.get("value") or pag.get("amount"),
+                    pag.get("type", "DIVIDENDO"), now
+                ))
+            except Exception:
+                pass
+    conn.commit()
+
+def db_listar_dividend_ranking(limit=50):
+    """Retorna ranking de ativos por Janus Dividend Score."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT dp.*, a.ticker, c.trading_name, c.sector
+                FROM dividend_profile dp
+                JOIN assets a ON a.asset_id = dp.asset_id
+                LEFT JOIN companies c ON c.company_id = a.company_id
+                WHERE dp.janus_dividend_score IS NOT NULL
+                AND dp.reference_date = (
+                    SELECT MAX(reference_date) FROM dividend_profile dp2
+                    WHERE dp2.asset_id = dp.asset_id
+                )
+                ORDER BY dp.janus_dividend_score DESC
+                LIMIT %s
+            """, (limit,))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro dividend ranking: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
