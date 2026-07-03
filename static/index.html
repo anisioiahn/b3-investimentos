@@ -710,6 +710,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <input id="pos-corretora" type="text" placeholder="Ex: XP, Rico, Clear...">
         </div>
       </div>
+      <div class="pos-field-row">
+        <div class="pos-field" style="flex:1">
+          <label>Categoria</label>
+          <select id="pos-categoria" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);width:100%">
+            <option value="">📁 Geral (sem categoria)</option>
+          </select>
+        </div>
+      </div>
       <div id="pos-preview" style="display:none;background:var(--bg);border-radius:8px;padding:10px;font-size:12px;color:var(--text2)"></div>
     </div>
     <div class="pos-modal-footer">
@@ -3023,6 +3031,13 @@ function abrirModalPosicao(ticker=''){
   document.getElementById('pos-preview').style.display = 'none';
   document.getElementById('pos-ticker-results').style.display = 'none';
 
+  // Popular select de categorias
+  const sel = document.getElementById('pos-categoria');
+  if(sel){
+    sel.innerHTML = '<option value="">📁 Geral (sem categoria)</option>'
+      + (_categorias||[]).map(c=>`<option value="${c.id}">${c.icone} ${c.nome}</option>`).join('');
+  }
+
   if(ticker){
     const pos = _carteira.find(p=>p.ticker===ticker);
     if(pos){
@@ -3030,6 +3045,7 @@ function abrirModalPosicao(ticker=''){
       document.getElementById('pos-qtd').value = pos.quantidade;
       document.getElementById('pos-data').value = pos.data_compra || '';
       document.getElementById('pos-corretora').value = pos.corretora || '';
+      if(sel && pos.categoria_id) sel.value = pos.categoria_id;
     }
   }
   document.getElementById('pos-modal').classList.add('open');
@@ -3104,6 +3120,8 @@ async function salvarPosicao(){
   if(!preco || preco <= 0){ alert('Informe o preço médio'); return; }
   if(!qtd || qtd <= 0){ alert('Informe a quantidade'); return; }
   try{
+    const catSel = document.getElementById('pos-categoria');
+    const categoriaId = catSel?.value ? parseInt(catSel.value) : null;
     const r = await fetch('/api/carteira', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
       ticker, preco_medio: preco, quantidade: qtd,
       data_compra: document.getElementById('pos-data').value,
@@ -3115,8 +3133,17 @@ async function salvarPosicao(){
       else alert(`Erro: ${d.erro||'Não foi possível salvar'}`);
       return;
     }
+    // Se tem categoria selecionada, move o ativo para ela
+    if(categoriaId){
+      await fetch(`/api/carteira/${ticker}/categoria`, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({categoria_id: categoriaId})
+      });
+    }
     fecharModalPosicao();
     await carregarCarteira();
+    await carregarCategorias();
     renderCarteira();
   }catch(e){ alert('Erro de conexão ao salvar posição'); }
 }
