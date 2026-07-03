@@ -4235,53 +4235,44 @@ carregarUsuario();
 let _gaugePollingAtivo = null;
 
 function iniciarGaugePolling(){
-  if(_gaugePollingAtivo) return; // já está rodando
+  if(_gaugePollingAtivo) return;
   _gaugePollingAtivo = setInterval(async () => {
     let algumAtivo = false;
 
-    // Verifica Janus Index
+    const atualizarGauge = (titulo, pct, msg, atual, total) => {
+      algumAtivo = true;
+      const gauge      = document.getElementById('gauge-overlay');
+      const gaugeBar   = document.getElementById('gauge-bar');
+      const gaugePct   = document.getElementById('gauge-pct');
+      const gaugeSetor = document.getElementById('gauge-setor');
+      const gaugeCont  = document.getElementById('gauge-contagem');
+      const gaugeTitle = document.querySelector('#gauge-overlay .gauge-titulo span:first-child');
+      if(gauge)      gauge.classList.add('ativo');
+      if(gaugeTitle) gaugeTitle.textContent = titulo;
+      if(gaugeBar)   gaugeBar.style.width   = `${pct}%`;
+      if(gaugePct)   gaugePct.textContent   = `${pct}%`;
+      if(gaugeSetor) gaugeSetor.textContent  = msg || '...';
+      if(gaugeCont)  gaugeCont.textContent   = total ? `${atual}/${total}` : '...';
+    };
+
+    // Janus Index
     try{
-      const rj = await fetch('/api/janus/progresso');
-      const pj = await rj.json();
-      if(pj.rodando){
-        algumAtivo = true;
-        const gauge      = document.getElementById('gauge-overlay');
-        const gaugeBar   = document.getElementById('gauge-bar');
-        const gaugePct   = document.getElementById('gauge-pct');
-        const gaugeSetor = document.getElementById('gauge-setor');
-        const gaugeCont  = document.getElementById('gauge-contagem');
-        const gaugeTitle = document.querySelector('#gauge-overlay .gauge-titulo span:first-child');
-        if(gauge)      gauge.classList.add('ativo');
-        if(gaugeTitle) gaugeTitle.textContent = '🎯 Janus Index — Atualizando';
-        if(gaugeBar)   gaugeBar.style.width   = `${pj.pct}%`;
-        if(gaugePct)   gaugePct.textContent   = `${pj.pct}%`;
-        if(gaugeSetor) gaugeSetor.textContent  = pj.ticker_atual || '...';
-        if(gaugeCont)  gaugeCont.textContent   = `${pj.atual}/${pj.total}`;
-      }
+      const p = await fetch('/api/janus/progresso').then(r=>r.json());
+      if(p.rodando) atualizarGauge('🎯 Janus Index', p.pct, p.ticker_atual, p.atual, p.total);
     }catch(e){}
 
-    // Verifica cotações
+    // Cotações
     try{
-      const rp = await fetch('/api/progresso');
-      const pp = await rp.json();
-      if(pp.atualizando){
-        algumAtivo = true;
-        const gauge      = document.getElementById('gauge-overlay');
-        const gaugeBar   = document.getElementById('gauge-bar');
-        const gaugePct   = document.getElementById('gauge-pct');
-        const gaugeSetor = document.getElementById('gauge-setor');
-        const gaugeCont  = document.getElementById('gauge-contagem');
-        const gaugeTitle = document.querySelector('#gauge-overlay .gauge-titulo span:first-child');
-        if(gauge)      gauge.classList.add('ativo');
-        if(gaugeTitle) gaugeTitle.textContent = '🔄 Atualizando cotações';
-        if(gaugeBar)   gaugeBar.style.width   = `${pp.pct}%`;
-        if(gaugePct)   gaugePct.textContent   = `${pp.pct}%`;
-        if(gaugeSetor) gaugeSetor.textContent  = pp.setor_atual || '...';
-        if(gaugeCont)  gaugeCont.textContent   = `${pp.atual}/${pp.total}`;
-      }
+      const p = await fetch('/api/progresso').then(r=>r.json());
+      if(p.atualizando) atualizarGauge('🔄 Atualizando cotações', p.pct, p.setor_atual, p.atual, p.total);
     }catch(e){}
 
-    // Se nenhum processo ativo, para o polling e esconde gauge
+    // Dividend Engine
+    try{
+      const p = await fetch('/api/dividend/progresso').then(r=>r.json());
+      if(p.rodando) atualizarGauge('💰 Dividend Engine', p.pct, p.msg, p.atual, p.total);
+    }catch(e){}
+
     if(!algumAtivo){
       clearInterval(_gaugePollingAtivo);
       _gaugePollingAtivo = null;
