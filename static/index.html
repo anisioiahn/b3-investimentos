@@ -2628,35 +2628,122 @@ async function moverAtivoCat(ticker, catId){
   renderCarteira();
 }
 
-async function criarCategoria(){
-  const nome = prompt('Nome da nova categoria (ex: DIVIDENDOS, GROWTH):');
-  if(!nome?.trim()) return;
-  const icone = prompt('Ícone (emoji):', '📁') || '📁';
-  const cor = prompt('Cor (hex):', '#0066cc') || '#0066cc';
-  const r = await fetch('/api/carteira/categorias', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({nome: nome.trim(), icone, cor})
+// ── Modal de Categoria ────────────────────────────────────────
+const CAT_ICONES = [
+  '📁','💰','📈','📉','🏦','🌾','⚡','🛢️','🏥','💻','🏗️','🛍️',
+  '🚀','💎','🔒','🌍','🏠','🚗','✈️','🎯','⭐','🔥','💡','📊',
+  '🌱','🐂','🐻','💼','🏆','🎲','🧠','⚖️','🔑','💲','📱','🏭'
+];
+const CAT_CORES = [
+  '#0066cc','#16a34a','#e53935','#f59e0b','#7c3aed','#0891b2',
+  '#db2777','#65a30d','#ea580c','#0d9488','#4f46e5','#dc2626',
+  '#059669','#d97706','#7c3aed','#0284c7','#be123c','#15803d',
+  '#b45309','#0369a1','#6d28d9','#047857','#9a3412','#1d4ed8',
+  '#64748b','#374151','#1e293b','#78350f'
+];
+
+let _catEditandoId = null;
+let _catIconeSelecionado = '📁';
+let _catCorSelecionada = '#0066cc';
+
+function abrirModalCategoria(catId = null){
+  _catEditandoId = catId;
+  const cat = catId ? _categorias.find(c=>c.id===catId) : null;
+
+  // Reset
+  _catIconeSelecionado = cat?.icone || '📁';
+  _catCorSelecionada = cat?.cor || '#0066cc';
+
+  document.getElementById('modal-cat-titulo').textContent = catId ? 'Editar Categoria' : 'Nova Categoria';
+  document.getElementById('cat-btn-salvar').textContent = catId ? 'Salvar Alterações' : 'Criar Categoria';
+  document.getElementById('cat-input-nome').value = cat?.nome || '';
+  document.getElementById('cat-preview-nome').textContent = cat?.nome || 'Nova Categoria';
+  document.getElementById('cat-preview-icone').textContent = _catIconeSelecionado;
+  document.getElementById('cat-preview-cor').style.background = _catCorSelecionada;
+  document.getElementById('cat-preview-cor-txt').textContent = _catCorSelecionada;
+
+  // Renderiza ícones
+  document.getElementById('cat-icones-grid').innerHTML = CAT_ICONES.map(ic => `
+    <button onclick="selecionarIconeCat('${ic}')" id="cat-ic-${ic.codePointAt(0)}"
+      style="width:38px;height:38px;border-radius:8px;border:2px solid ${ic===_catIconeSelecionado?'var(--green)':'var(--border)'};
+      background:${ic===_catIconeSelecionado?'var(--green-light)':'var(--card)'};
+      cursor:pointer;font-size:18px;transition:all .15s">${ic}</button>`).join('');
+
+  // Renderiza cores
+  document.getElementById('cat-cores-grid').innerHTML = CAT_CORES.map(cor => `
+    <button onclick="selecionarCorCat('${cor}')"
+      style="width:28px;height:28px;border-radius:50%;background:${cor};border:3px solid ${cor===_catCorSelecionada?'#fff':'transparent'};
+      outline:${cor===_catCorSelecionada?'2px solid var(--green)':'none'};
+      cursor:pointer;transition:all .15s" title="${cor}"></button>`).join('');
+
+  const modal = document.getElementById('modal-categoria');
+  modal.style.display = 'flex';
+  setTimeout(()=>document.getElementById('cat-input-nome').focus(), 100);
+}
+
+function selecionarIconeCat(ic){
+  _catIconeSelecionado = ic;
+  document.getElementById('cat-preview-icone').textContent = ic;
+  document.querySelectorAll('#cat-icones-grid button').forEach(b=>{
+    const sel = b.textContent === ic;
+    b.style.border = `2px solid ${sel?'var(--green)':'var(--border)'}`;
+    b.style.background = sel ? 'var(--green-light)' : 'var(--card)';
   });
-  const d = await r.json();
-  if(d.ok){ await carregarCategorias(); renderCarteira(); }
-  else alert(d.erro || 'Erro ao criar categoria');
+}
+
+function selecionarCorCat(cor){
+  _catCorSelecionada = cor;
+  document.getElementById('cat-preview-cor').style.background = cor;
+  document.getElementById('cat-preview-cor-txt').textContent = cor;
+  document.querySelectorAll('#cat-cores-grid button').forEach(b=>{
+    const sel = b.style.background === cor || b.title === cor;
+    b.style.border = `3px solid ${sel?'#fff':'transparent'}`;
+    b.style.outline = sel ? '2px solid var(--green)' : 'none';
+  });
+}
+
+function fecharModalCategoria(){
+  document.getElementById('modal-categoria').style.display = 'none';
+}
+
+async function salvarCategoria(){
+  const nome = document.getElementById('cat-input-nome').value.trim();
+  if(!nome){ alert('Informe um nome para a categoria'); return; }
+
+  const btn = document.getElementById('cat-btn-salvar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+
+  try{
+    if(_catEditandoId){
+      await fetch(`/api/carteira/categorias/${_catEditandoId}`, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({nome, cor: _catCorSelecionada, icone: _catIconeSelecionado})
+      });
+    } else {
+      const r = await fetch('/api/carteira/categorias', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({nome, cor: _catCorSelecionada, icone: _catIconeSelecionado})
+      });
+      const d = await r.json();
+      if(!r.ok){ alert(d.erro || 'Erro ao criar'); return; }
+    }
+    fecharModalCategoria();
+    await carregarCategorias();
+    renderCarteira();
+  }finally{
+    btn.disabled = false;
+    btn.textContent = _catEditandoId ? 'Salvar Alterações' : 'Criar Categoria';
+  }
+}
+
+async function criarCategoria(){
+  abrirModalCategoria(null);
 }
 
 async function editarCategoria(catId){
-  const cat = _categorias.find(c=>c.id===catId);
-  if(!cat) return;
-  const nome = prompt('Nome:', cat.nome);
-  if(!nome?.trim()) return;
-  const icone = prompt('Ícone:', cat.icone) || cat.icone;
-  const cor = prompt('Cor (hex):', cat.cor) || cat.cor;
-  await fetch(`/api/carteira/categorias/${catId}`, {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({nome: nome.trim(), icone, cor})
-  });
-  await carregarCategorias();
-  renderCarteira();
+  abrirModalCategoria(catId);
 }
 
 async function excluirCategoria(catId){
@@ -3667,6 +3754,54 @@ const _pollDados=setInterval(async()=>{
     <div class="gauge-bar-fill" id="gauge-bar" style="width:0%"></div>
   </div>
   <div class="gauge-pct" id="gauge-pct">0%</div>
+</div>
+
+<!-- MODAL CRIAÇÃO/EDIÇÃO DE CATEGORIA -->
+<div id="modal-categoria" style="display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center" onclick="if(event.target===this)fecharModalCategoria()">
+  <div style="background:var(--card);border-radius:16px;padding:1.5rem;width:100%;max-width:480px;box-shadow:0 16px 48px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+      <div style="font-size:15px;font-weight:700" id="modal-cat-titulo">Nova Categoria</div>
+      <button onclick="fecharModalCategoria()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3)">✕</button>
+    </div>
+
+    <!-- Preview -->
+    <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:1.25rem">
+      <div id="cat-preview-icone" style="font-size:28px">📁</div>
+      <div>
+        <div id="cat-preview-nome" style="font-size:14px;font-weight:700;color:var(--text)">Nova Categoria</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+          <div id="cat-preview-cor" style="width:16px;height:16px;border-radius:4px;background:#0066cc"></div>
+          <span id="cat-preview-cor-txt" style="font-size:11px;color:var(--text3)">#0066cc</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nome -->
+    <div style="margin-bottom:1rem">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Nome da categoria</label>
+      <input type="text" id="cat-input-nome" placeholder="Ex: DIVIDENDOS, GROWTH, AGRO..."
+        oninput="document.getElementById('cat-preview-nome').textContent=this.value||'Nova Categoria'"
+        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--card);color:var(--text);box-sizing:border-box;outline:none">
+    </div>
+
+    <!-- Ícones -->
+    <div style="margin-bottom:1rem">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:8px">Ícone</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="cat-icones-grid"></div>
+    </div>
+
+    <!-- Cores -->
+    <div style="margin-bottom:1.5rem">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:8px">Cor</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px" id="cat-cores-grid"></div>
+    </div>
+
+    <!-- Botões -->
+    <div style="display:flex;gap:8px">
+      <button onclick="fecharModalCategoria()" class="btn" style="flex:1;padding:10px">Cancelar</button>
+      <button onclick="salvarCategoria()" class="btn" style="flex:2;padding:10px;background:var(--green);color:#fff;border-color:var(--green);font-weight:700" id="cat-btn-salvar">Criar Categoria</button>
+    </div>
+  </div>
 </div>
 
 </body>
