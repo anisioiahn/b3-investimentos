@@ -137,7 +137,7 @@ def init_db():
     -- Inserir planos padrão se não existirem
     INSERT INTO planos (nome, preco_mensal, preco_anual, desconto_anual_pct, max_alertas, max_carteira, descricao, atualizado_em)
     VALUES
-        ('free', 0, 0, 0, 5, 5, 'Plano gratuito', NOW()::TEXT),
+        ('free', 0, 0, 0, -1, -1, 'Plano gratuito', NOW()::TEXT),
         ('pro', 29.90, 299.00, 17, -1, -1, 'Plano Profissional - recursos ilimitados', NOW()::TEXT)
     ON CONFLICT (nome) DO NOTHING;
 
@@ -158,8 +158,17 @@ def init_db():
         conn.commit(); conn.close()
         print("[DB] Tabelas v3.0 criadas/verificadas", flush=True)
 
-        # Migration segura para bancos já existentes
+        # Migration: remove limites do plano free
         try:
+            conn = get_conn()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE planos SET max_alertas=-1, max_carteira=-1
+                    WHERE nome='free'
+                """)
+            conn.commit(); conn.close()
+        except Exception as e:
+            print(f"[DB] Aviso migration plano free: {e}", flush=True)
             conn = get_conn()
             with conn.cursor() as cur:
                 cur.execute("""
