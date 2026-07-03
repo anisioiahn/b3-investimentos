@@ -17,6 +17,8 @@ import psycopg2, psycopg2.extras
 
 TOKEN_BRAPI = os.getenv("BRAPI_TOKEN", "")
 BRAPI_BASE  = "https://brapi.dev/api"
+LOTE        = 20   # 20 tickers por chamada (dividendos são mais leves que fundamentalistas)
+DELAY       = 0.3  # delay entre lotes
 
 TZ_BR = timezone(timedelta(hours=-3))
 def agora(): return datetime.now(TZ_BR)
@@ -33,7 +35,7 @@ def get_conn():
 
 # ── Busca dados de dividendos na Brapi ───────────────────────
 def buscar_dividendos_lote(tickers):
-    """Busca dividendos de até 10 tickers por chamada."""
+    """Busca dividendos de até 20 tickers por chamada."""
     joined = ",".join(tickers)
     url = f"{BRAPI_BASE}/quote/{joined}?modules=defaultKeyStatistics&dividends=true&token={TOKEN_BRAPI}"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -266,8 +268,7 @@ def run_dividend_collector(on_progress=None):
         erros = 0
         com_score = 0
 
-        # Processa em lotes de 10
-        LOTE = 10
+        # Processa em lotes
         total_lotes = (total + LOTE - 1) // LOTE
 
         for i in range(0, total, LOTE):
@@ -277,7 +278,7 @@ def run_dividend_collector(on_progress=None):
             pct = round(i / total * 100)
             prog(pct, i, total, f"Lote {lote_num}/{total_lotes}: {', '.join(lote_tickers[:5])}...")
 
-            time.sleep(0.5)
+            time.sleep(DELAY)
             dados_lote = buscar_dividendos_lote(lote_tickers)
 
             for ativo in lote:
