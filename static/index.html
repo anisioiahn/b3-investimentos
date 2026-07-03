@@ -2038,6 +2038,7 @@ async function carregarUsuario(){
     const el = document.getElementById('user-nome');
     if(el) el.textContent = d.nome || d.email;
     // Carteira é a aba inicial — carrega após autenticação confirmada
+    await carregarCategorias();
     await carregarCarteira();
   }catch(e){}
 }
@@ -2354,10 +2355,320 @@ function atualizarPrecosCarteira(){
   });
 }
 
+// ── CATEGORIAS DE CARTEIRA ───────────────────────────────────
+let _categorias = [];
+let _categoriaAtiva = null; // null = visão geral, id = visão da categoria
+
+async function carregarCategorias(){
+  try{
+    const r = await fetch('/api/carteira/categorias');
+    _categorias = await r.json();
+  }catch(e){ _categorias = []; }
+}
+
 function renderCarteira(){
-  renderResumoCarteira();
   renderPendentesCarteira();
-  renderTabelaCarteira();
+  if(_categoriaAtiva !== null){
+    renderCarteiraPorCategoria(_categoriaAtiva);
+  } else {
+    renderCarteiraCategorias();
+  }
+}
+
+function renderCarteiraCategorias(){
+  const el = document.getElementById('carteira-tabela');
+  const confirmadas = (_carteira||[]).filter(p=>p.status==='confirmada');
+
+  // Agrupa por categoria
+  const grupos = {};
+  // Categoria Geral (sem categoria)
+  grupos['geral'] = {
+    id: null, nome: 'Geral', cor: '#64748b', icone: '📁',
+    ativos: confirmadas.filter(p=>!p.categoria_id)
+  };
+  _categorias.forEach(cat => {
+    grupos[cat.id] = {
+      id: cat.id, nome: cat.nome, cor: cat.cor, icone: cat.icone,
+      ativos: confirmadas.filter(p=>p.categoria_id===cat.id)
+    };
+  });
+
+  const totalInvestido = confirmadas.reduce((s,p)=>s+(p.valor_investido||0),0);
+  const totalAtual = confirmadas.reduce((s,p)=>s+(p.valor_atual||p.valor_investido||0),0);
+  const lucroTotal = totalAtual - totalInvestido;
+  const lucroClass = lucroTotal>0?'lucro-pos':lucroTotal<0?'lucro-neg':'';
+
+  // Resumo geral
+  document.getElementById('carteira-resumo').innerHTML = `
+    <div class="resumo-card">
+      <div class="resumo-label">Total Investido</div>
+      <div class="resumo-valor">R$ ${fmt(totalInvestido)}</div>
+      <div class="resumo-sub" style="color:var(--text3)">${confirmadas.length} ativo(s)</div>
+    </div>
+    <div class="resumo-card">
+      <div class="resumo-label">Valor Atual</div>
+      <div class="resumo-valor">R$ ${fmt(totalAtual)}</div>
+    </div>
+    <div class="resumo-card">
+      <div class="resumo-label">Resultado</div>
+      <div class="resumo-valor ${lucroClass}">${lucroTotal>=0?'+':''}R$ ${fmt(lucroTotal)}</div>
+      <div class="resumo-sub ${lucroClass}">${totalInvestido>0?(lucroTotal/totalInvestido*100).toFixed(2)+'%':''}</div>
+    </div>`;
+
+  if(!confirmadas.length){
+    el.innerHTML = `<div class="carteira-empty">
+      <div style="font-size:40px;margin-bottom:12px">💼</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px">Carteira vazia</div>
+      <div style="font-size:13px">Clique em "+ Adicionar posição" para começar</div>
+    </div>`;
+    return;
+  }
+
+  // Gráfico de pizza + cards de categoria
+  const gruposArray = Object.values(grupos).filter(g=>g.ativos.length>0);
+
+  let pizzaHtml = '';
+  if(gruposArray.length > 1){
+    const segmentos = gruposArray.map(g=>{
+      const val = g.ativos.reduce((s,p)=>s+(p.valor_atual||p.valor_investido||0),0);
+      return {nome:g.nome, cor:g.cor, valor:val, pct: totalAtual>0?val/totalAtual*100:0};
+    });
+    pizzaHtml = `<div style="margin-bottom:1.5rem">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)">📊 Distribuição por Categoria</div>
+      <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+        <svg width="120" height="120" viewBox="0 0 120 120">${_gerarPizza(segmentos)}</svg>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${segmentos.map(s=>`
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+              <div style="width:12px;height:12px;border-radius:3px;background:${s.cor};flex-shrink:0"></div>
+              <span style="color:var(--text2)">${s.nome}</span>
+              <span style="font-weight:700;color:var(--text)">${s.pct.toFixed(1)}%</span>
+              <span style="color:var(--text3)">R$ ${fmt(s.valor)}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Cards de categoria
+  const cardsHtml = gruposArray.map(g=>{
+    const vi = g.ativos.reduce((s,p)=>s+(p.valor_investido||0),0);
+    const va = g.ativos.reduce((s,p)=>s+(p.valor_atual||p.valor_investido||0),0);
+    const lucro = va - vi;
+    const pctPart = totalAtual>0?(va/totalAtual*100).toFixed(1):'0.0';
+    const lucroClass = lucro>0?'lucro-pos':lucro<0?'lucro-neg':'';
+    return `<div onclick="abrirCategoria(${g.id===null?'null':g.id})"
+      style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1rem;cursor:pointer;transition:all .15s;border-left:4px solid ${g.cor}"
+      onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px">${g.icone}</span>
+          <span style="font-size:14px;font-weight:700;color:var(--text)">${g.nome}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${g.id!==null?`<button onclick="event.stopPropagation();editarCategoria(${g.id})" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text3)" title="Editar">✏️</button>
+          <button onclick="event.stopPropagation();excluirCategoria(${g.id})" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text3)" title="Excluir">🗑</button>`:''}
+          <span style="font-size:11px;color:var(--text3)">${g.ativos.length} ativo(s)</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap">
+        <div><div style="font-size:10px;color:var(--text3)">Investido</div><div style="font-size:13px;font-weight:700">R$ ${fmt(vi)}</div></div>
+        <div><div style="font-size:10px;color:var(--text3)">Atual</div><div style="font-size:13px;font-weight:700">R$ ${fmt(va)}</div></div>
+        <div><div style="font-size:10px;color:var(--text3)">Resultado</div><div class="${lucroClass}" style="font-size:13px;font-weight:700">${lucro>=0?'+':''}R$ ${fmt(lucro)}</div></div>
+        <div><div style="font-size:10px;color:var(--text3)">Participação</div><div style="font-size:13px;font-weight:700">${pctPart}%</div></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = pizzaHtml + `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:var(--text)">📂 Categorias</div>
+      <button onclick="criarCategoria()" class="btn" style="font-size:12px;padding:6px 12px">+ Nova categoria</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">${cardsHtml}</div>`;
+}
+
+function _gerarPizza(segmentos){
+  const total = segmentos.reduce((s,g)=>s+g.valor,0);
+  if(!total) return '';
+  let angulo = -90;
+  const cx=60, cy=60, r=50;
+  return segmentos.map(s=>{
+    const pct = s.valor/total;
+    const ang = pct * 360;
+    const rad1 = angulo * Math.PI/180;
+    const rad2 = (angulo+ang) * Math.PI/180;
+    const x1 = cx + r*Math.cos(rad1);
+    const y1 = cy + r*Math.sin(rad1);
+    const x2 = cx + r*Math.cos(rad2);
+    const y2 = cy + r*Math.sin(rad2);
+    const large = ang > 180 ? 1 : 0;
+    const path = `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z`;
+    angulo += ang;
+    return `<path d="${path}" fill="${s.cor}" stroke="#fff" stroke-width="1.5"/>`;
+  }).join('');
+}
+
+function abrirCategoria(catId){
+  _categoriaAtiva = catId;
+  renderCarteiraPorCategoria(catId);
+}
+
+function voltarCategorias(){
+  _categoriaAtiva = null;
+  renderCarteiraCategorias();
+}
+
+function renderCarteiraPorCategoria(catId){
+  const el = document.getElementById('carteira-tabela');
+  const confirmadas = (_carteira||[]).filter(p=>p.status==='confirmada');
+  const cat = catId===null
+    ? {nome:'Geral', cor:'#64748b', icone:'📁'}
+    : _categorias.find(c=>c.id===catId) || {nome:'Geral', cor:'#64748b', icone:'📁'};
+  const ativos = catId===null
+    ? confirmadas.filter(p=>!p.categoria_id)
+    : confirmadas.filter(p=>p.categoria_id===catId);
+
+  const vi = ativos.reduce((s,p)=>s+(p.valor_investido||0),0);
+  const va = ativos.reduce((s,p)=>s+(p.valor_atual||p.valor_investido||0),0);
+  const lucro = va - vi;
+  const lucroClass = lucro>0?'lucro-pos':lucro<0?'lucro-neg':'';
+
+  document.getElementById('carteira-resumo').innerHTML = `
+    <div class="resumo-card">
+      <div class="resumo-label">Total Investido</div>
+      <div class="resumo-valor">R$ ${fmt(vi)}</div>
+      <div class="resumo-sub" style="color:var(--text3)">${ativos.length} ativo(s)</div>
+    </div>
+    <div class="resumo-card">
+      <div class="resumo-label">Valor Atual</div>
+      <div class="resumo-valor">R$ ${fmt(va)}</div>
+    </div>
+    <div class="resumo-card">
+      <div class="resumo-label">Resultado</div>
+      <div class="resumo-valor ${lucroClass}">${lucro>=0?'+':''}R$ ${fmt(lucro)}</div>
+      <div class="resumo-sub ${lucroClass}">${vi>0?(lucro/vi*100).toFixed(2)+'%':''}</div>
+    </div>`;
+
+  const ordenada = [...ativos].sort((a,b)=>(b.valor_atual||b.valor_investido)-(a.valor_atual||a.valor_investido));
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <button onclick="voltarCategorias()" class="back-btn" style="position:static;margin:0">← Voltar</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">${cat.icone}</span>
+        <span style="font-size:15px;font-weight:700;color:var(--text)">${cat.nome}</span>
+      </div>
+      <div></div>
+    </div>
+    ${_renderTabelaAtivos(ordenada, catId)}`;
+}
+
+function _renderTabelaAtivos(ativos, catId){
+  if(!ativos.length) return `<div class="carteira-empty" style="padding:2rem">
+    <div style="font-size:32px;margin-bottom:8px">📭</div>
+    <div style="font-size:14px">Nenhum ativo nesta categoria</div>
+  </div>`;
+
+  return `<table class="ct-table"><thead><tr>
+    <th>Ativo</th><th class="num">Qtd</th><th class="num">P. Médio</th>
+    <th class="num">Cotação</th><th class="num">Investido</th><th class="num">Atual</th>
+    <th class="num">Resultado</th><th></th>
+  </tr></thead><tbody>
+  ${ativos.map(p=>{
+    const lucro = p.lucro||0;
+    const cls = lucro>0?'lucro-pos':lucro<0?'lucro-neg':'';
+    const logoHtml = p.logo ? `<img src="${p.logo}" onerror="this.style.display='none';this.parentElement.style.background='${p.cor}';this.parentElement.textContent='${p.ticker.substring(0,4)}'">`
+      : `<img src="https://icons.brapi.dev/icons/${p.ticker}.svg" style="width:100%;height:100%;object-fit:cover;border-radius:8px"
+          onerror="this.style.display='none';this.parentElement.style.background='${p.cor}';this.parentElement.textContent='${p.ticker.substring(0,4)}'">`;
+    const catOpts = [
+      `<option value="">Geral</option>`,
+      ..._categorias.map(c=>`<option value="${c.id}" ${p.categoria_id===c.id?'selected':''}>${c.icone} ${c.nome}</option>`)
+    ].join('');
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <div class="ct-logo" style="background:${p.cor};overflow:hidden">${logoHtml}</div>
+        <div><div class="ct-ticker">${p.ticker}</div><div class="ct-nome">${p.nome}</div></div>
+      </div></td>
+      <td class="num">${p.quantidade}</td>
+      <td class="num">R$ ${fmt(p.preco_medio)}</td>
+      <td class="num">${p.preco_atual?`R$ ${fmt(p.preco_atual)}`:'—'}</td>
+      <td class="num">R$ ${fmt(p.valor_investido)}</td>
+      <td class="num">${p.valor_atual?`R$ ${fmt(p.valor_atual)}`:'—'}</td>
+      <td class="num ${cls}">${lucro>=0?'+':''}R$ ${fmt(lucro)}<br><span style="font-size:10px">${p.lucro_pct!=null?(p.lucro_pct>=0?'+':'')+p.lucro_pct.toFixed(2)+'%':''}</span></td>
+      <td><div style="display:flex;gap:4px;justify-content:flex-end">
+        <select onchange="moverAtivoCat('${p.ticker}',this.value)" title="Mover para categoria"
+          style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);cursor:pointer">
+          ${catOpts}
+        </select>
+        <button class="ct-edit" onclick="abrirGrafico('${p.ticker}')" title="Ver análise">📊</button>
+        <button class="ct-edit" onclick="editarPosicao('${p.ticker}')" title="Editar">✏️</button>
+        <button class="ct-del" onclick="removerPosicao('${p.ticker}')" title="Remover">🗑</button>
+      </div></td>
+    </tr>`;
+  }).join('')}
+  </tbody></table>`;
+}
+
+async function moverAtivoCat(ticker, catId){
+  await fetch(`/api/carteira/${ticker}/categoria`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({categoria_id: catId ? parseInt(catId) : null})
+  });
+  await carregarCarteira();
+  await carregarCategorias();
+  renderCarteira();
+}
+
+async function criarCategoria(){
+  const nome = prompt('Nome da nova categoria (ex: DIVIDENDOS, GROWTH):');
+  if(!nome?.trim()) return;
+  const icone = prompt('Ícone (emoji):', '📁') || '📁';
+  const cor = prompt('Cor (hex):', '#0066cc') || '#0066cc';
+  const r = await fetch('/api/carteira/categorias', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({nome: nome.trim(), icone, cor})
+  });
+  const d = await r.json();
+  if(d.ok){ await carregarCategorias(); renderCarteira(); }
+  else alert(d.erro || 'Erro ao criar categoria');
+}
+
+async function editarCategoria(catId){
+  const cat = _categorias.find(c=>c.id===catId);
+  if(!cat) return;
+  const nome = prompt('Nome:', cat.nome);
+  if(!nome?.trim()) return;
+  const icone = prompt('Ícone:', cat.icone) || cat.icone;
+  const cor = prompt('Cor (hex):', cat.cor) || cat.cor;
+  await fetch(`/api/carteira/categorias/${catId}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({nome: nome.trim(), icone, cor})
+  });
+  await carregarCategorias();
+  renderCarteira();
+}
+
+async function excluirCategoria(catId){
+  const cat = _categorias.find(c=>c.id===catId);
+  if(!confirm(`Excluir categoria "${cat?.nome}"? Os ativos serão movidos para Geral.`)) return;
+  await fetch(`/api/carteira/categorias/${catId}`, {method:'DELETE'});
+  if(_categoriaAtiva === catId) _categoriaAtiva = null;
+  await carregarCategorias();
+  await carregarCarteira();
+  renderCarteira();
+}
+
+function renderCarteira(){
+  renderPendentesCarteira();
+  if(_categoriaAtiva !== null && _categoriaAtiva !== undefined){
+    renderCarteiraPorCategoria(_categoriaAtiva);
+  } else {
+    renderCarteiraCategorias();
+  }
 }
 
 function renderPendentesCarteira(){
