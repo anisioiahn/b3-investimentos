@@ -608,10 +608,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <div class="cockpit-card-title">🌡️ Termômetro do Mercado</div>
           <div id="cockpit-heatmap"></div>
         </div>
-        <!-- Módulo 2: Top Oportunidades -->
-        <div class="cockpit-card">
-          <div class="cockpit-card-title">⭐ Top 5 Oportunidades</div>
-          <div id="cockpit-oportunidades"></div>
+        <!-- Módulo 2: Top Oportunidades + Top Dividendos -->
+        <div style="display:flex;flex-direction:column;gap:1rem">
+          <div class="cockpit-card">
+            <div class="cockpit-card-title">⭐ Top 5 Oportunidades</div>
+            <div id="cockpit-oportunidades"></div>
+          </div>
+          <div class="cockpit-card">
+            <div class="cockpit-card-title">💰 Top 5 Dividendos</div>
+            <div id="cockpit-dividendos"></div>
+          </div>
         </div>
         <!-- Módulo 3: Evolução da Carteira -->
         <div class="cockpit-card">
@@ -1548,6 +1554,7 @@ function renderCockpit(){
   _renderCockpitSaudacao();
   _renderCockpitHeatmap();
   _renderCockpitOportunidades();
+  _renderCockpitDividendos();
   _renderCockpitCarteira();
 }
 
@@ -1634,6 +1641,48 @@ function _renderCockpitOportunidades(){
   + (ultimaAtt ? `<div style="margin-top:10px;font-size:10px;color:var(--text3);text-align:right">🕐 Atualizado em ${ultimaAtt}</div>` : '');
 }
 
+function _renderCockpitDividendos(){
+  const el = document.getElementById('cockpit-dividendos');
+  if(!el) return;
+
+  if(!_dividendRanking?.length){
+    el.innerHTML = '<div class="cockpit-empty">Execute o Dividend Engine para ver os melhores pagadores</div>';
+    return;
+  }
+
+  const top5 = [..._dividendRanking]
+    .filter(d => d.janus_dividend_score != null && d.dividend_yield_12m != null)
+    .sort((a,b) => parseFloat(b.janus_dividend_score) - parseFloat(a.janus_dividend_score))
+    .slice(0, 5);
+
+  if(!top5.length){
+    el.innerHTML = '<div class="cockpit-empty">Nenhum ativo com score de dividendos calculado</div>';
+    return;
+  }
+
+  const ultimaAtt = top5[0]?.reference_date
+    ? new Date(top5[0].reference_date).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'})
+    : null;
+
+  el.innerHTML = top5.map((d,i)=>{
+    const score = parseFloat(d.janus_dividend_score);
+    const dy    = d.dividend_yield_12m != null ? (parseFloat(d.dividend_yield_12m)*100).toFixed(1)+'%' : '—';
+    const anos  = d.years_paying ? `${d.years_paying}a` : '—';
+    const grow  = d.growing_dividends ? '📈' : '';
+    const slug  = divScoreSlug(score);
+    return `<div class="ck-op-row" onclick="abrirGrafico('${d.ticker}')">
+      <span class="ck-op-pos">${i+1}º</span>
+      <div class="ji-logo" style="background:#16a34a;width:28px;height:28px;flex-shrink:0">${ji_logoHtml(d.ticker)}</div>
+      <div class="ck-op-info">
+        <div class="ck-op-ticker">${d.ticker} ${grow}</div>
+        <div class="ck-op-empresa">DY ${dy} · ${anos} pagando</div>
+      </div>
+      <span class="div-score-badge div-score-${slug}" style="font-size:11px">${score.toFixed(1)}</span>
+    </div>`;
+  }).join('')
+  + (ultimaAtt ? `<div style="margin-top:10px;font-size:10px;color:var(--text3);text-align:right">🕐 Atualizado em ${ultimaAtt}</div>` : '');
+}
+
 function _renderCockpitCarteira(){
   const el = document.getElementById('cockpit-carteira');
   const confirmadas = (_carteira||[]).filter(p=>p.status==='confirmada');
@@ -1689,10 +1738,17 @@ function _renderCockpitCarteira(){
 let _dividendRanking = [];
 let _dividendGaugeAtivo = false;
 
-async function carregarDividendos(){
+async function carregarDividendosRanking(){
   try{
     const r = await fetch('/api/dividend/ranking?limit=500');
     _dividendRanking = await r.json();
+    if(_paginaAtiva === 'cockpit') _renderCockpitDividendos();
+  }catch(e){ _dividendRanking = []; }
+}
+
+async function carregarDividendos(){
+  try{
+    await carregarDividendosRanking();
     renderDividendRanking(_dividendRanking);
     // Status
     const r2 = await fetch('/api/dividend/progresso');
@@ -2542,6 +2598,7 @@ async function carregarUsuario(){
     await carregarCategorias();
     await carregarCarteira();
     await carregarJanusRanking();
+    await carregarDividendosRanking();
     renderCockpit();
   }catch(e){}
 }
