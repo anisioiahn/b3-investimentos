@@ -1564,6 +1564,11 @@ function _renderCockpitOportunidades(){
     .sort((a,b)=>b.score-a.score)
     .slice(0,5);
 
+  // Data da última atualização
+  const ultimaAtt = _janusRanking[0]?.reference_date
+    ? new Date(_janusRanking[0].reference_date).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'})
+    : null;
+
   el.innerHTML = top5.map((item,i)=>{
     const slug = ji_classSlug(janusClassificacaoPorScore(item.score));
     return `<div class="ck-op-row" onclick="abrirGrafico('${item.ticker}')">
@@ -1575,7 +1580,8 @@ function _renderCockpitOportunidades(){
       </div>
       <span class="ji-score-badge ji-score-${slug}" style="font-size:11px;padding:2px 8px">${item.score.toFixed(1)}</span>
     </div>`;
-  }).join('');
+  }).join('')
+  + (ultimaAtt ? `<div style="margin-top:10px;font-size:10px;color:var(--text3);text-align:right">🕐 Atualizado em ${ultimaAtt}</div>` : '');
 }
 
 function _renderCockpitCarteira(){
@@ -2243,6 +2249,7 @@ async function carregarUsuario(){
     // Cockpit é a tela inicial
     await carregarCategorias();
     await carregarCarteira();
+    await carregarJanusRanking();
     renderCockpit();
   }catch(e){}
 }
@@ -3542,6 +3549,8 @@ async function carregarJanusRanking(){
     }));
     renderJanusMiniRankings();
     renderJanusTabela();
+    // Atualiza cockpit se estiver ativo
+    if(_paginaAtiva === 'cockpit') _renderCockpitOportunidades();
   }catch(e){}
 }
 
