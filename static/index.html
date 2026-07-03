@@ -283,6 +283,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .ct-logo img{width:100%;height:100%;object-fit:cover;border-radius:8px}
 .ct-ticker{font-size:13px;font-weight:700}
 .ct-nome{font-size:11px;color:var(--text2)}
+.ct-table{width:100%;border-collapse:collapse;font-size:12px}
+.ct-table thead th{font-size:11px;font-weight:600;color:var(--text2);padding:6px 8px;border-bottom:2px solid var(--border);text-align:right;white-space:nowrap}
+.ct-table thead th:first-child{text-align:left}
+.ct-table tbody td{padding:8px 8px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle;text-align:right;white-space:nowrap}
+.ct-table tbody td:first-child{text-align:left}
+.ct-table tbody tr:hover td{background:var(--bg)}
+.ct-table .num{text-align:right}
 .ct-setor{font-size:10px;color:var(--text3);margin-top:1px}
 .lucro-pos{color:#16a34a;font-weight:600}
 .lucro-neg{color:#e53935;font-weight:600}
@@ -2595,7 +2602,7 @@ function _renderTabelaAtivos(ativos, catId){
       <td class="num">${p.preco_atual?`R$ ${fmt(p.preco_atual)}`:'—'}</td>
       <td class="num">R$ ${fmt(p.valor_investido)}</td>
       <td class="num">${p.valor_atual?`R$ ${fmt(p.valor_atual)}`:'—'}</td>
-      <td class="num ${cls}">${lucro>=0?'+':''}R$ ${fmt(lucro)}<br><span style="font-size:10px">${p.lucro_pct!=null?(p.lucro_pct>=0?'+':'')+p.lucro_pct.toFixed(2)+'%':''}</span></td>
+      <td class="num ${cls}" style="font-size:12px;font-weight:700">${lucro>=0?'+':''}R$ ${fmt(lucro)}<br><span style="font-size:10px;font-weight:400">${p.lucro_pct!=null?(p.lucro_pct>=0?'+':'')+p.lucro_pct.toFixed(2)+'%':''}</span></td>
       <td><div style="display:flex;gap:4px;justify-content:flex-end">
         <select onchange="moverAtivoCat('${p.ticker}',this.value)" title="Mover para categoria"
           style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);cursor:pointer">
