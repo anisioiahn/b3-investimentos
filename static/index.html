@@ -3047,6 +3047,19 @@ function abrirModalPosicao(ticker=''){
       document.getElementById('pos-corretora').value = pos.corretora || '';
       if(sel && pos.categoria_id) sel.value = pos.categoria_id;
     }
+  } else {
+    // Novos ativos: quantidade padrão 100, preço atual do cache se disponível
+    document.getElementById('pos-qtd').value = 100;
+    // Preço atual: tenta buscar do cache de cotações
+    const tickerInput = ticker || '';
+    if(tickerInput){
+      let precoAtual = null;
+      for(const s of Object.values(DADOS.setores||{})){
+        const e = s.empresas?.find(e=>e.ticker===tickerInput.toUpperCase());
+        if(e?.preco){ precoAtual = e.preco; break; }
+      }
+      if(precoAtual) document.getElementById('pos-preco').value = precoAtual.toFixed(2);
+    }
   }
   document.getElementById('pos-modal').classList.add('open');
   setTimeout(()=> document.getElementById('pos-ticker').focus(), 100);
@@ -3086,8 +3099,29 @@ function buscarTickerCarteira(val){
 function selecionarTickerCarteira(ticker, nome){
   document.getElementById('pos-ticker').value = ticker;
   document.getElementById('pos-ticker-results').style.display = 'none';
-  document.getElementById('pos-preco').focus();
+
+  // Tenta preencher preço atual do cache
+  let precoAtual = null;
+  for(const s of Object.values(DADOS.setores||{})){
+    const e = s.empresas?.find(e=>e.ticker===ticker);
+    if(e?.preco){ precoAtual = e.preco; break; }
+  }
+  // Tenta também no ranking Janus
+  if(!precoAtual){
+    const ji = (_janusRanking||[]).find(j=>j.ticker===ticker);
+    if(ji?.preco) precoAtual = ji.preco;
+  }
+  if(precoAtual){
+    document.getElementById('pos-preco').value = precoAtual.toFixed(2);
+  }
+
+  // Quantidade padrão
+  if(!document.getElementById('pos-qtd').value){
+    document.getElementById('pos-qtd').value = 100;
+  }
+
   atualizarPreviewPosicao();
+  document.getElementById('pos-qtd').focus();
 }
 
 function atualizarPreviewPosicao(){
