@@ -1004,32 +1004,43 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
     <!-- ABA 3: AJIA -->
     <div class="painel-body" id="painel-jaia" style="display:none;padding:1.5rem">
+      <!-- Score resumo -->
       <div id="jaia-score-area" style="margin-bottom:1rem"></div>
-      <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">
-        <div style="background:linear-gradient(135deg,#1a237e,#283593);padding:12px 16px;display:flex;align-items:center;gap:10px">
-          <span style="font-size:20px">🤖</span>
-          <div>
-            <div style="font-size:13px;font-weight:700;color:#fff">AJIA — Analista Janus com Inteligência Artificial</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.7)">Especialista em investimentos B3</div>
+      <!-- Layout lado a lado: Radar + Chat -->
+      <div style="display:grid;grid-template-columns:280px 1fr;gap:1rem;align-items:start">
+        <!-- RADAR CHART -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:1rem">
+          <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;text-align:center">🕸️ Perfil do Ativo</div>
+          <canvas id="jaia-radar-canvas" width="260" height="260"></canvas>
+          <div id="jaia-radar-legenda" style="margin-top:8px;font-size:10px;color:var(--text3);text-align:center"></div>
+        </div>
+        <!-- CHAT AJIA -->
+        <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">
+          <div style="background:linear-gradient(135deg,#1a237e,#283593);padding:12px 16px;display:flex;align-items:center;gap:10px">
+            <span style="font-size:20px">🤖</span>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:#fff">AJIA — Analista Janus com Inteligência Artificial</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.7)">Especialista em investimentos B3</div>
+            </div>
           </div>
-        </div>
-        <div id="jaia-chat" style="height:300px;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:10px;background:var(--bg)">
-          <div class="jaia-msg jaia-bot">
-            <div class="jaia-avatar">🤖</div>
-            <div class="jaia-bubble">Carregando análise de <strong id="jaia-ticker-nome"></strong>...</div>
+          <div id="jaia-chat" style="height:280px;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:10px;background:var(--bg)">
+            <div class="jaia-msg jaia-bot">
+              <div class="jaia-avatar">🤖</div>
+              <div class="jaia-bubble">Carregando análise de <strong id="jaia-ticker-nome"></strong>...</div>
+            </div>
           </div>
-        </div>
-        <div style="padding:10px;border-top:1px solid var(--border);display:flex;gap:8px;background:#fff">
-          <input type="text" id="jaia-input" placeholder="Pergunte sobre este ativo..."
-            style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:20px;font-size:13px;outline:none"
-            onkeydown="if(event.key==='Enter')enviarJaia()">
-          <button onclick="enviarJaia()" class="ji-btn-sugerir" style="border-radius:20px;padding:10px 18px">Enviar</button>
-        </div>
-        <div style="padding:6px 16px 10px;display:flex;gap:6px;flex-wrap:wrap;background:#fff">
-          <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">📊 Analisar fundamentos</button>
-          <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">⚖️ Vale a pena comprar?</button>
-          <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">🔍 Pontos de atenção</button>
-          <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">📈 Perspectivas futuras</button>
+          <div style="padding:10px;border-top:1px solid var(--border);display:flex;gap:8px;background:#fff">
+            <input type="text" id="jaia-input" placeholder="Pergunte sobre este ativo..."
+              style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:20px;font-size:13px;outline:none"
+              onkeydown="if(event.key==='Enter')enviarJaia()">
+            <button onclick="enviarJaia()" class="ji-btn-sugerir" style="border-radius:20px;padding:10px 18px">Enviar</button>
+          </div>
+          <div style="padding:6px 16px 10px;display:flex;gap:6px;flex-wrap:wrap;background:#fff">
+            <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">📊 Analisar fundamentos</button>
+            <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">⚖️ Vale a pena comprar?</button>
+            <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">🔍 Pontos de atenção</button>
+            <button class="jaia-sugestao" onclick="enviarJaiaSugestao(this)">📈 Perspectivas futuras</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2234,6 +2245,15 @@ async function abrirGrafico(ticker){
   // Popula score na aba AJIA — passa janusItem E o score diretamente como fallback extra
   renderJaiaScoreArea(scoreData, janusItem || {score: null});
 
+  // Busca dados de dividendos para o radar (não bloqueante)
+  fetch(`/api/dividend/ranking?limit=1000`)
+    .then(r=>r.json())
+    .then(lista=>{
+      const divData = lista.find(d=>d.ticker===ticker);
+      renderRadarJaia(scoreData, divData || null);
+    })
+    .catch(()=>renderRadarJaia(scoreData, null));
+
   // AJIA faz análise inicial automática em background
   _enviarMensagemJaiaAuto();
 }
@@ -2254,6 +2274,124 @@ function abrirAlertaDoModal(ticker, co){
     const tickerAlvo = ticker || _painelTicker;
     if(coAlvo) toggleDirAlerta(tickerAlvo, 'acima', null);
   }, 150);
+}
+
+// ── Radar Chart da AJIA ──────────────────────────────────────
+let _radarChart = null;
+
+function renderRadarJaia(scoreData, dividendData){
+  const canvas = document.getElementById('jaia-radar-canvas');
+  const legendaEl = document.getElementById('jaia-radar-legenda');
+  if(!canvas) return;
+
+  if(_radarChart){ _radarChart.destroy(); _radarChart = null; }
+
+  // Pega indicadores do score
+  const inds = {};
+  (scoreData?.indicadores || []).forEach(i => { inds[i.indicator_code] = parseFloat(i.raw_value); });
+
+  // Normaliza cada indicador para 0-100
+  const BENCHMARKS = {
+    FIN_ROE:            {min:-0.10, max:0.40},
+    FIN_ROIC:           {min:-0.05, max:0.35},
+    FIN_NET_MARGIN:     {min:-0.10, max:0.30},
+    FIN_REVENUE_GROWTH: {min:-0.20, max:0.50},
+  };
+
+  function normalizar(code, valor){
+    if(valor === null || valor === undefined) return null;
+    const b = BENCHMARKS[code];
+    if(!b) return null;
+    return Math.max(0, Math.min(100, (valor - b.min) / (b.max - b.min) * 100));
+  }
+
+  // Dados do Quality Engine
+  const roe  = normalizar('FIN_ROE',            inds['FIN_ROE']);
+  const roic = normalizar('FIN_ROIC',           inds['FIN_ROIC']);
+  const marg = normalizar('FIN_NET_MARGIN',     inds['FIN_NET_MARGIN']);
+  const cresc= normalizar('FIN_REVENUE_GROWTH', inds['FIN_REVENUE_GROWTH']);
+
+  // Dados do Dividend Engine (se disponível)
+  const dy   = dividendData?.dividend_yield_12m != null
+    ? Math.min(100, (parseFloat(dividendData.dividend_yield_12m) / 0.15) * 100) : null;
+  const cons = dividendData?.dividend_consistency != null
+    ? parseFloat(dividendData.dividend_consistency) : null;
+
+  // Monta labels e dados (omite os que não têm valor)
+  const eixos = [
+    {label:'ROE',             valor: roe,  cor:'#0066cc'},
+    {label:'ROIC',            valor: roic, cor:'#0066cc'},
+    {label:'Margem Líq.',     valor: marg, cor:'#0066cc'},
+    {label:'Cresc. Receita',  valor: cresc,cor:'#0066cc'},
+    {label:'DY 12M',          valor: dy,   cor:'#16a34a'},
+    {label:'Consistência Div',valor: cons, cor:'#16a34a'},
+  ].filter(e => e.valor !== null && e.valor !== undefined);
+
+  if(eixos.length < 3){
+    canvas.style.display = 'none';
+    if(legendaEl) legendaEl.textContent = 'Dados insuficientes para o radar';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+
+  // Gradiente de preenchimento
+  const gradient = ctx.createRadialGradient(130,130,0,130,130,130);
+  gradient.addColorStop(0,   'rgba(0,102,204,0.5)');
+  gradient.addColorStop(1,   'rgba(0,102,204,0.05)');
+
+  _radarChart = new Chart(ctx, {
+    type: 'radar',
+    data: {
+      labels: eixos.map(e=>e.label),
+      datasets:[{
+        data: eixos.map(e=>e.valor),
+        backgroundColor: gradient,
+        borderColor: '#0066cc',
+        borderWidth: 2,
+        pointBackgroundColor: eixos.map(e=>e.cor),
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      }]
+    },
+    options:{
+      responsive: false,
+      plugins:{
+        legend:{ display:false },
+        tooltip:{
+          callbacks:{
+            label: c => `${c.label}: ${c.raw.toFixed(1)}/100`
+          }
+        }
+      },
+      scales:{
+        r:{
+          min: 0, max: 100,
+          beginAtZero: true,
+          grid:{ color:'rgba(0,0,0,0.08)' },
+          angleLines:{ color:'rgba(0,0,0,0.08)' },
+          pointLabels:{
+            font:{ size:10 },
+            color:'var(--text2)'
+          },
+          ticks:{
+            display: false,
+            stepSize: 25,
+          }
+        }
+      }
+    }
+  });
+
+  // Legenda de cores
+  if(legendaEl){
+    legendaEl.innerHTML = `
+      <span style="color:#0066cc">■</span> Quality Engine &nbsp;
+      <span style="color:#16a34a">■</span> Dividend Engine`;
+  }
 }
 
 function renderJaiaScoreArea(scoreData, janusItem){
