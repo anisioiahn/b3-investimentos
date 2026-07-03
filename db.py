@@ -104,7 +104,19 @@ def init_db():
         data_compra TEXT, corretora TEXT, adicionado_em TEXT,
         status TEXT NOT NULL DEFAULT 'confirmada' CHECK (status IN ('confirmada','pendente')),
         origem TEXT DEFAULT 'manual',
+        categoria_id INTEGER DEFAULT NULL,
         UNIQUE(usuario_id, ticker)
+    );
+
+    -- CATEGORIAS DE CARTEIRA por usuário
+    CREATE TABLE IF NOT EXISTS carteira_categorias (
+        id SERIAL PRIMARY KEY,
+        usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+        nome TEXT NOT NULL,
+        cor TEXT DEFAULT '#0066cc',
+        icone TEXT DEFAULT '📁',
+        criado_em TEXT,
+        UNIQUE(usuario_id, nome)
     );
 
     -- PUSH SUBSCRIPTIONS por usuário
@@ -146,7 +158,7 @@ def init_db():
         conn.commit(); conn.close()
         print("[DB] Tabelas v3.0 criadas/verificadas", flush=True)
 
-        # Migration segura para bancos já existentes (caso as colunas ainda não existam)
+        # Migration segura para bancos já existentes
         try:
             conn = get_conn()
             with conn.cursor() as cur:
@@ -157,6 +169,10 @@ def init_db():
                 cur.execute("""
                     ALTER TABLE carteira
                     ADD COLUMN IF NOT EXISTS origem TEXT DEFAULT 'manual'
+                """)
+                cur.execute("""
+                    ALTER TABLE carteira
+                    ADD COLUMN IF NOT EXISTS categoria_id INTEGER DEFAULT NULL
                 """)
             conn.commit(); conn.close()
         except Exception as e:
@@ -615,3 +631,88 @@ def db_carregar_cache():
     except Exception as e:
         print(f"[DB] Erro carregar cache: {e}", flush=True)
     return None
+
+# ── CATEGORIAS DE CARTEIRA ────────────────────────────────────
+def db_listar_categorias(uid):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT c.*, COUNT(p.id) as total_ativos
+                FROM carteira_categorias c
+                LEFT JOIN carteira p ON p.categoria_id = c.id AND p.usuario_id = %s AND p.status = 'confirmada'
+                WHERE c.usuario_id = %s
+                GROUP BY c.id
+                ORDER BY c.nome
+            """, (uid, uid))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro listar categorias: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
+
+def db_criar_categoria(uid, nome, cor='#0066cc', icone='📁'):
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO carteira_categorias (usuario_id, nome, cor, icone, criado_em)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (usuario_id, nome) DO NOTHING
+                RETURNING id
+            """, (uid, nome.strip(), cor, icone, agora_str()))
+            row = cur.fetchone()
+        conn.commit(); conn.close()
+        return row[0] if row else None
+    except Exception as e:
+        print(f"[DB] Erro criar categoria: {e}", flush=True)
+        return None
+
+def db_editar_categoria(uid, cat_id, nome, cor, icone):
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE carteira_categorias SET nome=%s, cor=%s, icone=%s
+                WHERE id=%s AND usuario_id=%s
+            """, (nome.strip(), cor, icone, cat_id, uid))
+        conn.commit(); conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erro editar categoria: {e}", flush=True)
+        return False
+
+def db_excluir_categoria(uid, cat_id):
+    """Remove categoria e move ativos para sem categoria (Geral)."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            # Move ativos para sem categoria
+            cur.execute("""
+                UPDATE carteira SET categoria_id = NULL
+                WHERE usuario_id=%s AND categoria_id=%s
+            """, (uid, cat_id))
+            cur.execute("""
+                DELETE FROM carteira_categorias WHERE id=%s AND usuario_id=%s
+            """, (cat_id, uid))
+        conn.commit(); conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erro excluir categoria: {e}", flush=True)
+        return False
+
+def db_mover_ativo_categoria(uid, ticker, categoria_id):
+    """Move um ativo para uma categoria (ou None para Geral)."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE carteira SET categoria_id=%s
+                WHERE usuario_id=%s AND ticker=%s
+            """, (categoria_id, uid, ticker.upper()))
+        conn.commit(); conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erro mover ativo: {e}", flush=True)
+        return False
