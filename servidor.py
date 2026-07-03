@@ -893,7 +893,70 @@ def api_ajia_chat():
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
 
-# ── ADMIN ROUTES ──────────────────────────────────────────────
+# ── DIVIDEND ENGINE ──────────────────────────────────────────
+_dividend_rodando = False
+_dividend_estado  = {"pct": 0, "atual": 0, "total": 0, "msg": ""}
+_dividend_lock    = __import__('threading').Lock()
+
+def _rodar_dividend_collector():
+    global _dividend_rodando, _dividend_estado
+    if not _dividend_lock.acquire(blocking=False):
+        print("[DIVIDEND] Coleta já em andamento.", flush=True)
+        return
+    _dividend_rodando = True
+    _dividend_estado  = {"pct": 0, "atual": 0, "total": 0, "msg": "Iniciando..."}
+    try:
+        import subprocess, sys
+        proc = subprocess.Popen(
+            [sys.executable, "dividend_collector.py"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+        )
+        for linha in proc.stdout:
+            linha = linha.strip()
+            if not linha: continue
+            print(linha, flush=True)
+            try:
+                parte = linha.replace("[DIVIDEND]", "").strip()
+                if parte and parte[0].isdigit() and "%" in parte:
+                    pct = int(parte.split("%")[0].strip())
+                    msg = parte.split("%", 1)[1].strip()
+                    _dividend_estado.update({"pct": pct, "msg": msg})
+            except: pass
+        proc.wait()
+        _dividend_estado.update({"pct": 100, "msg": "Concluído!"})
+    except Exception as e:
+        print(f"[DIVIDEND] Erro: {e}", flush=True)
+        _dividend_estado["msg"] = f"Erro: {e}"
+    finally:
+        _dividend_rodando = False
+        _dividend_lock.release()
+
+@app.route("/api/dividend/coletar", methods=["POST"])
+@requer_auth
+def api_dividend_coletar():
+    if _dividend_rodando:
+        return jsonify({"ok": False, "mensagem": "Coleta já em andamento"}), 409
+    threading.Thread(target=_rodar_dividend_collector, daemon=True).start()
+    return jsonify({"ok": True, "mensagem": "Dividend Engine iniciado"})
+
+@app.route("/api/dividend/progresso")
+@requer_auth
+def api_dividend_progresso():
+    return jsonify({
+        "rodando": _dividend_rodando,
+        "pct":     _dividend_estado["pct"],
+        "msg":     _dividend_estado["msg"],
+        "atual":   _dividend_estado["atual"],
+        "total":   _dividend_estado["total"],
+    })
+
+@app.route("/api/dividend/ranking")
+@requer_auth
+def api_dividend_ranking():
+    limit = request.args.get("limit", 100, type=int)
+    return jsonify(db.db_listar_dividend_ranking(limit))
+
+
 @app.route("/api/admin/login", methods=["POST"])
 def api_admin_login():
     d = request.json or {}
