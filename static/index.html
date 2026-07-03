@@ -3758,11 +3758,14 @@ const _pollDados=setInterval(async()=>{
 
 <!-- MODAL CRIAÇÃO/EDIÇÃO DE CATEGORIA -->
 <div id="modal-categoria" style="display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center" onclick="if(event.target===this)fecharModalCategoria()">
-  <div style="background:var(--card);border-radius:16px;padding:1.5rem;width:100%;max-width:480px;box-shadow:0 16px 48px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+  <div style="background:var(--card);border-radius:16px;padding:1.5rem;width:100%;max-width:480px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-shrink:0">
       <div style="font-size:15px;font-weight:700" id="modal-cat-titulo">Nova Categoria</div>
       <button onclick="fecharModalCategoria()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3)">✕</button>
     </div>
+
+    <!-- Conteúdo rolável -->
+    <div style="overflow-y:auto;flex:1;padding-right:4px">
 
     <!-- Preview -->
     <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border-radius:10px;margin-bottom:1.25rem">
@@ -3791,13 +3794,15 @@ const _pollDados=setInterval(async()=>{
     </div>
 
     <!-- Cores -->
-    <div style="margin-bottom:1.5rem">
+    <div style="margin-bottom:1rem">
       <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:8px">Cor</label>
       <div style="display:flex;flex-wrap:wrap;gap:8px" id="cat-cores-grid"></div>
     </div>
 
-    <!-- Botões -->
-    <div style="display:flex;gap:8px">
+    </div><!-- fim scroll -->
+
+    <!-- Botões fixos no rodapé -->
+    <div style="display:flex;gap:8px;margin-top:1rem;flex-shrink:0">
       <button onclick="fecharModalCategoria()" class="btn" style="flex:1;padding:10px">Cancelar</button>
       <button onclick="salvarCategoria()" class="btn" style="flex:2;padding:10px;background:var(--green);color:#fff;border-color:var(--green);font-weight:700" id="cat-btn-salvar">Criar Categoria</button>
     </div>
