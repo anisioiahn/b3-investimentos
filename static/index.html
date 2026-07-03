@@ -85,6 +85,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 @media(max-width:900px){.cockpit-grid{grid-template-columns:1fr}}
 .cockpit-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.25rem;box-shadow:var(--shadow)}
 .cockpit-card-title{font-size:13px;font-weight:700;color:var(--text2);margin-bottom:1rem;display:flex;align-items:center;gap:6px}
+.div-score-badge{display:inline-flex;align-items:center;justify-content:center;padding:3px 10px;border-radius:8px;font-size:11px;font-weight:700}
+.div-score-a{background:#d1fae5;color:#065f46}
+.div-score-b{background:#dbeafe;color:#1e40af}
+.div-score-c{background:#fef9c3;color:#854d0e}
+.div-score-d{background:#fee2e2;color:#991b1b}
+.div-table{width:100%;border-collapse:collapse;font-size:12px}
+.div-table th{font-size:11px;font-weight:600;color:var(--text2);padding:6px 8px;border-bottom:2px solid var(--border);text-align:right;white-space:nowrap}
+.div-table th:first-child,.div-table th:nth-child(2){text-align:left}
+.div-table td{padding:8px 8px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle;text-align:right;white-space:nowrap}
+.div-table td:first-child,.div-table td:nth-child(2){text-align:left}
+.div-table tr:hover td{background:var(--bg);cursor:pointer}
 .ck-hm-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:opacity .15s}
 .ck-hm-row:last-child{border-bottom:none}
 .ck-hm-row:hover{opacity:.8}
@@ -564,6 +575,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="tab" onclick="goPage('carteira',this)">💼 Carteira</div>
     <div class="tab" onclick="goPage('alertas',this)">🔔 Alertas <span class="tab-badge" id="alt-cnt" style="display:none">0</span></div>
     <div class="tab" onclick="goPage('janus',this)">🎯 Janus Index</div>
+    <div class="tab" onclick="goPage('dividendos',this)">💰 Dividendos</div>
     <div class="tab" onclick="goPage('setores',this)">📊 Setores</div>
     <div class="tab" onclick="goPage('empresas',this)" id="tab-empresas" style="display:none">🏢 <span id="tab-sname">Empresas</span></div>
     <!-- Aba dinâmica de ativo buscado -->
@@ -607,6 +619,44 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <div id="cockpit-carteira"></div>
         </div>
       </div>
+    </div>
+
+    <div class="page" id="page-dividendos">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:18px;font-weight:700">💰 Janus Dividend Engine</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px" id="div-status-txt">Carregando...</div>
+        </div>
+        <button id="div-btn-coletar" class="ji-btn-atualizar" onclick="executarDividendEngine()">
+          <span id="div-btn-icon">💰</span> Atualizar Dividendos
+        </button>
+      </div>
+
+      <!-- Filtros -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1.25rem;display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+        <span style="font-size:12px;font-weight:700;color:var(--text2)">🔍 Filtros:</span>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+          <label>DY mín. (%)</label>
+          <input type="number" id="div-filter-dy" value="0" min="0" max="100" step="0.5"
+            style="width:60px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--card);color:var(--text)">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+          <label>Anos pagando mín.</label>
+          <input type="number" id="div-filter-anos" value="0" min="0" max="30" step="1"
+            style="width:60px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--card);color:var(--text)">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" id="div-filter-growing"> Dividendos crescentes
+          </label>
+        </div>
+        <button onclick="filtrarDividendos()" class="btn" style="padding:6px 14px;font-size:12px;background:var(--green);color:#fff;border-color:var(--green)">Aplicar</button>
+        <button onclick="limparFiltrosDividendos()" class="btn" style="padding:6px 14px;font-size:12px">Limpar</button>
+      </div>
+
+      <!-- Ranking -->
+      <div id="div-ranking-area"></div>
     </div>
 
     <div class="page" id="page-setores"><div class="sectors-grid" id="sgrid"></div></div>
@@ -1635,6 +1685,183 @@ function _renderCockpitCarteira(){
     </div>`:''}`;
 }
 
+// ── DIVIDENDOS ───────────────────────────────────────────────
+let _dividendRanking = [];
+let _dividendGaugeAtivo = false;
+
+async function carregarDividendos(){
+  try{
+    const r = await fetch('/api/dividend/ranking?limit=500');
+    _dividendRanking = await r.json();
+    renderDividendRanking(_dividendRanking);
+    // Status
+    const r2 = await fetch('/api/dividend/progresso');
+    const p = await r2.json();
+    const statusEl = document.getElementById('div-status-txt');
+    if(statusEl){
+      if(p.rodando) statusEl.textContent = `⚡ Atualizando... ${p.pct}%`;
+      else if(_dividendRanking.length)
+        statusEl.textContent = `${_dividendRanking.length} ativos com Dividend Score calculado`;
+      else statusEl.textContent = 'Nenhuma coleta realizada. Clique em "Atualizar Dividendos".';
+    }
+  }catch(e){}
+}
+
+function divScoreSlug(score){
+  if(score >= 70) return 'a';
+  if(score >= 50) return 'b';
+  if(score >= 30) return 'c';
+  return 'd';
+}
+
+function divScoreLabel(score){
+  if(score >= 70) return 'Excelente';
+  if(score >= 50) return 'Bom';
+  if(score >= 30) return 'Regular';
+  return 'Fraco';
+}
+
+function renderDividendRanking(dados){
+  const el = document.getElementById('div-ranking-area');
+  if(!el) return;
+
+  if(!dados?.length){
+    el.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--text2)">
+      <div style="font-size:40px;margin-bottom:12px">💰</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px">Nenhum dado de dividendos ainda</div>
+      <div style="font-size:13px">Clique em "Atualizar Dividendos" para executar o Dividend Engine</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = `<div style="overflow-x:auto">
+    <table class="div-table">
+      <thead><tr>
+        <th>#</th>
+        <th>Ativo</th>
+        <th>DY 12M</th>
+        <th>DY 5A</th>
+        <th>Anos</th>
+        <th>Consistência</th>
+        <th>Pmt/Ano</th>
+        <th>Payout</th>
+        <th>Crescendo</th>
+        <th>Div. Score</th>
+        <th></th>
+      </tr></thead>
+      <tbody>
+      ${dados.map((d,i)=>{
+        const dy12 = d.dividend_yield_12m != null ? (parseFloat(d.dividend_yield_12m)*100).toFixed(2)+'%' : '—';
+        const dy5  = d.dividend_yield_5y  != null ? (parseFloat(d.dividend_yield_5y)*100).toFixed(2)+'%' : '—';
+        const anos = d.years_paying || '—';
+        const cons = d.dividend_consistency != null ? parseFloat(d.dividend_consistency).toFixed(0)+'%' : '—';
+        const pmt  = d.payments_per_year || '—';
+        const pout = d.payout_ratio != null ? (parseFloat(d.payout_ratio)*100).toFixed(0)+'%' : '—';
+        const grow = d.growing_dividends ? '📈 Sim' : '➡️ Não';
+        const score= d.janus_dividend_score != null ? parseFloat(d.janus_dividend_score) : null;
+        const slug = score!=null ? divScoreSlug(score) : 'd';
+        const logoHtml = `<img src="https://icons.brapi.dev/icons/${d.ticker}.svg"
+          style="width:100%;height:100%;object-fit:cover;border-radius:6px"
+          onerror="this.style.display='none';this.parentElement.style.background='#0066cc';this.parentElement.textContent='${d.ticker.substring(0,4)}'">`;
+        return `<tr onclick="abrirGrafico('${d.ticker}')">
+          <td style="color:var(--text3);font-size:11px">${i+1}</td>
+          <td><div style="display:flex;align-items:center;gap:8px">
+            <div class="ct-logo" style="width:28px;height:28px;overflow:hidden;flex-shrink:0">${logoHtml}</div>
+            <div>
+              <div style="font-weight:700;font-size:12px">${d.ticker}</div>
+              <div style="font-size:10px;color:var(--text3)">${(d.trading_name||'').substring(0,20)}</div>
+            </div>
+          </div></td>
+          <td style="font-weight:700;color:${parseFloat(d.dividend_yield_12m||0)>=0.06?'#16a34a':'var(--text)'}">${dy12}</td>
+          <td>${dy5}</td>
+          <td>${anos}</td>
+          <td>${cons}</td>
+          <td>${pmt}</td>
+          <td>${pout}</td>
+          <td>${grow}</td>
+          <td><span class="div-score-badge div-score-${slug}">${score!=null?score.toFixed(1):'—'}</span></td>
+          <td onclick="event.stopPropagation()">
+            <button onclick="abrirGrafico('${d.ticker}')" class="btn" style="padding:4px 8px;font-size:11px">📊</button>
+          </td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function filtrarDividendos(){
+  const dyMin   = parseFloat(document.getElementById('div-filter-dy').value||0) / 100;
+  const anosMin = parseInt(document.getElementById('div-filter-anos').value||0);
+  const growing = document.getElementById('div-filter-growing').checked;
+
+  const filtrados = _dividendRanking.filter(d=>{
+    if(dyMin > 0 && (d.dividend_yield_12m == null || parseFloat(d.dividend_yield_12m) < dyMin)) return false;
+    if(anosMin > 0 && (d.years_paying == null || d.years_paying < anosMin)) return false;
+    if(growing && !d.growing_dividends) return false;
+    return true;
+  });
+  renderDividendRanking(filtrados);
+}
+
+function limparFiltrosDividendos(){
+  document.getElementById('div-filter-dy').value = 0;
+  document.getElementById('div-filter-anos').value = 0;
+  document.getElementById('div-filter-growing').checked = false;
+  renderDividendRanking(_dividendRanking);
+}
+
+async function executarDividendEngine(){
+  const btn  = document.getElementById('div-btn-coletar');
+  const icon = document.getElementById('div-btn-icon');
+  if(btn) btn.disabled = true;
+  if(icon) icon.classList.add('spin');
+
+  // Mostra gauge
+  const gauge      = document.getElementById('gauge-overlay');
+  const gaugeBar   = document.getElementById('gauge-bar');
+  const gaugePct   = document.getElementById('gauge-pct');
+  const gaugeSetor = document.getElementById('gauge-setor');
+  const gaugeCont  = document.getElementById('gauge-contagem');
+  const gaugeTitle = document.querySelector('#gauge-overlay .gauge-titulo span:first-child');
+  if(gauge)      gauge.classList.add('ativo');
+  if(gaugeTitle) gaugeTitle.textContent = '💰 Dividend Engine';
+  if(gaugeBar)   gaugeBar.style.width = '0%';
+  if(gaugePct)   gaugePct.textContent = '0%';
+  if(gaugeSetor) gaugeSetor.textContent = 'Iniciando...';
+  if(gaugeCont)  gaugeCont.textContent = '...';
+
+  try{
+    await fetch('/api/dividend/coletar', {method:'POST'});
+  }catch(e){}
+
+  await new Promise(r=>setTimeout(r, 2000));
+
+  let tentativas = 0;
+  const poll = setInterval(async()=>{
+    tentativas++;
+    try{
+      const rp = await fetch('/api/dividend/progresso');
+      const p  = await rp.json();
+      if(gaugeBar)   gaugeBar.style.width = `${p.pct}%`;
+      if(gaugePct)   gaugePct.textContent = `${p.pct}%`;
+      if(gaugeSetor) gaugeSetor.textContent = p.msg || '...';
+
+      const statusEl = document.getElementById('div-status-txt');
+      if(statusEl && p.rodando) statusEl.textContent = `⚡ Atualizando... ${p.pct}%`;
+
+      if(!p.rodando || p.pct >= 100){
+        clearInterval(poll);
+        if(btn)  btn.disabled = false;
+        if(icon) icon.classList.remove('spin');
+        setTimeout(()=>{ if(gauge) gauge.classList.remove('ativo'); }, 3000);
+        await carregarDividendos();
+      }
+    }catch(e){}
+    if(tentativas >= 120){ clearInterval(poll); if(btn) btn.disabled=false; if(icon) icon.classList.remove('spin'); }
+  }, 5000);
+}
+
 function toggleMenuSec(){
   const m = document.getElementById('menu-sec');
   const o = document.getElementById('menu-sec-overlay');
@@ -1658,6 +1885,7 @@ function goPage(p,el){
   if(p==='params') renderFontes();
   if(p==='carteira'){ renderCarteira(); carregarCarteira(); }
   if(p==='janus') carregarJanusIndex();
+  if(p==='dividendos') carregarDividendos();
 }
 function goBack(){currentSector=null;document.getElementById('tab-empresas').style.display='none';goPage('setores',document.querySelector('.tab'));}
 
