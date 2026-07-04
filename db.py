@@ -443,6 +443,20 @@ def db_listar_disparados(uid, limite=20):
         return rows
     except: return []
 
+def db_ja_disparado_hoje(uid, ticker, direcao):
+    """Verifica se já existe disparo para este ticker/direção hoje."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) FROM alertas_disparados
+                WHERE usuario_id=%s AND ticker=%s AND direcao=%s
+                AND disparado_em::date = CURRENT_DATE
+            """, (uid, ticker, direcao))
+            return cur.fetchone()[0] > 0
+    except: return False
+    finally: conn.close()
+
 def db_registrar_disparado(uid, alerta, preco_atual):
     try:
         conn = get_conn()
