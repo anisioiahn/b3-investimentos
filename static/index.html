@@ -2286,9 +2286,14 @@ function renderRadarJaia(scoreData, dividendData){
 
   if(_radarChart){ _radarChart.destroy(); _radarChart = null; }
 
-  // Pega indicadores do score
+  // Monta mapa de indicadores — aceita lista [{indicator_code, raw_value}] ou objeto
   const inds = {};
-  (scoreData?.indicadores || []).forEach(i => { inds[i.indicator_code] = parseFloat(i.raw_value); });
+  const indicadoresRaw = scoreData?.indicadores;
+  if(Array.isArray(indicadoresRaw)){
+    indicadoresRaw.forEach(i => { if(i.indicator_code) inds[i.indicator_code] = parseFloat(i.raw_value); });
+  } else if(indicadoresRaw && typeof indicadoresRaw === 'object'){
+    Object.assign(inds, indicadoresRaw);
+  }
 
   // Normaliza cada indicador para 0-100
   const BENCHMARKS = {
@@ -2299,54 +2304,55 @@ function renderRadarJaia(scoreData, dividendData){
   };
 
   function normalizar(code, valor){
-    if(valor === null || valor === undefined) return null;
+    if(valor === null || valor === undefined || isNaN(valor)) return null;
     const b = BENCHMARKS[code];
     if(!b) return null;
     return Math.max(0, Math.min(100, (valor - b.min) / (b.max - b.min) * 100));
   }
 
-  // Dados do Quality Engine
-  const roe  = normalizar('FIN_ROE',            inds['FIN_ROE']);
-  const roic = normalizar('FIN_ROIC',           inds['FIN_ROIC']);
-  const marg = normalizar('FIN_NET_MARGIN',     inds['FIN_NET_MARGIN']);
-  const cresc= normalizar('FIN_REVENUE_GROWTH', inds['FIN_REVENUE_GROWTH']);
+  const roe   = normalizar('FIN_ROE',            inds['FIN_ROE']);
+  const roic  = normalizar('FIN_ROIC',           inds['FIN_ROIC']);
+  const marg  = normalizar('FIN_NET_MARGIN',     inds['FIN_NET_MARGIN']);
+  const cresc = normalizar('FIN_REVENUE_GROWTH', inds['FIN_REVENUE_GROWTH']);
 
-  // Dados do Dividend Engine (se disponível)
-  const dy   = dividendData?.dividend_yield_12m != null
-    ? Math.min(100, (parseFloat(dividendData.dividend_yield_12m) / 0.15) * 100) : null;
-  const cons = dividendData?.dividend_consistency != null
+  // Dividend Engine — usa dividendData ou _jaiaContexto
+  const ctx2 = _jaiaContexto || {};
+  const dyRaw = dividendData?.dividend_yield_12m ?? ctx2.janus_score; // fallback
+  const dyVal = dividendData?.dividend_yield_12m != null
+    ? Math.min(100, (parseFloat(dividendData.dividend_yield_12m) / 0.15) * 100)
+    : null;
+  const consVal = dividendData?.dividend_consistency != null
     ? parseFloat(dividendData.dividend_consistency) : null;
 
-  // Monta labels e dados (omite os que não têm valor)
+  // Monta eixos — filtra os que não têm valor
   const eixos = [
-    {label:'ROE',             valor: roe,  cor:'#0066cc'},
-    {label:'ROIC',            valor: roic, cor:'#0066cc'},
-    {label:'Margem Líq.',     valor: marg, cor:'#0066cc'},
-    {label:'Cresc. Receita',  valor: cresc,cor:'#0066cc'},
-    {label:'DY 12M',          valor: dy,   cor:'#16a34a'},
-    {label:'Consistência Div',valor: cons, cor:'#16a34a'},
-  ].filter(e => e.valor !== null && e.valor !== undefined);
+    {label:'ROE',             valor: roe,     cor:'#0066cc'},
+    {label:'ROIC',            valor: roic,    cor:'#0066cc'},
+    {label:'Margem Líq.',     valor: marg,    cor:'#0066cc'},
+    {label:'Cresc. Receita',  valor: cresc,   cor:'#0066cc'},
+    {label:'DY 12M',          valor: dyVal,   cor:'#16a34a'},
+    {label:'Consist. Div.',   valor: consVal, cor:'#16a34a'},
+  ].filter(e => e.valor !== null && e.valor !== undefined && !isNaN(e.valor));
 
   if(eixos.length < 3){
     canvas.style.display = 'none';
-    if(legendaEl) legendaEl.textContent = 'Dados insuficientes para o radar';
+    if(legendaEl) legendaEl.innerHTML = '<span style="color:var(--text3)">Indicadores insuficientes para o radar</span>';
     return;
   }
 
   canvas.style.display = 'block';
-  const ctx = canvas.getContext('2d');
+  const ctxCanvas = canvas.getContext('2d');
 
-  // Gradiente de preenchimento
-  const gradient = ctx.createRadialGradient(130,130,0,130,130,130);
-  gradient.addColorStop(0,   'rgba(0,102,204,0.5)');
+  const gradient = ctxCanvas.createRadialGradient(130,130,0,130,130,130);
+  gradient.addColorStop(0,   'rgba(0,102,204,0.45)');
   gradient.addColorStop(1,   'rgba(0,102,204,0.05)');
 
-  _radarChart = new Chart(ctx, {
+  _radarChart = new Chart(ctxCanvas, {
     type: 'radar',
     data: {
       labels: eixos.map(e=>e.label),
       datasets:[{
-        data: eixos.map(e=>e.valor),
+        data: eixos.map(e=>parseFloat(e.valor.toFixed(1))),
         backgroundColor: gradient,
         borderColor: '#0066cc',
         borderWidth: 2,
@@ -2362,35 +2368,24 @@ function renderRadarJaia(scoreData, dividendData){
       plugins:{
         legend:{ display:false },
         tooltip:{
-          callbacks:{
-            label: c => `${c.label}: ${c.raw.toFixed(1)}/100`
-          }
+          callbacks:{ label: c=>`${c.label}: ${parseFloat(c.raw).toFixed(1)}/100` }
         }
       },
       scales:{
         r:{
-          min: 0, max: 100,
+          min:0, max:100,
           beginAtZero: true,
-          grid:{ color:'rgba(0,0,0,0.08)' },
-          angleLines:{ color:'rgba(0,0,0,0.08)' },
-          pointLabels:{
-            font:{ size:10 },
-            color:'var(--text2)'
-          },
-          ticks:{
-            display: false,
-            stepSize: 25,
-          }
+          grid:{ color:'rgba(0,0,0,0.07)' },
+          angleLines:{ color:'rgba(0,0,0,0.07)' },
+          pointLabels:{ font:{size:10}, color:'#666' },
+          ticks:{ display:false, stepSize:25 }
         }
       }
     }
   });
 
-  // Legenda de cores
   if(legendaEl){
-    legendaEl.innerHTML = `
-      <span style="color:#0066cc">■</span> Quality Engine &nbsp;
-      <span style="color:#16a34a">■</span> Dividend Engine`;
+    legendaEl.innerHTML = `<span style="color:#0066cc">■</span> Quality &nbsp; <span style="color:#16a34a">■</span> Dividendos`;
   }
 }
 
