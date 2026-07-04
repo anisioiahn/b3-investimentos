@@ -3146,6 +3146,7 @@ function renderCarteira(){
 }
 
 function renderCarteiraCategorias(){
+  try{
   const el = document.getElementById('carteira-tabela');
   const confirmadas = (_carteira||[]).filter(p=>p.status==='confirmada');
 
@@ -3275,8 +3276,9 @@ function renderCarteiraCategorias(){
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">${cardsHtml}</div>`;
 
-  // Carrega gráfico de evolução
-  carregarEvolucaoCarteira(null, 30, document.querySelector('#carteira-tabela .range-btn.active'));
+  // Carrega gráfico de evolução após DOM atualizar
+  setTimeout(()=>carregarEvolucaoCarteira(null, 30, document.querySelector('#carteira-tabela .range-btn')), 100);
+  }catch(e){ console.error('Erro renderCarteiraCategorias:', e); }
 }
 
 function _gerarPizza(segmentos){
