@@ -522,7 +522,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       </div>
       <div>
         <div class="htitle">Janus <span id="app-version" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px"></span></div>
-        <div class="hsub" id="last-upd">Passado e Futuro. Melhores Escolhas.</div>
+        <div class="hsub">Investment Intelligence Platform</div>
       </div>
     </div>
 
@@ -609,9 +609,36 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <!-- PÁGINA COCKPIT -->
     <div class="page active" id="page-cockpit">
       <!-- Saudação -->
-      <div id="cockpit-header" style="margin-bottom:1.5rem">
-        <div style="font-size:20px;font-weight:700;color:var(--text)" id="cockpit-saudacao">Bom dia! 👋</div>
-        <div style="font-size:13px;color:var(--text2);margin-top:4px" id="cockpit-resumo-dia">Carregando resumo do mercado...</div>
+      <div id="cockpit-header" style="margin-bottom:1.5rem;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+        <div>
+          <div style="font-size:20px;font-weight:700;color:var(--text)" id="cockpit-saudacao">Bom dia! 👋</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:4px" id="cockpit-resumo-dia">Carregando resumo do mercado...</div>
+        </div>
+        <!-- Frame de atualizações -->
+        <div id="cockpit-atualizacoes" style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:var(--card);font-size:11px;min-width:220px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:2px">ÚLTIMA ATUALIZAÇÃO</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:14px">📊</span>
+            <div>
+              <div style="font-weight:600;color:var(--text)">Cotações</div>
+              <div style="color:var(--text3)" id="ck-att-cotacao">—</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:14px">🎯</span>
+            <div>
+              <div style="font-weight:600;color:var(--text)">Janus Index</div>
+              <div style="color:var(--text3)" id="ck-att-janus">—</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:14px">💰</span>
+            <div>
+              <div style="font-weight:600;color:var(--text)">Dividendos</div>
+              <div style="color:var(--text3)" id="ck-att-dividendos">—</div>
+            </div>
+          </div>
+        </div>
       </div>
       <!-- Grid 3 módulos -->
       <div class="cockpit-grid">
@@ -1187,7 +1214,10 @@ async function carregarDados(){
     document.getElementById('status-txt').textContent='Ao vivo · brapi.dev';
     if(DADOS.atualizado_em){
       const d=new Date(DADOS.atualizado_em);
-      document.getElementById('last-upd').textContent='Atualizado às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'America/Sao_Paulo'});
+      // Atualiza data no frame do cockpit se estiver visível
+      const el = document.getElementById('ck-att-cotacao');
+      if(el) el.textContent = d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',
+        year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
     }
     renderSectors();
     if(currentSector && _paginaAtiva !== 'carteira') renderEmpresas(true);
@@ -1707,14 +1737,43 @@ function _renderCockpitSaudacao(){
   const setores = Object.values(DADOS.setores||{});
   if(!setores.length){
     document.getElementById('cockpit-resumo-dia').textContent = 'Aguardando dados do mercado...';
-    return;
+  } else {
+    const todasEmpresas = setores.flatMap(s=>s.empresas||[]).filter(e=>e.preco!=null);
+    const emAlta  = todasEmpresas.filter(e=>(e.variacao||0)>0).length;
+    const emBaixa = todasEmpresas.filter(e=>(e.variacao||0)<0).length;
+    const humor = emAlta > emBaixa ? '🟢 mercado majoritariamente em alta'
+                : emBaixa > emAlta ? '🔴 mercado majoritariamente em baixa'
+                : '🟡 mercado equilibrado';
+    document.getElementById('cockpit-resumo-dia').textContent =
+      `${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})} · ${humor} (▲${emAlta} · ▼${emBaixa} ativos)`;
   }
-  const todasEmpresas = setores.flatMap(s=>s.empresas||[]).filter(e=>e.preco!=null);
-  const emAlta = todasEmpresas.filter(e=>(e.variacao||0)>0).length;
-  const emBaixa = todasEmpresas.filter(e=>(e.variacao||0)<0).length;
-  const humor = emAlta > emBaixa ? '🟢 mercado majoritariamente em alta' : emBaixa > emAlta ? '🔴 mercado majoritariamente em baixa' : '🟡 mercado equilibrado';
-  document.getElementById('cockpit-resumo-dia').textContent =
-    `${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})} · ${humor} (▲${emAlta} · ▼${emBaixa} ativos)`;
+
+  // Datas de atualização
+  const fmtData = iso => {
+    if(!iso) return '—';
+    try{
+      const d = new Date(iso);
+      return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',
+        hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
+    }catch{ return '—'; }
+  };
+
+  // Cotações — vem do DADOS.atualizado_em
+  const attCot = document.getElementById('ck-att-cotacao');
+  if(attCot) attCot.textContent = fmtData(DADOS.atualizado_em);
+
+  // Janus Index — busca da API
+  fetch('/api/janus/status').then(r=>r.json()).then(d=>{
+    const el = document.getElementById('ck-att-janus');
+    if(el) el.textContent = d.ultima_coleta ? fmtData(d.ultima_coleta) : '—';
+  }).catch(()=>{});
+
+  // Dividendos — pega do ranking se disponível
+  const attDiv = document.getElementById('ck-att-dividendos');
+  if(attDiv){
+    const ref = _dividendRanking?.[0]?.reference_date;
+    attDiv.textContent = ref ? fmtData(ref + 'T12:00:00') : '—';
+  }
 }
 
 function _renderCockpitHeatmap(){
