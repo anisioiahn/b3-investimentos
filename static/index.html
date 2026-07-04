@@ -3282,6 +3282,20 @@ function _renderTabelaAtivos(ativos, catId){
       `<option value="">Geral</option>`,
       ..._categorias.map(c=>`<option value="${c.id}" ${p.categoria_id===c.id?'selected':''}>${c.icone} ${c.nome}</option>`)
     ].join('');
+    const altAcima  = _alertasServidor?.find(a=>a.ticker===p.ticker&&a.direcao==='acima');
+    const altAbaixo = _alertasServidor?.find(a=>a.ticker===p.ticker&&a.direcao==='abaixo');
+    const alertasHtml = `
+      <div class="tgt-lbl">Alertas de preço</div>
+      <div class="tgt-row">
+        ${altAcima
+          ? `<button class="tgt-set" onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','acima',this)">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)}</button>`
+          : `<button class="tgt-btn" onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','acima',this)">▲ Acima</button>`}
+        ${altAbaixo
+          ? `<button class="tgt-set" onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','abaixo',this)">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)}</button>`
+          : `<button class="tgt-btn" onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','abaixo',this)">▼ Abaixo</button>`}
+      </div>
+      ${altAcima?`<div style="font-size:10px;color:#16a34a;margin-top:2px">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${p.ticker}','acima')">✕</button></div>`:''}
+      ${altAbaixo?`<div style="font-size:10px;color:#e53935;margin-top:2px">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${p.ticker}','abaixo')">✕</button></div>`:''}`;
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:8px">
         <div class="ct-logo" style="background:${p.cor};overflow:hidden">${logoHtml}</div>
@@ -3293,17 +3307,20 @@ function _renderTabelaAtivos(ativos, catId){
       <td class="num">R$ ${fmt(p.valor_investido)}</td>
       <td class="num">${p.valor_atual?`R$ ${fmt(p.valor_atual)}`:'—'}</td>
       <td class="num ${cls}" style="font-size:12px;font-weight:700">${lucro>=0?'+':''}R$ ${fmt(lucro)}<br><span style="font-size:10px;font-weight:400">${p.lucro_pct!=null?(p.lucro_pct>=0?'+':'')+p.lucro_pct.toFixed(2)+'%':''}</span></td>
-      <td><div style="display:flex;gap:4px;justify-content:flex-end;align-items:center">
-        <select onchange="moverAtivoCat('${p.ticker}',this.value)" title="Mover para categoria"
-          style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);cursor:pointer">
-          ${catOpts}
-        </select>
-        <button class="ct-edit" onclick="abrirGrafico('${p.ticker}')" title="Ver análise">📊</button>
-        <button class="ct-edit" onclick="abrirAlertaCarteira('${p.ticker}','acima')" title="Alerta acima" style="color:#16a34a">▲</button>
-        <button class="ct-edit" onclick="abrirAlertaCarteira('${p.ticker}','abaixo')" title="Alerta abaixo" style="color:#e53935">▼</button>
-        <button class="ct-edit" onclick="editarPosicao('${p.ticker}')" title="Editar">✏️</button>
-        <button class="ct-del" onclick="removerPosicao('${p.ticker}')" title="Remover">🗑</button>
-      </div></td>
+      <td>
+        <div style="display:flex;gap:8px;align-items:flex-start;justify-content:flex-end">
+          <div onclick="event.stopPropagation()">${alertasHtml}</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <button class="ct-edit" onclick="abrirGrafico('${p.ticker}')" title="Ver análise">📊</button>
+            <select onchange="moverAtivoCat('${p.ticker}',this.value)" title="Mover para categoria"
+              style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);cursor:pointer">
+              ${catOpts}
+            </select>
+            <button class="ct-edit" onclick="editarPosicao('${p.ticker}')" title="Editar">✏️</button>
+            <button class="ct-del" onclick="removerPosicao('${p.ticker}')" title="Remover">🗑</button>
+          </div>
+        </div>
+      </td>
     </tr>`;
   }).join('')}
   </tbody></table>`;
