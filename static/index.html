@@ -761,6 +761,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
             style="width:100%;padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer;background:var(--green);color:#fff">
             🔔 Ativar Notificações
           </button>
+          <button onclick="reregistrarPush()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--border);font-size:13px;cursor:pointer;background:#fff;color:var(--text2)">
+            🔄 Reregistrar este dispositivo
+          </button>
           <button onclick="testarPush()" id="btn-push-test" style="display:none;width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--border);font-size:13px;cursor:pointer;background:#fff;color:var(--text2)">
             🧪 Enviar notificação de teste
           </button>
@@ -2785,6 +2788,44 @@ async function initPush(){
 
 function mostrarInstrucoes(){
   alert('Para ativar notificações no iPhone:\n\n1. Toque no ícone ↑ (compartilhar) na barra do Safari\n2. Toque em "Adicionar à Tela de Início"\n3. Toque em "Adicionar"\n4. Feche o Safari\n5. Abra o app pelo ícone na tela inicial\n6. Volte em Parâmetros e ative as notificações');
+}
+
+async function reregistrarPush(){
+  try{
+    // Remove subscription local
+    if(_pushSubscription){
+      await _pushSubscription.unsubscribe();
+      _pushSubscription = null;
+    }
+    // Remove do servidor
+    await fetch('/api/push/unsubscribe', {method:'POST'});
+
+    // Aguarda um momento e re-registra
+    await new Promise(r=>setTimeout(r, 500));
+
+    // Nova subscription
+    const vapidResp = await fetch('/api/push/vapid-public-key');
+    const {publicKey} = await vapidResp.json();
+    const applicationServerKey = urlBase64ToUint8Array(publicKey);
+
+    await navigator.serviceWorker.ready;
+    _pushSubscription = await _swRegistration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey
+    });
+
+    // Salva no servidor
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(_pushSubscription)
+    });
+
+    atualizarBtnPush();
+    alert('✅ Dispositivo reregistrado com sucesso! Clique em "Enviar notificação de teste" para confirmar.');
+  }catch(e){
+    alert('❌ Erro ao reregistrar: ' + e.message);
+  }
 }
 
 function atualizarBtnPush(){
