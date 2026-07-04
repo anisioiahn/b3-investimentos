@@ -994,10 +994,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div class="chart-header">
         <div class="chart-title">Histórico de preço</div>
         <div class="chart-ranges">
-          <button class="range-btn" onclick="filtrarChart(30,this)">1M</button>
+          <button class="range-btn active" onclick="filtrarChart(30,this)">1M</button>
           <button class="range-btn" onclick="filtrarChart(90,this)">3M</button>
           <button class="range-btn" onclick="filtrarChart(180,this)">6M</button>
-          <button class="range-btn active" onclick="filtrarChart(365,this)">1A</button>
+          <button class="range-btn" onclick="filtrarChart(365,this)">1A</button>
         </div>
       </div>
       <div class="chart-wrap">
@@ -2349,13 +2349,13 @@ async function abrirGrafico(ticker){
     <div class="jaia-bubble">Analisando <strong>${co.nome} (${ticker})</strong> ...</div>
   </div>`;
 
-  // Busca tudo em paralelo — /api/historico já retorna preço + histórico numa chamada só
+  // Busca tudo em paralelo — começa com 1M para carregar rápido
   const [hist, nots, scoreData] = await Promise.all([
-    fetchComTimeout(`/api/historico/${ticker}`, 20000),
+    fetchComTimeout(`/api/historico/${ticker}?range=1mo&interval=1d`, 15000),
     fetchComTimeout(`/api/noticias/${ticker}`, 40000),
     fetchComTimeout(`/api/janus/score/${ticker}`, 15000),
   ]);
-  const det = hist; // mesmo objeto tem preço e histórico
+  const det = hist;
 
   // Atualiza stats com detalhe
   if(det && !det.erro){
@@ -2794,10 +2794,41 @@ function renderNoticias(data){
   document.getElementById('noticias-grid').innerHTML=html;
 }
 
-function filtrarChart(dias,btn){
-  document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
-  const cutoff=Date.now()-dias*86400000;
-  renderChart(chartDataFull.filter(d=>(d.date*1000)>=cutoff));
+async function filtrarChart(dias, btn){
+  document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+
+  // Mapeia dias para range da Brapi
+  const rangeMap = {30:'1mo', 90:'3mo', 180:'6mo', 365:'1y'};
+  const range = rangeMap[dias] || '1mo';
+
+  // Verifica se já tem dados suficientes em cache
+  const cutoff = Date.now() - dias*86400000;
+  const temDados = chartDataFull.length > 0 &&
+    (chartDataFull[0].date*1000) <= cutoff;
+
+  if(temDados){
+    // Filtra do cache existente
+    renderChart(chartDataFull.filter(d=>(d.date*1000)>=cutoff));
+  } else {
+    // Busca da API com o range correto
+    document.getElementById('chart-loading').style.display='flex';
+    document.getElementById('chart-loading').textContent='Carregando...';
+    if(chartInstance){chartInstance.destroy();chartInstance=null;}
+    try{
+      const r = await fetch(`/api/historico/${_painelTicker}?range=${range}&interval=1d`);
+      const d = await r.json();
+      chartDataFull = d.historico || [];
+      if(chartDataFull.length){
+        document.getElementById('chart-loading').style.display='none';
+        renderChart(chartDataFull);
+      } else {
+        document.getElementById('chart-loading').textContent='Histórico não disponível.';
+      }
+    }catch(e){
+      document.getElementById('chart-loading').textContent='Erro ao carregar histórico.';
+    }
+  }
 }
 function renderChart(dados){
   if(!dados.length) return;
