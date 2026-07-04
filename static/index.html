@@ -3200,23 +3200,64 @@ function renderCarteiraCategorias(){
 
   let pizzaHtml = '';
   if(gruposArray.length > 1){
-    const segmentos = gruposArray.map(g=>{
-      const val = g.ativos.reduce((s,p)=>s+(p.valor_atual||p.valor_investido||0),0);
-      return {nome:g.nome, cor:g.cor, valor:val, pct: totalAtual>0?val/totalAtual*100:0};
+    // Pizza 1: por valor investido
+    const segInvestido = gruposArray.map(g=>{
+      const val = g.ativos.reduce((s,p)=>s+(p.valor_investido||0),0);
+      return {nome:g.nome, cor:g.cor, valor:val, pct: totalInvestido>0?val/totalInvestido*100:0};
     });
+
+    // Pizza 2: por lucro (só categorias com lucro positivo)
+    const totalLucro = gruposArray.reduce((s,g)=>{
+      const lucro = g.ativos.reduce((sl,p)=>sl+((p.valor_atual||p.valor_investido||0)-(p.valor_investido||0)),0);
+      return s + Math.max(0, lucro);
+    }, 0);
+    const segLucro = gruposArray.map(g=>{
+      const lucro = g.ativos.reduce((s,p)=>s+((p.valor_atual||p.valor_investido||0)-(p.valor_investido||0)),0);
+      return {nome:g.nome, cor:g.cor, valor:lucro, pct: totalLucro>0?Math.max(0,lucro)/totalLucro*100:0};
+    }).filter(s=>s.valor > 0);
+
     pizzaHtml = `<div style="margin-bottom:1.5rem">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)">📊 Distribuição por Categoria</div>
-      <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
-        <svg width="120" height="120" viewBox="0 0 120 120">${_gerarPizza(segmentos)}</svg>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          ${segmentos.map(s=>`
-            <div style="display:flex;align-items:center;gap:8px;font-size:12px">
-              <div style="width:12px;height:12px;border-radius:3px;background:${s.cor};flex-shrink:0"></div>
-              <span style="color:var(--text2)">${s.nome}</span>
-              <span style="font-weight:700;color:var(--text)">${s.pct.toFixed(1)}%</span>
-              <span style="color:var(--text3)">R$ ${fmt(s.valor)}</span>
-            </div>`).join('')}
+      <div style="display:flex;gap:2rem;flex-wrap:wrap">
+
+        <!-- Pizza 1: Valor Investido -->
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px;text-align:center">💰 Por Valor Investido</div>
+          <div style="display:flex;gap:1rem;align-items:center">
+            <svg width="100" height="100" viewBox="0 0 120 120">${_gerarPizza(segInvestido)}</svg>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              ${segInvestido.map(s=>`
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px">
+                  <div style="width:10px;height:10px;border-radius:2px;background:${s.cor};flex-shrink:0"></div>
+                  <span style="color:var(--text2)">${s.nome}</span>
+                  <span style="font-weight:700">${s.pct.toFixed(1)}%</span>
+                </div>`).join('')}
+            </div>
+          </div>
         </div>
+
+        <!-- Divisor -->
+        <div style="width:1px;background:var(--border);align-self:stretch"></div>
+
+        <!-- Pizza 2: Por Lucro -->
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px;text-align:center">📈 Por Resultado</div>
+          <div style="display:flex;gap:1rem;align-items:center">
+            ${segLucro.length > 0
+              ? `<svg width="100" height="100" viewBox="0 0 120 120">${_gerarPizza(segLucro)}</svg>
+                 <div style="display:flex;flex-direction:column;gap:5px">
+                   ${segLucro.map(s=>`
+                     <div style="display:flex;align-items:center;gap:6px;font-size:11px">
+                       <div style="width:10px;height:10px;border-radius:2px;background:${s.cor};flex-shrink:0"></div>
+                       <span style="color:var(--text2)">${s.nome}</span>
+                       <span style="font-weight:700;color:#16a34a">+R$ ${fmt(s.valor)}</span>
+                     </div>`).join('')}
+                 </div>`
+              : `<div style="font-size:12px;color:var(--text3);padding:1rem">Sem lucro<br>realizado ainda</div>`
+            }
+          </div>
+        </div>
+
       </div>
     </div>`;
   }
