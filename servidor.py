@@ -306,7 +306,78 @@ def loop_auto():
             atualizar_cache()
         time.sleep(10)
 
-def enriquecer_carteira(posicoes):
+def salvar_snapshots_fechamento():
+    """
+    Calcula e salva o snapshot diário de todas as carteiras de todos os usuários.
+    Deve ser chamado após o fechamento da B3 (~17:30h).
+    """
+    from datetime import datetime, timezone, timedelta
+    tz_br = timezone(timedelta(hours=-3))
+    hoje = datetime.now(tz_br).strftime("%Y-%m-%d")
+
+    print(f"[SNAPSHOT] 📸 Salvando snapshots de {hoje}...", flush=True)
+
+    # Inicializa tabela se necessário
+    try:
+        conn_init = db.get_conn()
+        db.db_init_snapshot_tables(conn_init)
+        conn_init.close()
+    except Exception as e:
+        print(f"[SNAPSHOT] Erro init: {e}", flush=True)
+        return
+
+    usuarios = db.db_listar_todos_usuarios()
+    print(f"[SNAPSHOT] {len(usuarios)} usuário(s) para processar", flush=True)
+
+    for uid_u in usuarios:
+        try:
+            posicoes = enriquecer_carteira(
+                [p for p in db.db_listar_carteira(uid_u) if p.get('status') == 'confirmada']
+            )
+            if not posicoes: continue
+
+            # Snapshot total geral (categoria_id = None)
+            vi_total = sum(p.get('valor_investido', 0) or 0 for p in posicoes)
+            va_total = sum(p.get('valor_atual', 0) or p.get('valor_investido', 0) or 0 for p in posicoes)
+            db.db_salvar_snapshot(uid_u, None, hoje, vi_total, va_total, len(posicoes))
+
+            # Snapshot por categoria
+            cats = db.db_listar_categorias(uid_u)
+            # Agrupa por categoria
+            grupos = {}
+            for pos in posicoes:
+                cat_id = pos.get('categoria_id')
+                if cat_id not in grupos:
+                    grupos[cat_id] = []
+                grupos[cat_id].append(pos)
+
+            for cat_id, ativos in grupos.items():
+                if cat_id is None: continue  # Geral já foi salvo acima
+                vi = sum(p.get('valor_investido', 0) or 0 for p in ativos)
+                va = sum(p.get('valor_atual', 0) or p.get('valor_investido', 0) or 0 for p in ativos)
+                db.db_salvar_snapshot(uid_u, cat_id, hoje, vi, va, len(ativos))
+
+            print(f"[SNAPSHOT] ✅ user {uid_u}: R$ {va_total:.2f} ({len(posicoes)} ativos)", flush=True)
+        except Exception as e:
+            print(f"[SNAPSHOT] ❌ Erro user {uid_u}: {e}", flush=True)
+
+    print(f"[SNAPSHOT] ✅ Snapshots do dia {hoje} salvos!", flush=True)
+
+# ── ROTAS DE SNAPSHOT ─────────────────────────────────────────
+@app.route("/api/carteira/snapshot")
+@requer_auth
+def api_carteira_snapshot():
+    categoria_id = request.args.get('categoria_id', type=int)
+    dias = request.args.get('dias', 90, type=int)
+    snapshots = db.db_listar_snapshots(uid(), categoria_id, dias)
+    return jsonify(snapshots)
+
+@app.route("/api/carteira/snapshot/salvar", methods=["POST"])
+@requer_auth
+def api_snapshot_manual():
+    """Permite salvar snapshot manualmente (para testes)."""
+    salvar_snapshots_fechamento()
+    return jsonify({"ok": True})
     resultado = []
     for pos in posicoes:
         ticker = pos["ticker"]
