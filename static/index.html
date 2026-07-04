@@ -3284,19 +3284,19 @@ function _renderTabelaAtivos(ativos, catId){
     ].join('');
     const altAcima  = _alertasServidor?.find(a=>a.ticker===p.ticker&&a.direcao==='acima');
     const altAbaixo = _alertasServidor?.find(a=>a.ticker===p.ticker&&a.direcao==='abaixo');
+    const btnStyle = 'padding:4px 8px;font-size:11px;border-radius:6px;cursor:pointer;font-family:inherit';
     const alertasHtml = `
-      <div class="tgt-lbl">Alertas de preço</div>
-      <div class="tgt-row">
+      <div style="font-size:10px;color:var(--text2);margin-bottom:3px">Alertas de preço</div>
+      <div style="display:flex;gap:4px;margin-bottom:2px">
         ${altAcima
-          ? `<button class="tgt-set" onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','acima',this)">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)}</button>`
-          : `<button class="tgt-btn" onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','acima',this)">▲ Acima</button>`}
+          ? `<button onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','acima',this)" style="${btnStyle};background:var(--green);color:#fff;border:1px solid var(--green)">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)}</button>`
+          : `<button onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','acima',this)" style="${btnStyle};background:transparent;color:var(--green);border:1px solid var(--green)">▲ Acima</button>`}
         ${altAbaixo
-          ? `<button class="tgt-set" onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','abaixo',this)">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)}</button>`
-          : `<button class="tgt-btn" onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','abaixo',this)">▼ Abaixo</button>`}
+          ? `<button onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','abaixo',this)" style="${btnStyle};background:#e53935;color:#fff;border:1px solid #e53935">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)}</button>`
+          : `<button onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','abaixo',this)" style="${btnStyle};background:transparent;color:#e53935;border:1px solid #e53935">▼ Abaixo</button>`}
       </div>
-      ${altAcima?`<div style="font-size:10px;color:#16a34a;margin-top:2px">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${p.ticker}','acima')">✕</button></div>`:''}
-      ${altAbaixo?`<div style="font-size:10px;color:#e53935;margin-top:2px">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${p.ticker}','abaixo')">✕</button></div>`:''}`;
-    return `<tr>
+      ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)} <button onclick="event.stopPropagation();removerAlerta('${p.ticker}','acima')" style="background:none;border:none;cursor:pointer;color:#16a34a;font-size:11px">✕</button></div>`:''}
+      ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)} <button onclick="event.stopPropagation();removerAlerta('${p.ticker}','abaixo')" style="background:none;border:none;cursor:pointer;color:#e53935;font-size:11px">✕</button></div>`:''}`;    return `<tr>
       <td><div style="display:flex;align-items:center;gap:8px">
         <div class="ct-logo" style="background:${p.cor};overflow:hidden">${logoHtml}</div>
         <div><div class="ct-ticker">${p.ticker}</div><div class="ct-nome">${p.nome}</div></div>
