@@ -655,18 +655,28 @@ def api_ibovespa():
     except Exception as e:
         print(f"[IBOV] Erro: {e}", flush=True)
     return jsonify({"ticker": "IBOVESPA", "historico": []})
+
+@app.route("/api/historico/<ticker>")
+@requer_auth
+def api_historico(ticker):
     ticker = ticker.upper()
+    range_param = request.args.get('range', '1y')
+    interval_param = request.args.get('interval', '1d')
+    cache_key = f"{ticker}_{range_param}_{interval_param}"
     agora_ts = time.time()
-    # Retorna do cache se ainda válido
-    if ticker in _cache_historico:
-        cached = _cache_historico[ticker]
+
+    # Cache de 5 minutos
+    if cache_key in _cache_historico:
+        cached = _cache_historico[cache_key]
         if agora_ts - cached["ts"] < CACHE_HISTORICO_TTL:
             return jsonify(cached["data"])
     try:
-        # Uma única chamada retorna preço atual + histórico
+        t0 = time.time()
         r = requests.get(
-            f"{QUOTE_URL}/{ticker}?range=1y&interval=1d&token={TOKEN_BRAPI}",
+            f"{QUOTE_URL}/{ticker}?range={range_param}&interval={interval_param}&token={TOKEN_BRAPI}",
             timeout=15)
+        t1 = time.time()
+        print(f"[HISTORICO] {ticker} {range_param}/{interval_param}: {round(t1-t0,1)}s", flush=True)
         if r.status_code == 200:
             results = r.json().get("results", [])
             if results:
@@ -681,9 +691,10 @@ def api_ibovespa():
                     "maxima_dia": d.get("regularMarketDayHigh"),
                     "historico": [{"date": h.get("date"), "close": h.get("close")} for h in hist if h.get("close")]
                 }
-                _cache_historico[ticker] = {"data": resp, "ts": agora_ts}
+                _cache_historico[cache_key] = {"data": resp, "ts": agora_ts}
                 return jsonify(resp)
-    except: pass
+    except Exception as e:
+        print(f"[HISTORICO] Erro {ticker}: {e}", flush=True)
     return jsonify({"ticker": ticker, "historico": []})
 
 @app.route("/api/detalhe/<ticker>")
