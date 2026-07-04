@@ -618,9 +618,43 @@ def api_intervalo():
 _cache_historico = {}  # ticker → {data, ts}
 CACHE_HISTORICO_TTL = 300  # 5 minutos
 
-@app.route("/api/historico/<ticker>")
+@app.route("/api/ibovespa")
 @requer_auth
-def api_historico(ticker):
+def api_ibovespa():
+    """Retorna histórico do IBOVESPA com range variável."""
+    range_param    = request.args.get('range', '1mo')
+    interval_param = request.args.get('interval', '1d')
+    cache_key = f"IBOV_{range_param}_{interval_param}"
+    agora_ts = time.time()
+
+    if cache_key in _cache_historico:
+        cached = _cache_historico[cache_key]
+        if agora_ts - cached["ts"] < CACHE_HISTORICO_TTL:
+            return jsonify(cached["data"])
+    try:
+        ticker_ibov = "%5EBVSP"  # ^BVSP URL encoded
+        r = requests.get(
+            f"{QUOTE_URL}/{ticker_ibov}?range={range_param}&interval={interval_param}&token={TOKEN_BRAPI}",
+            timeout=20)
+        if r.status_code == 200:
+            results = r.json().get("results", [])
+            if results:
+                d = results[0]
+                hist = d.get("historicalDataPrice", [])
+                # Calcula variação no período
+                precos = [h.get("close") for h in hist if h.get("close")]
+                var_pct = round((precos[-1]-precos[0])/precos[0]*100, 2) if len(precos)>=2 else 0
+                resp = {
+                    "ticker": "IBOVESPA",
+                    "preco": d.get("regularMarketPrice"),
+                    "variacao_pct_periodo": var_pct,
+                    "historico": [{"date": h.get("date"), "close": h.get("close")} for h in hist if h.get("close")]
+                }
+                _cache_historico[cache_key] = {"data": resp, "ts": agora_ts}
+                return jsonify(resp)
+    except Exception as e:
+        print(f"[IBOV] Erro: {e}", flush=True)
+    return jsonify({"ticker": "IBOVESPA", "historico": []})
     ticker = ticker.upper()
     agora_ts = time.time()
     # Retorna do cache se ainda válido
