@@ -3309,7 +3309,7 @@ function _renderTabelaAtivos(ativos, catId){
       <td class="num ${cls}" style="font-size:12px;font-weight:700">${lucro>=0?'+':''}R$ ${fmt(lucro)}<br><span style="font-size:10px;font-weight:400">${p.lucro_pct!=null?(p.lucro_pct>=0?'+':'')+p.lucro_pct.toFixed(2)+'%':''}</span></td>
       <td>
         <div style="display:flex;gap:8px;align-items:flex-start;justify-content:flex-end">
-          <div onclick="event.stopPropagation()">${alertasHtml}</div>
+          <div onclick="event.stopPropagation()" style="font-size:11px">${alertasHtml}</div>
           <div style="display:flex;flex-direction:column;gap:4px">
             <button class="ct-edit" onclick="abrirGrafico('${p.ticker}')" title="Ver análise">📊</button>
             <select onchange="moverAtivoCat('${p.ticker}',this.value)" title="Mover para categoria"
