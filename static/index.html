@@ -3194,7 +3194,7 @@ function renderCarteiraCategorias(){
     return;
   }
 
-  // Gráfico de pizza + cards de categoria
+  // Gráfico de evolução + pizza + cards
   const gruposArray = Object.values(grupos).filter(g=>g.ativos.length>0);
 
   let pizzaHtml = '';
@@ -3219,6 +3219,24 @@ function renderCarteiraCategorias(){
       </div>
     </div>`;
   }
+
+  // Gráfico de evolução histórica
+  const evoHtml = `<div style="margin-bottom:1.5rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--text)">📈 Evolução da Carteira</div>
+      <div style="display:flex;gap:6px">
+        <button onclick="carregarEvolucaoCarteira(null,30,this)" class="range-btn active" style="font-size:11px">1M</button>
+        <button onclick="carregarEvolucaoCarteira(null,90,this)" class="range-btn" style="font-size:11px">3M</button>
+        <button onclick="carregarEvolucaoCarteira(null,180,this)" class="range-btn" style="font-size:11px">6M</button>
+      </div>
+    </div>
+    <div style="position:relative;height:120px">
+      <canvas id="carteira-evo-chart"></canvas>
+      <div id="carteira-evo-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text3)">
+        Histórico disponível após o primeiro fechamento registrado
+      </div>
+    </div>
+  </div>`;
 
   // Cards de categoria
   const cardsHtml = gruposArray.map(g=>{
@@ -3250,12 +3268,15 @@ function renderCarteiraCategorias(){
     </div>`;
   }).join('');
 
-  el.innerHTML = pizzaHtml + `
+  el.innerHTML = pizzaHtml + evoHtml + `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:13px;font-weight:700;color:var(--text)">📂 Categorias</div>
       <button onclick="criarCategoria()" class="btn" style="font-size:12px;padding:6px 12px">+ Nova categoria</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">${cardsHtml}</div>`;
+
+  // Carrega gráfico de evolução
+  carregarEvolucaoCarteira(null, 30, document.querySelector('#carteira-tabela .range-btn.active'));
 }
 
 function _gerarPizza(segmentos){
@@ -3277,6 +3298,83 @@ function _gerarPizza(segmentos){
     angulo += ang;
     return `<path d="${path}" fill="${s.cor}" stroke="#fff" stroke-width="1.5"/>`;
   }).join('');
+}
+
+// ── EVOLUÇÃO HISTÓRICA DA CARTEIRA ───────────────────────────
+let _evoChart = null;
+
+async function carregarEvolucaoCarteira(categoriaId, dias, btnEl){
+  // Atualiza botão ativo
+  if(btnEl){
+    btnEl.closest('div')?.querySelectorAll('.range-btn')
+      .forEach(b=>b.classList.remove('active'));
+    btnEl.classList.add('active');
+  }
+
+  try{
+    const url = categoriaId
+      ? `/api/carteira/snapshot?categoria_id=${categoriaId}&dias=${dias}`
+      : `/api/carteira/snapshot?dias=${dias}`;
+    const r = await fetch(url);
+    const snapshots = await r.json();
+
+    const emptyEl = document.getElementById('carteira-evo-empty');
+    const canvas  = document.getElementById('carteira-evo-chart');
+    if(!canvas) return;
+
+    if(!snapshots?.length){
+      if(emptyEl) emptyEl.style.display = 'flex';
+      return;
+    }
+    if(emptyEl) emptyEl.style.display = 'none';
+
+    if(_evoChart){ _evoChart.destroy(); _evoChart = null; }
+
+    const labels = snapshots.map(s=>
+      new Date(s.data+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})
+    );
+    const valores = snapshots.map(s=>parseFloat(s.valor_atual||0));
+    const subindo = valores[valores.length-1] >= valores[0];
+    const cor = subindo ? '#16a34a' : '#e53935';
+
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0,0,0,120);
+    if(subindo){
+      grad.addColorStop(0,   'rgba(22,163,74,0.5)');
+      grad.addColorStop(0.5, 'rgba(22,163,74,0.15)');
+      grad.addColorStop(1,   'rgba(22,163,74,0.02)');
+    } else {
+      grad.addColorStop(0,   'rgba(229,57,53,0.5)');
+      grad.addColorStop(0.5, 'rgba(229,57,53,0.15)');
+      grad.addColorStop(1,   'rgba(229,57,53,0.02)');
+    }
+
+    _evoChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets:[{
+        data: valores,
+        borderColor: cor,
+        backgroundColor: grad,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        fill: true,
+        tension: 0.4
+      }]},
+      options:{
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins:{ legend:{display:false},
+          tooltip:{ callbacks:{ label: c=>`R$ ${fmt(c.parsed.y)}` } }
+        },
+        scales:{
+          x:{ grid:{display:false}, border:{display:false}, ticks:{font:{size:9},color:'#999',maxTicksLimit:6} },
+          y:{ position:'right', grid:{color:'rgba(0,0,0,0.04)'}, border:{display:false},
+              ticks:{callback:v=>`R$ ${fmt(v)}`,font:{size:9},color:'#999'} }
+        }
+      }
+    });
+  }catch(e){ console.error('Erro evolução carteira:', e); }
 }
 
 function abrirCategoria(catId){
@@ -3331,7 +3429,27 @@ function renderCarteiraPorCategoria(catId){
       </div>
       <div></div>
     </div>
+    <!-- Gráfico de evolução da categoria -->
+    <div style="margin-bottom:1.25rem;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--text)">📈 Evolução — ${cat.nome}</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="carregarEvolucaoCarteira(${catId},30,this)" class="range-btn active" style="font-size:11px">1M</button>
+          <button onclick="carregarEvolucaoCarteira(${catId},90,this)" class="range-btn" style="font-size:11px">3M</button>
+          <button onclick="carregarEvolucaoCarteira(${catId},180,this)" class="range-btn" style="font-size:11px">6M</button>
+        </div>
+      </div>
+      <div style="position:relative;height:100px">
+        <canvas id="carteira-evo-chart"></canvas>
+        <div id="carteira-evo-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text3)">
+          Histórico disponível após o primeiro fechamento registrado
+        </div>
+      </div>
+    </div>
     ${_renderTabelaAtivos(ordenada, catId)}`;
+
+  // Carrega gráfico da categoria
+  if(catId !== null) carregarEvolucaoCarteira(catId, 30, null);
 }
 
 function _renderTabelaAtivos(ativos, catId){
