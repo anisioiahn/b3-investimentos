@@ -260,6 +260,9 @@ def verificar_alertas_todos(cache):
         disparou = (direcao=="acima" and preco_atual>=valor_alvo) or \
                    (direcao=="abaixo" and preco_atual<=valor_alvo)
         if disparou:
+            # Só dispara se ainda não foi disparado hoje
+            if db.db_ja_disparado_hoje(uid_u, ticker, direcao):
+                continue
             seta = "▲" if direcao=="acima" else "▼"
             log(f"🚨 {ticker} {seta} R${preco_atual:.2f} (user {uid_u})", "alerta")
             db.db_registrar_disparado(uid_u, alerta, preco_atual)
