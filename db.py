@@ -395,7 +395,7 @@ def db_listar_alertas(uid):
     try:
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT * FROM alertas WHERE usuario_id=%s ORDER BY criado_em DESC", (uid,))
+            cur.execute("SELECT * FROM alertas WHERE usuario_id=%s ORDER BY ticker ASC, direcao ASC", (uid,))
             rows = [dict(r) for r in cur.fetchall()]
             for r in rows:
                 if r.get('valor'): r['valor'] = float(r['valor'])
