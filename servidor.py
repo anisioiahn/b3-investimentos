@@ -275,17 +275,26 @@ def verificar_alertas_todos(cache):
                 f"{alerta.get('nome',alerta['ticker'])}\n{seta} R$ {preco:.2f}")
 
 def enviar_push_para(subs, titulo, corpo):
-    if not subs: return
+    if not subs:
+        print(f"[PUSH] Nenhuma subscription para enviar: {titulo}", flush=True)
+        return
     try:
-        from pywebpush import webpush
+        from pywebpush import webpush, WebPushException
         payload = json.dumps({"title":titulo,"body":corpo,"tag":"janus-alerta"})
         for sub in subs:
             try:
                 webpush(subscription_info=sub, data=payload,
                         vapid_private_key=VAPID_PRIVATE_KEY,
                         vapid_claims={"sub":VAPID_EMAIL})
-            except: pass
-    except: pass
+                print(f"[PUSH] ✅ Enviado: {titulo}", flush=True)
+            except WebPushException as e:
+                print(f"[PUSH] ❌ WebPushException: {e} | status: {e.response.status_code if e.response else 'N/A'}", flush=True)
+            except Exception as e:
+                print(f"[PUSH] ❌ Erro ao enviar: {e}", flush=True)
+    except ImportError:
+        print("[PUSH] ❌ pywebpush não instalado", flush=True)
+    except Exception as e:
+        print(f"[PUSH] ❌ Erro geral: {e}", flush=True)
 
 def loop_auto():
     time.sleep(10)
