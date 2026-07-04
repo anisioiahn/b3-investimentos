@@ -893,3 +893,96 @@ def db_listar_dividend_ranking(limit=50):
         return []
     finally:
         conn.close()
+
+# ── CARTEIRA SNAPSHOT (histórico diário de performance) ───────
+def db_init_snapshot_tables(conn):
+    """Cria tabela de snapshots se não existir."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS carteira_snapshot (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+                categoria_id INTEGER DEFAULT NULL,  -- NULL = total geral
+                data TEXT NOT NULL,                 -- YYYY-MM-DD
+                valor_investido NUMERIC,
+                valor_atual NUMERIC,
+                lucro NUMERIC,
+                lucro_pct NUMERIC,
+                total_ativos INTEGER,
+                created_at TEXT,
+                UNIQUE(usuario_id, categoria_id, data)
+            );
+            CREATE INDEX IF NOT EXISTS idx_snapshot_usuario ON carteira_snapshot(usuario_id, data);
+        """)
+    conn.commit()
+
+def db_salvar_snapshot(uid, categoria_id, data, valor_investido, valor_atual, total_ativos):
+    """Salva ou atualiza snapshot diário."""
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    lucro = round(valor_atual - valor_investido, 2) if valor_atual else 0
+    lucro_pct = round(lucro / valor_investido * 100, 4) if valor_investido else 0
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO carteira_snapshot
+                    (usuario_id, categoria_id, data, valor_investido, valor_atual,
+                     lucro, lucro_pct, total_ativos, created_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (usuario_id, categoria_id, data) DO UPDATE SET
+                    valor_investido=EXCLUDED.valor_investido,
+                    valor_atual=EXCLUDED.valor_atual,
+                    lucro=EXCLUDED.lucro,
+                    lucro_pct=EXCLUDED.lucro_pct,
+                    total_ativos=EXCLUDED.total_ativos,
+                    created_at=EXCLUDED.created_at
+            """, (uid, categoria_id, data, valor_investido, valor_atual,
+                  lucro, lucro_pct, total_ativos, now))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[SNAPSHOT] Erro salvar: {e}", flush=True)
+
+def db_listar_snapshots(uid, categoria_id=None, dias=90):
+    """Retorna histórico de snapshots para gráfico."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            if categoria_id is None:
+                # Total geral (categoria_id IS NULL)
+                cur.execute("""
+                    SELECT data, valor_investido, valor_atual, lucro, lucro_pct, total_ativos
+                    FROM carteira_snapshot
+                    WHERE usuario_id=%s AND categoria_id IS NULL
+                    ORDER BY data ASC
+                    LIMIT %s
+                """, (uid, dias))
+            else:
+                cur.execute("""
+                    SELECT data, valor_investido, valor_atual, lucro, lucro_pct, total_ativos
+                    FROM carteira_snapshot
+                    WHERE usuario_id=%s AND categoria_id=%s
+                    ORDER BY data ASC
+                    LIMIT %s
+                """, (uid, categoria_id, dias))
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                for k in ['valor_investido','valor_atual','lucro','lucro_pct']:
+                    if r.get(k): r[k] = float(r[k])
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[SNAPSHOT] Erro listar: {e}", flush=True)
+        return []
+
+def db_listar_todos_usuarios():
+    """Retorna todos os usuários para o cron de snapshot."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT id FROM usuarios WHERE ativo=TRUE OR ativo IS NULL")
+            rows = [r['id'] for r in cur.fetchall()]
+        conn.close()
+        return rows
+    except: return []
