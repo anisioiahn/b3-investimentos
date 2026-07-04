@@ -705,7 +705,11 @@ def api_alertas_limpar():
 @app.route("/api/carteira", methods=["GET"])
 @requer_auth
 def api_carteira_get():
-    return jsonify(enriquecer_carteira(db.db_listar_carteira(uid())))
+    try:
+        return jsonify(enriquecer_carteira(db.db_listar_carteira(uid())))
+    except Exception as e:
+        print(f"[CARTEIRA] ❌ Erro GET: {e}", flush=True)
+        return jsonify({"erro": str(e)}), 500
 
 @app.route("/api/carteira", methods=["POST"])
 @requer_auth
@@ -1135,6 +1139,15 @@ if _db_ok:
         _cache = cache_db
         log(f"📂 Cache restaurado do banco", "sucesso")
     auth.init_admin_padrao()
+    # Inicializa tabelas de snapshot e dividendos
+    try:
+        conn_startup = db.get_conn()
+        db.db_init_snapshot_tables(conn_startup)
+        db.db_init_dividend_tables(conn_startup)
+        conn_startup.close()
+        print("[STARTUP] ✅ Tabelas de snapshot e dividendos verificadas", flush=True)
+    except Exception as e:
+        print(f"[STARTUP] ⚠️ Erro ao verificar tabelas: {e}", flush=True)
 _proximo_update = agora().timestamp() + INTERVALO_INICIAL
 threading.Thread(target=loop_auto, daemon=True).start()
 
