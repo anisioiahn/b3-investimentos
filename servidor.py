@@ -306,6 +306,30 @@ def loop_auto():
             atualizar_cache()
         time.sleep(10)
 
+def enriquecer_carteira(posicoes):
+    resultado = []
+    for pos in posicoes:
+        ticker = pos["ticker"]
+        preco_atual = None
+        for s in _cache.get("setores",{}).values():
+            for e in s["empresas"]:
+                if e["ticker"] == ticker:
+                    preco_atual = e.get("preco")
+                    if not pos.get("nome") or pos["nome"]==ticker: pos["nome"]=e.get("nome",ticker)
+                    if not pos.get("cor"): pos["cor"]=e.get("cor","#0066cc")
+                    if not pos.get("setor_nome"): pos["setor_nome"]=s.get("nome","")
+                    break
+            if preco_atual: break
+        qtd = float(pos.get("quantidade",0))
+        pm = float(pos.get("preco_medio",0))
+        vi = round(qtd*pm,2)
+        va = round(qtd*preco_atual,2) if preco_atual else None
+        lucro = round(va-vi,2) if va else None
+        lucro_pct = round((preco_atual-pm)/pm*100,2) if preco_atual and pm else None
+        resultado.append({**pos,"preco_atual":preco_atual,"valor_investido":vi,
+                          "valor_atual":va,"lucro":lucro,"lucro_pct":lucro_pct})
+    return resultado
+
 def salvar_snapshots_fechamento():
     """
     Calcula e salva o snapshot diário de todas as carteiras de todos os usuários.
