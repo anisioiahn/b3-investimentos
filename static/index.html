@@ -1701,51 +1701,93 @@ function _renderCockpitCarteira(){
   const el = document.getElementById('cockpit-carteira');
   const confirmadas = (_carteira||[]).filter(p=>p.status==='confirmada');
   if(!confirmadas.length){
-    el.innerHTML = '<div class="cockpit-empty">Sua carteira está vazia<br><small>Adicione posições na aba Carteira</small></div>'; return;
+    el.innerHTML = `<div class="cockpit-empty">
+      <div style="font-size:32px;margin-bottom:8px">💼</div>
+      <div>Carteira vazia</div>
+      <small>Adicione posições na aba Carteira</small>
+    </div>`; return;
   }
 
   const totalInvestido = confirmadas.reduce((s,p)=>s+(p.valor_investido||0),0);
   const totalAtual = confirmadas.reduce((s,p)=>s+(p.valor_atual||p.valor_investido||0),0);
   const lucro = totalAtual - totalInvestido;
   const lucroP = totalInvestido>0?(lucro/totalInvestido*100):0;
-  const lucroClass = lucro>0?'lucro-pos':lucro<0?'lucro-neg':'';
+  const positivo = lucro >= 0;
 
-  // Top 3 melhores e piores da carteira
   const comLucro = confirmadas.filter(p=>p.lucro_pct!=null).sort((a,b)=>b.lucro_pct-a.lucro_pct);
   const melhores = comLucro.slice(0,3);
-  const piores = comLucro.slice(-2).reverse();
+  const piores = comLucro.filter(p=>p.lucro_pct<0).slice(-2).reverse();
 
   el.innerHTML = `
-    <div class="ck-cart-total">
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:12px;color:var(--text2)">Total investido</span>
-        <span style="font-size:13px;font-weight:700">R$ ${fmt(totalInvestido)}</span>
+    <!-- Resumo principal -->
+    <div style="background:${positivo?'linear-gradient(135deg,#16a34a,#15803d)':'linear-gradient(135deg,#dc2626,#b91c1c)'};
+      border-radius:12px;padding:14px 16px;margin-bottom:12px;color:#fff">
+      <div style="font-size:11px;opacity:.8;margin-bottom:2px">Resultado Total</div>
+      <div style="font-size:24px;font-weight:800;letter-spacing:-0.5px">
+        ${positivo?'+':''}R$ ${fmt(lucro)}
       </div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:12px;color:var(--text2)">Valor atual</span>
-        <span style="font-size:13px;font-weight:700">R$ ${fmt(totalAtual)}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between">
-        <span style="font-size:12px;color:var(--text2)">Resultado</span>
-        <span class="${lucroClass}" style="font-size:14px;font-weight:700">${lucro>=0?'+':''}R$ ${fmt(lucro)} <small>(${lucroP>=0?'+':''}${lucroP.toFixed(2)}%)</small></span>
+      <div style="font-size:13px;opacity:.9;margin-top:2px">${positivo?'+':''}${lucroP.toFixed(2)}%</div>
+      <div style="display:flex;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.2)">
+        <div>
+          <div style="font-size:10px;opacity:.7">Investido</div>
+          <div style="font-size:13px;font-weight:600">R$ ${fmt(totalInvestido)}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;opacity:.7">Atual</div>
+          <div style="font-size:13px;font-weight:600">R$ ${fmt(totalAtual)}</div>
+        </div>
       </div>
     </div>
+
+    <!-- Melhores -->
     ${melhores.length?`
-    <div style="margin-top:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🏆 MELHORES</div>
-      ${melhores.map(p=>`<div class="ck-cart-row" style="cursor:pointer" onclick="abrirGrafico('${p.ticker}')">
-        <span style="font-weight:700;font-size:12px">${p.ticker}</span>
-        <span class="lucro-pos" style="font-size:12px;font-weight:700">+${p.lucro_pct?.toFixed(2)||0}%</span>
-      </div>`).join('')}
+    <div style="margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">🏆 DESTAQUES</div>
+      ${melhores.map(p=>`
+        <div onclick="abrirGrafico('${p.ticker}')" style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;border-bottom:1px solid var(--border)">
+          <div style="width:28px;height:28px;border-radius:6px;overflow:hidden;flex-shrink:0;background:#0066cc">
+            <img src="https://icons.brapi.dev/icons/${p.ticker}.svg" style="width:100%;height:100%;object-fit:cover"
+              onerror="this.style.display='none';this.parentElement.style.background='${p.cor||'#0066cc'}';this.parentElement.innerHTML='<span style=font-size:8px;color:#fff;display:flex;align-items:center;justify-content:center;height:100%>${p.ticker.substring(0,4)}</span>'">
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:700">${p.ticker}</div>
+            <div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nome||''}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px;font-weight:700;color:#16a34a">+${p.lucro_pct?.toFixed(2)||0}%</div>
+            <div style="font-size:10px;color:var(--text3)">+R$ ${fmt(p.lucro||0)}</div>
+          </div>
+        </div>`).join('')}
     </div>`:''}
+
+    <!-- Atenção -->
     ${piores.length?`
-    <div style="margin-top:10px">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">⚠️ ATENÇÃO</div>
-      ${piores.map(p=>`<div class="ck-cart-row" style="cursor:pointer" onclick="abrirGrafico('${p.ticker}')">
-        <span style="font-weight:700;font-size:12px">${p.ticker}</span>
-        <span class="lucro-neg" style="font-size:12px;font-weight:700">${p.lucro_pct?.toFixed(2)||0}%</span>
-      </div>`).join('')}
-    </div>`:''}`;
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">⚠️ ATENÇÃO</div>
+      ${piores.map(p=>`
+        <div onclick="abrirGrafico('${p.ticker}')" style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;border-bottom:1px solid var(--border)">
+          <div style="width:28px;height:28px;border-radius:6px;overflow:hidden;flex-shrink:0;background:#0066cc">
+            <img src="https://icons.brapi.dev/icons/${p.ticker}.svg" style="width:100%;height:100%;object-fit:cover"
+              onerror="this.style.display='none';this.parentElement.style.background='${p.cor||'#0066cc'}';this.parentElement.innerHTML='<span style=font-size:8px;color:#fff;display:flex;align-items:center;justify-content:center;height:100%>${p.ticker.substring(0,4)}</span>'">
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:700">${p.ticker}</div>
+            <div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nome||''}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px;font-weight:700;color:#e53935">${p.lucro_pct?.toFixed(2)||0}%</div>
+            <div style="font-size:10px;color:var(--text3)">R$ ${fmt(p.lucro||0)}</div>
+          </div>
+        </div>`).join('')}
+    </div>`:''}
+
+    <!-- Link para carteira -->
+    <div style="text-align:center;margin-top:12px">
+      <button onclick="goPage('carteira',document.querySelector('.tab[onclick*=carteira]'))"
+        style="font-size:11px;color:var(--green);background:none;border:none;cursor:pointer;font-weight:600">
+        Ver carteira completa →
+      </button>
+    </div>`;
 }
 
 // ── DIVIDENDOS ───────────────────────────────────────────────
