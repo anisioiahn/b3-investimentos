@@ -2920,13 +2920,17 @@ function updateAltCnt(){
 
 function renderAlerts(){
   const c=document.getElementById('altbox');
-  let html='<div class="alts-toolbar"><div class="alts-toolbar-title">🔔 Alertas configurados</div></div>';
+
+  // ── Alertas configurados (esquerda)
+  let esqHtml = '';
   if(!_alertasServidor.length){
-    html+=`<div class="alts-empty"><div class="alts-empty-icon">🔔</div>
-      <div style="font-size:15px;font-weight:600;margin-bottom:6px">Nenhum alerta configurado</div>
-      <div style="font-size:13px">Acesse um setor → clique em uma empresa → defina o valor alvo e a direção (▲ acima ou ▼ abaixo)</div></div>`;
+    esqHtml = `<div class="alts-empty" style="padding:2rem">
+      <div style="font-size:32px;margin-bottom:8px">🔔</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px">Nenhum alerta configurado</div>
+      <div style="font-size:12px;color:var(--text2)">Configure alertas nos Setores, Janus Index ou Carteira</div>
+    </div>`;
   } else {
-    html+=_alertasServidor.map(a=>{
+    esqHtml = _alertasServidor.map(a=>{
       const dirCls=a.direcao==='acima'?'alt-direcao-acima':'alt-direcao-abaixo';
       const dirSeta=a.direcao==='acima'?'▲':'▼';
       let precoAtual=null;
@@ -2935,8 +2939,9 @@ function renderAlerts(){
         if(co&&co.preco){precoAtual=co.preco;break;}
       }
       const dist=precoAtual?((a.valor-precoAtual)/precoAtual*100):null;
+      const logoHtml=`<img src="https://icons.brapi.dev/icons/${a.ticker}.svg" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.style.display='none';this.parentElement.style.background='${a.cor}';this.parentElement.textContent='${a.ticker.substring(0,4)}'">`;
       return `<div class="alt-item">
-        <div class="alt-logo" style="background:${a.cor}">${a.ticker.substring(0,4)}</div>
+        <div class="alt-logo" style="background:${a.cor};overflow:hidden">${logoHtml}</div>
         <div class="alt-info">
           <div class="alt-ticker">${a.ticker}</div>
           <div class="alt-nome">${a.nome}</div>
@@ -2952,28 +2957,51 @@ function renderAlerts(){
       </div>`;
     }).join('');
   }
-  if(_disparadosServidor.length){
-    html+=`<div class="disparados-section">
-      <div class="disparados-title"><span>🚨 Alertas disparados</span>
-        <button class="btn" onclick="limparDisparados()" style="font-size:11px;padding:3px 10px">Limpar</button>
-      </div>`;
-    html+=_disparadosServidor.slice(0,10).map(d=>{
+
+  // ── Alertas disparados (direita)
+  let dirHtml = '';
+  if(!_disparadosServidor.length){
+    dirHtml = `<div class="alts-empty" style="padding:2rem">
+      <div style="font-size:32px;margin-bottom:8px">✅</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px">Nenhum alerta disparado</div>
+      <div style="font-size:12px;color:var(--text2)">Alertas atingidos aparecerão aqui</div>
+    </div>`;
+  } else {
+    dirHtml = _disparadosServidor.slice(0,20).map(d=>{
       const seta=d.direcao==='acima'?'▲':'▼';
       const ts=d.disparado_em?new Date(d.disparado_em).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'}):'';
+      const logoHtml=`<img src="https://icons.brapi.dev/icons/${d.ticker}.svg" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.style.display='none';this.parentElement.style.background='${d.cor||'#0066cc'}';this.parentElement.textContent='${d.ticker.substring(0,4)}'">`;
       return `<div class="disparado-item">
-        <div class="alt-logo" style="background:${d.cor};width:34px;height:34px;font-size:9px">${d.ticker.substring(0,4)}</div>
+        <div class="alt-logo" style="background:${d.cor||'#0066cc'};width:34px;height:34px;font-size:9px;overflow:hidden">${logoHtml}</div>
         <div class="disparado-info">
-          <div class="disparado-ticker">${d.ticker} · ${d.nome}</div>
+          <div class="disparado-ticker">${d.ticker} · ${d.nome||''}</div>
           <div>${seta} Atingiu R$ ${(d.preco_no_disparo||0).toFixed(2)} (alvo: R$ ${(d.valor||0).toFixed(2)} ${d.direcao})</div>
           <div class="disparado-ts">${ts}</div>
         </div>
         <span class="alt-badge alt-badge-disparado">🚨</span>
       </div>`;
     }).join('');
-    html+='</div>';
   }
-  c.innerHTML=html;
-}
+
+  c.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start">
+      <!-- ESQUERDA: Configurados -->
+      <div>
+        <div class="alts-toolbar" style="margin-bottom:1rem">
+          <div class="alts-toolbar-title">🔔 Alertas configurados (${_alertasServidor.length})</div>
+        </div>
+        ${esqHtml}
+      </div>
+      <!-- DIREITA: Disparados -->
+      <div>
+        <div class="alts-toolbar" style="margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between">
+          <div class="alts-toolbar-title">🚨 Alertas disparados (${_disparadosServidor.length})</div>
+          ${_disparadosServidor.length?`<button class="btn" onclick="limparDisparados()" style="font-size:11px;padding:3px 10px">Limpar</button>`:''}
+        </div>
+        ${dirHtml}
+      </div>
+    </div>`;}
+
 
 async function limparDisparados(){
   await fetch('/api/alertas/disparados/limpar',{method:'POST'});
