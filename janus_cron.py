@@ -47,6 +47,22 @@ def iniciar_cron_janus():
             }
         )
 
+        def executar_snapshot():
+            """Salva snapshot diário após fechamento da B3."""
+            hora_str = agora().strftime("%H:%M")
+            hora_h = agora().hour
+            hora_m = agora().minute
+            # Só executa entre 17:30 e 17:35
+            if not (hora_h == 17 and 30 <= hora_m <= 35):
+                print(f"[SNAPSHOT CRON] ⏭️ {hora_str} — fora do horário, ignorando")
+                return
+            print(f"[SNAPSHOT CRON] 📸 {hora_str} — salvando snapshot de fechamento...")
+            try:
+                from servidor import salvar_snapshots_fechamento
+                salvar_snapshots_fechamento()
+            except Exception as e:
+                print(f"[SNAPSHOT CRON] ❌ Erro: {e}", flush=True)
+
         scheduler.add_job(executar, "cron",
                           day_of_week="mon-fri",
                           hour=19, minute=0,
@@ -56,6 +72,11 @@ def iniciar_cron_janus():
                           day_of_week="mon-fri",
                           hour=10, minute=0,
                           id="janus_coleta_abertura")
+
+        scheduler.add_job(executar_snapshot, "cron",
+                          day_of_week="mon-fri",
+                          hour=17, minute=30,
+                          id="carteira_snapshot_fechamento")
 
         scheduler.start()
         print("[JANUS CRON] ✅ Agendamentos configurados:")
