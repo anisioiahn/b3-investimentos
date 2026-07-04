@@ -3293,18 +3293,54 @@ function _renderTabelaAtivos(ativos, catId){
       <td class="num">R$ ${fmt(p.valor_investido)}</td>
       <td class="num">${p.valor_atual?`R$ ${fmt(p.valor_atual)}`:'—'}</td>
       <td class="num ${cls}" style="font-size:12px;font-weight:700">${lucro>=0?'+':''}R$ ${fmt(lucro)}<br><span style="font-size:10px;font-weight:400">${p.lucro_pct!=null?(p.lucro_pct>=0?'+':'')+p.lucro_pct.toFixed(2)+'%':''}</span></td>
-      <td><div style="display:flex;gap:4px;justify-content:flex-end">
+      <td><div style="display:flex;gap:4px;justify-content:flex-end;align-items:center">
         <select onchange="moverAtivoCat('${p.ticker}',this.value)" title="Mover para categoria"
           style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);cursor:pointer">
           ${catOpts}
         </select>
         <button class="ct-edit" onclick="abrirGrafico('${p.ticker}')" title="Ver análise">📊</button>
+        <button class="ct-edit" onclick="abrirAlertaCarteira('${p.ticker}','acima')" title="Alerta acima" style="color:#16a34a">▲</button>
+        <button class="ct-edit" onclick="abrirAlertaCarteira('${p.ticker}','abaixo')" title="Alerta abaixo" style="color:#e53935">▼</button>
         <button class="ct-edit" onclick="editarPosicao('${p.ticker}')" title="Editar">✏️</button>
         <button class="ct-del" onclick="removerPosicao('${p.ticker}')" title="Remover">🗑</button>
       </div></td>
     </tr>`;
   }).join('')}
   </tbody></table>`;
+}
+
+function abrirAlertaCarteira(ticker, direcao){
+  // Verifica se já tem alerta para este ticker/direção
+  const jatem = _alertasServidor?.find(a=>a.ticker===ticker&&a.direcao===direcao);
+
+  if(jatem){
+    // Mostra alerta existente com opção de remover
+    const dirLabel = direcao==='acima' ? '▲ Acima de' : '▼ Abaixo de';
+    const dirCor   = direcao==='acima' ? '#16a34a' : '#e53935';
+    document.querySelectorAll('.alerta-modal-inline').forEach(el=>el.remove());
+    const modal = document.createElement('div');
+    modal.className = 'alerta-modal-inline';
+    modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.25rem;z-index:600;box-shadow:0 8px 32px rgba(0,0,0,.2);min-width:260px';
+    modal.innerHTML = `
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px">${ticker}</div>
+      <div style="font-size:12px;color:${dirCor};font-weight:600;margin-bottom:12px">${dirLabel} R$ ${parseFloat(jatem.valor).toFixed(2)}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Alerta ativo — você será notificado quando o preço atingir este valor.</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="this.closest('.alerta-modal-inline').remove()"
+          style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--card);cursor:pointer;font-size:13px;color:var(--text)">Fechar</button>
+        <button onclick="removerAlerta('${ticker}','${direcao}');this.closest('.alerta-modal-inline').remove();"
+          style="flex:1;padding:9px;border:none;border-radius:8px;background:#e53935;color:#fff;cursor:pointer;font-size:13px;font-weight:600">🗑 Remover</button>
+      </div>`;
+    document.body.appendChild(modal);
+    // Fecha ao clicar fora
+    setTimeout(()=>{
+      const fechar = e=>{ if(!modal.contains(e.target)){ modal.remove(); document.removeEventListener('click',fechar); } };
+      document.addEventListener('click', fechar);
+    }, 100);
+  } else {
+    // Cria novo alerta — reutiliza lógica existente
+    toggleDirAlertaBusca(ticker, direcao, null);
+  }
 }
 
 async function moverAtivoCat(ticker, catId){
