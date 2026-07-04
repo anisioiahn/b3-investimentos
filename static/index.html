@@ -2893,8 +2893,10 @@ async function salvarAlerta(ticker, valor, direcao){
       else alert(`Erro: ${d.erro||'Não foi possível salvar o alerta'}`);
       return;
     }
-    // Recarrega alertas e atualiza tela
     await carregarAlertas();
+    // Atualiza tela atual
+    if(_paginaAtiva === 'carteira') renderCarteira();
+    if(currentSector) renderEmpresas(true);
   }catch(e){ alert('Erro de conexão ao salvar alerta'); }
 }
 
@@ -2903,6 +2905,8 @@ async function removerAlerta(ticker, direcao){
     const url=direcao?`/api/alertas/${ticker}?direcao=${direcao}`:`/api/alertas/${ticker}`;
     await fetch(url,{method:'DELETE'});
     await carregarAlertas();
+    // Atualiza tela atual
+    if(_paginaAtiva === 'carteira') renderCarteira();
     if(currentSector) renderEmpresas(true);
   }catch(e){}
 }
@@ -3312,10 +3316,6 @@ function _renderTabelaAtivos(ativos, catId){
           <div onclick="event.stopPropagation()" style="font-size:11px">${alertasHtml}</div>
           <div style="display:flex;flex-direction:column;gap:4px">
             <button class="ct-edit" onclick="abrirGrafico('${p.ticker}')" title="Ver análise">📊</button>
-            <select onchange="moverAtivoCat('${p.ticker}',this.value)" title="Mover para categoria"
-              style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);cursor:pointer">
-              ${catOpts}
-            </select>
             <button class="ct-edit" onclick="editarPosicao('${p.ticker}')" title="Editar">✏️</button>
             <button class="ct-del" onclick="removerPosicao('${p.ticker}')" title="Remover">🗑</button>
           </div>
