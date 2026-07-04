@@ -609,7 +609,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <!-- PÁGINA COCKPIT -->
     <div class="page active" id="page-cockpit">
       <!-- Saudação -->
-      <div id="cockpit-header" style="margin-bottom:1.5rem;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+      <div id="cockpit-header" style="margin-bottom:0.75rem;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
         <div>
           <div style="font-size:20px;font-weight:700;color:var(--text)" id="cockpit-saudacao">Bom dia! 👋</div>
           <div style="font-size:13px;color:var(--text2);margin-top:4px" id="cockpit-resumo-dia">Carregando resumo do mercado...</div>
@@ -1765,7 +1765,10 @@ function _renderCockpitSaudacao(){
   // Janus Index — busca da API
   fetch('/api/janus/status').then(r=>r.json()).then(d=>{
     const el = document.getElementById('ck-att-janus');
-    if(el) el.textContent = d.ultima_coleta ? fmtData(d.ultima_coleta) : '—';
+    if(!el) return;
+    const uc = d.ultima_coleta;
+    const dataStr = uc?.finished_at || uc?.started_at || null;
+    el.textContent = dataStr ? fmtData(dataStr) : '—';
   }).catch(()=>{});
 
   // Dividendos — pega do ranking se disponível
