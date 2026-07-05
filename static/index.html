@@ -61,11 +61,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   .hlogo .hsub{display:none}
   .hright .hframe{display:none}
   .hright{gap:4px}
-  .tabs{display:none}
   .timerbar{display:none}
   .progress-bar{display:none}
-  .content{padding:1rem;padding-bottom:80px}
+  .content{padding:.75rem;padding-bottom:80px;overflow-x:hidden}
   .cockpit-grid{grid-template-columns:1fr}
+  .cockpit-card{overflow:hidden;min-width:0}
+  canvas{max-width:100%!important}
   .bottom-bar{
     display:flex;position:fixed;bottom:0;left:0;right:0;z-index:200;
     background:var(--card);border-top:1px solid var(--border);
@@ -96,7 +97,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .btn:hover{border-color:var(--green);color:var(--green)}
 
 /* TABS */
-.tabs{display:flex;border-bottom:1px solid var(--border);padding:0 1.5rem;background:#fff;overflow-x:auto}
+.tabs{display:none}
 .tab{padding:11px 14px;font-size:13px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;display:flex;align-items:center;gap:5px}
 .tab-ativo{background:var(--green-light);border-bottom-color:var(--green)!important;color:var(--green)!important;gap:6px}
 .tab-ativo-logo{width:18px;height:18px;border-radius:4px;overflow:hidden;flex-shrink:0;background:#0066cc;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff}
