@@ -62,8 +62,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   .hright .hframe{display:none}
   .hright{gap:4px}
   .tabs{display:none}
-  .content{padding:1rem;padding-bottom:80px}
   .timerbar{display:none}
+  .progress-bar{display:none}
+  .content{padding:1rem;padding-bottom:80px}
   .cockpit-grid{grid-template-columns:1fr}
   .bottom-bar{
     display:flex;position:fixed;bottom:0;left:0;right:0;z-index:200;
@@ -603,7 +604,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   </div>
 
   <!-- Barra de timer configurável -->
-  <div class="timerbar">
+  <!-- Timerbar — apenas desktop -->
+  <div class="timerbar" id="timerbar-desktop">
     <span class="timerbar-label">⏱️ Atualizar a cada:</span>
     <select class="iv-select" id="iv-select" onchange="setIntervalo(this.value)">
       <option value="300">5 minutos</option>
@@ -630,7 +632,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="tab" onclick="goPage('dividendos',this)">💰 Dividendos</div>
     <div class="tab" onclick="goPage('setores',this)">📊 Setores</div>
     <div class="tab" onclick="goPage('empresas',this)" id="tab-empresas" style="display:none">🏢 <span id="tab-sname">Empresas</span></div>
-    <!-- Aba dinâmica de ativo buscado -->
     <div class="tab tab-ativo" id="tab-busca" style="display:none" onclick="goPage('busca',this)">
       <div class="tab-ativo-logo" id="tab-busca-logo"></div>
       <span id="tab-busca-nome"></span>
@@ -1786,7 +1787,7 @@ function _renderCockpitSaudacao(){
       `${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})} · ${humor} (▲${emAlta} · ▼${emBaixa} ativos)`;
   }
 
-  // Datas de atualização
+  // Datas de atualização — cockpit e menu mobile
   const fmtData = iso => {
     if(!iso) return '—';
     try{
@@ -1796,25 +1797,26 @@ function _renderCockpitSaudacao(){
     }catch{ return '—'; }
   };
 
-  // Cotações — vem do DADOS.atualizado_em
   const attCot = document.getElementById('ck-att-cotacao');
   if(attCot) attCot.textContent = fmtData(DADOS.atualizado_em);
+  const mobCot = document.getElementById('mob-att-cotacao');
+  if(mobCot) mobCot.textContent = fmtData(DADOS.atualizado_em);
 
-  // Janus Index — busca da API
   fetch('/api/janus/status').then(r=>r.json()).then(d=>{
+    const dataStr = d.ultima_coleta?.finished_at || d.ultima_coleta?.started_at || null;
+    const fmt = fmtData(dataStr);
     const el = document.getElementById('ck-att-janus');
-    if(!el) return;
-    const uc = d.ultima_coleta;
-    const dataStr = uc?.finished_at || uc?.started_at || null;
-    el.textContent = dataStr ? fmtData(dataStr) : '—';
+    if(el) el.textContent = fmt;
+    const mob = document.getElementById('mob-att-janus');
+    if(mob) mob.textContent = fmt;
   }).catch(()=>{});
 
-  // Dividendos — pega do ranking se disponível
   const attDiv = document.getElementById('ck-att-dividendos');
-  if(attDiv){
-    const ref = _dividendRanking?.[0]?.reference_date;
-    attDiv.textContent = ref ? fmtData(ref + 'T12:00:00') : '—';
-  }
+  const mobDiv = document.getElementById('mob-att-dividendos');
+  const ref = _dividendRanking?.[0]?.reference_date;
+  const fmtDiv = ref ? fmtData(ref + 'T12:00:00') : '—';
+  if(attDiv) attDiv.textContent = fmtDiv;
+  if(mobDiv) mobDiv.textContent = fmtDiv;
 }
 
 function _renderCockpitHeatmap(){
@@ -5064,6 +5066,15 @@ function iniciarGaugePolling(){
       if(gaugePct)   gaugePct.textContent   = `${pct}%`;
       if(gaugeSetor) gaugeSetor.textContent  = msg || '...';
       if(gaugeCont)  gaugeCont.textContent   = total ? `${atual}/${total}` : '...';
+      // Mini-gauge mobile
+      const mobArea = document.getElementById('mob-gauge-area');
+      const mobBar  = document.getElementById('mob-gauge-bar');
+      const mobPct  = document.getElementById('mob-gauge-pct');
+      const mobMsg  = document.getElementById('mob-gauge-msg');
+      if(mobArea){ mobArea.style.display = 'block'; }
+      if(mobBar)  mobBar.style.width = `${pct}%`;
+      if(mobPct)  mobPct.textContent = `${pct}%`;
+      if(mobMsg)  mobMsg.textContent = `${titulo} — ${msg||'...'}`;
     };
 
     // Janus Index
@@ -5226,24 +5237,79 @@ const _pollDados=setInterval(async()=>{
 <!-- Menu expandido do "Mais" -->
 <div id="bottom-menu" style="display:none;position:fixed;bottom:70px;left:0;right:0;z-index:199;padding:0 1rem">
   <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 -8px 32px rgba(0,0,0,.12);overflow:hidden">
+
+    <!-- ATUALIZAÇÃO -->
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:10px">⏱️ ATUALIZAÇÃO DE DADOS</div>
+      <!-- Config intervalo -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:13px;color:var(--text)">Atualizar a cada</span>
+        <select id="iv-select-mobile" onchange="setIntervalo(this.value);document.getElementById('iv-select').value=this.value"
+          style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text)">
+          <option value="300">5 min</option>
+          <option value="600">10 min</option>
+          <option value="900">15 min</option>
+          <option value="1800">30 min</option>
+          <option value="3600" selected>1 hora</option>
+          <option value="43200">12 horas</option>
+          <option value="86400">Diário</option>
+          <option value="0">Manual</option>
+        </select>
+      </div>
+      <!-- Datas de atualização -->
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;font-size:12px">
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--text2)">📊 Cotações</span>
+          <span style="color:var(--text3)" id="mob-att-cotacao">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--text2)">🎯 Janus Index</span>
+          <span style="color:var(--text3)" id="mob-att-janus">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--text2)">💰 Dividendos</span>
+          <span style="color:var(--text3)" id="mob-att-dividendos">—</span>
+        </div>
+      </div>
+      <!-- Gauge de progresso -->
+      <div id="mob-gauge-area" style="display:none;margin-bottom:10px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px" id="mob-gauge-msg">Atualizando...</div>
+        <div style="background:var(--bg);border-radius:20px;height:8px;overflow:hidden">
+          <div id="mob-gauge-bar" style="height:100%;background:var(--green);border-radius:20px;width:0%;transition:width .5s"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);text-align:right;margin-top:2px" id="mob-gauge-pct">0%</div>
+      </div>
+      <!-- Botão atualizar -->
+      <button onclick="forcarAtualizacao();fecharBottomMenu()"
+        style="width:100%;padding:10px;border:none;border-radius:10px;background:var(--green);color:#fff;font-size:13px;font-weight:600;cursor:pointer">
+        ↻ Atualizar agora
+      </button>
+    </div>
+
+    <!-- Alertas -->
     <div onclick="goPage('alertas',null);atualizarBottomBar('alertas');fecharBottomMenu()"
       style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span style="font-size:14px;font-weight:500">Alertas</span>
       <span id="bottom-menu-alertas" style="margin-left:auto;background:#e53935;color:#fff;border-radius:10px;font-size:11px;padding:2px 8px;display:none">0</span>
     </div>
+
+    <!-- Log -->
     <div onclick="goPage('log',null);fecharBottomMenu()"
       style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       <span style="font-size:14px;font-weight:500">Log</span>
     </div>
+
+    <!-- Parâmetros -->
     <div onclick="goPage('params',null);fecharBottomMenu()"
       style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       <span style="font-size:14px;font-weight:500">Parâmetros</span>
     </div>
+
   </div>
-  <button onclick="fecharBottomMenu()" style="width:100%;margin-top:8px;padding:12px;border:none;border-radius:12px;background:var(--card);font-size:14px;color:var(--text2);cursor:pointer">Cancelar</button>
+  <button onclick="fecharBottomMenu()" style="width:100%;margin-top:8px;padding:12px;border:none;border-radius:12px;background:var(--card);font-size:14px;color:var(--text2);cursor:pointer;font-family:inherit">Fechar</button>
 </div>
 <div id="bottom-menu-overlay" onclick="fecharBottomMenu()" style="display:none;position:fixed;inset:0;z-index:198"></div>
 
