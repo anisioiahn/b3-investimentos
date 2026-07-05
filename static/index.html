@@ -68,17 +68,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   .bottom-bar{
     display:flex;position:fixed;bottom:0;left:0;right:0;z-index:200;
     background:var(--card);border-top:1px solid var(--border);
-    box-shadow:0 -4px 20px rgba(0,0,0,.08);
-    padding:8px 0 calc(8px + env(safe-area-inset-bottom));
+    box-shadow:0 -2px 16px rgba(0,0,0,.06);
+    padding:6px 0 calc(6px + env(safe-area-inset-bottom));
   }
   .bb-item{
     flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
     cursor:pointer;padding:4px 0;border:none;background:none;
-    color:var(--text3);transition:color .15s;font-size:10px;font-weight:500
+    color:#9ca3af;transition:color .15s;font-size:10px;font-weight:500;font-family:inherit
   }
   .bb-item.active{color:var(--green)}
-  .bb-item .bb-icon{font-size:22px;line-height:1}
-  .bb-badge{position:absolute;top:-4px;right:-4px;background:#e53935;color:#fff;
+  .bb-icon{width:22px;height:22px;stroke-width:1.8}
+  .bb-badge{position:absolute;top:-2px;right:calc(50% - 18px);background:#e53935;color:#fff;
     border-radius:10px;font-size:9px;padding:1px 5px;font-weight:700}
 }
 .hlogo{display:flex;align-items:center;gap:10px}
@@ -2199,6 +2199,19 @@ async function executarDividendEngine(){
     }catch(e){}
     if(tentativas >= 120){ clearInterval(poll); if(btn) btn.disabled=false; if(icon) icon.classList.remove('spin'); }
   }, 5000);
+}
+
+function toggleBottomMenu(){
+  const menu = document.getElementById('bottom-menu');
+  const overlay = document.getElementById('bottom-menu-overlay');
+  const aberto = menu.style.display !== 'none';
+  menu.style.display = aberto ? 'none' : 'block';
+  overlay.style.display = aberto ? 'none' : 'block';
+}
+
+function fecharBottomMenu(){
+  document.getElementById('bottom-menu').style.display = 'none';
+  document.getElementById('bottom-menu-overlay').style.display = 'none';
 }
 
 function atualizarBottomBar(pagina){
@@ -5172,27 +5185,67 @@ const _pollDados=setInterval(async()=>{
 
 <!-- BOTTOM BAR MOBILE -->
 <nav class="bottom-bar" id="bottom-bar">
-  <button class="bb-item active" id="bb-cockpit" onclick="goPage('cockpit',this);atualizarBottomBar('cockpit')">
-    <span class="bb-icon">🚀</span>
+  <button class="bb-item active" id="bb-cockpit" onclick="goPage('cockpit',null);atualizarBottomBar('cockpit')">
+    <svg class="bb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+    </svg>
     <span>Cockpit</span>
   </button>
-  <button class="bb-item" id="bb-carteira" onclick="goPage('carteira',this);atualizarBottomBar('carteira')">
-    <span class="bb-icon">💼</span>
+  <button class="bb-item" id="bb-carteira" onclick="goPage('carteira',null);atualizarBottomBar('carteira')">
+    <svg class="bb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+    </svg>
     <span>Carteira</span>
   </button>
-  <button class="bb-item" id="bb-janus" onclick="goPage('janus',this);atualizarBottomBar('janus')">
-    <span class="bb-icon">🎯</span>
+  <button class="bb-item" id="bb-janus" onclick="goPage('janus',null);atualizarBottomBar('janus')">
+    <svg class="bb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
     <span>Janus</span>
   </button>
-  <button class="bb-item" id="bb-dividendos" onclick="goPage('dividendos',this);atualizarBottomBar('dividendos')">
-    <span class="bb-icon">💰</span>
+  <button class="bb-item" id="bb-dividendos" onclick="goPage('dividendos',null);atualizarBottomBar('dividendos')">
+    <svg class="bb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+    </svg>
     <span>Dividendos</span>
   </button>
-  <button class="bb-item" id="bb-setores" onclick="goPage('setores',this);atualizarBottomBar('setores')" style="position:relative">
-    <span class="bb-icon">📊</span>
+  <button class="bb-item" id="bb-setores" onclick="goPage('setores',null);atualizarBottomBar('setores')">
+    <svg class="bb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+    </svg>
     <span>Setores</span>
   </button>
+  <button class="bb-item" id="bb-mais" onclick="toggleBottomMenu()">
+    <svg class="bb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>
+    </svg>
+    <span>Mais</span>
+  </button>
 </nav>
+
+<!-- Menu expandido do "Mais" -->
+<div id="bottom-menu" style="display:none;position:fixed;bottom:70px;left:0;right:0;z-index:199;padding:0 1rem">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 -8px 32px rgba(0,0,0,.12);overflow:hidden">
+    <div onclick="goPage('alertas',null);atualizarBottomBar('alertas');fecharBottomMenu()"
+      style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span style="font-size:14px;font-weight:500">Alertas</span>
+      <span id="bottom-menu-alertas" style="margin-left:auto;background:#e53935;color:#fff;border-radius:10px;font-size:11px;padding:2px 8px;display:none">0</span>
+    </div>
+    <div onclick="goPage('log',null);fecharBottomMenu()"
+      style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span style="font-size:14px;font-weight:500">Log</span>
+    </div>
+    <div onclick="goPage('params',null);fecharBottomMenu()"
+      style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span style="font-size:14px;font-weight:500">Parâmetros</span>
+    </div>
+  </div>
+  <button onclick="fecharBottomMenu()" style="width:100%;margin-top:8px;padding:12px;border:none;border-radius:12px;background:var(--card);font-size:14px;color:var(--text2);cursor:pointer">Cancelar</button>
+</div>
+<div id="bottom-menu-overlay" onclick="fecharBottomMenu()" style="display:none;position:fixed;inset:0;z-index:198"></div>
 
 </body>
 </html>
