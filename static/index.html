@@ -605,24 +605,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
   <!-- Barra de timer configurável -->
   <!-- Timerbar — apenas desktop -->
-  <div class="timerbar" id="timerbar-desktop">
-    <span class="timerbar-label">⏱️ Atualizar a cada:</span>
-    <select class="iv-select" id="iv-select" onchange="setIntervalo(this.value)">
-      <option value="300">5 minutos</option>
-      <option value="600">10 minutos</option>
-      <option value="900">15 minutos</option>
-      <option value="1800">30 minutos</option>
-      <option value="3600" selected>1 hora</option>
-      <option value="43200">12 horas</option>
-      <option value="86400">Diariamente</option>
-      <option value="0">Manual (sem auto)</option>
-    </select>
-    <div class="countdown-pill">
-      <span>Próxima em:</span>
-      <span class="countdown-val" id="countdown-val">—</span>
-    </div>
-  </div>
-  <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  <!-- Elementos ocultos usados pelo JS -->
+  <select id="iv-select" style="display:none" onchange="setIntervalo(this.value)">
+    <option value="300">5 minutos</option>
+    <option value="600">10 minutos</option>
+    <option value="900">15 minutos</option>
+    <option value="1800">30 minutos</option>
+    <option value="3600" selected>1 hora</option>
+    <option value="43200">12 horas</option>
+    <option value="86400">Diariamente</option>
+    <option value="0">Manual (sem auto)</option>
+  </select>
+  <span id="countdown-val" style="display:none"></span>
+  <div class="progress-bar" style="display:none"><div class="progress-fill" id="progress-fill"></div></div>
 
   <div class="tabs">
     <div class="tab active" onclick="goPage('cockpit',this)">🚀 Cockpit</div>
@@ -650,24 +645,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <!-- PÁGINA COCKPIT -->
     <div class="page active" id="page-cockpit">
       <!-- Saudação + Frame de atualizações -->
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+      <div style="margin-bottom:1rem">
         <div id="cockpit-header">
           <div style="font-size:20px;font-weight:700;color:var(--text)" id="cockpit-saudacao">Bom dia! 👋</div>
           <div style="font-size:13px;color:var(--text2);margin-top:4px" id="cockpit-resumo-dia">Carregando resumo do mercado...</div>
         </div>
-        <!-- Frame atualizações horizontal -->
-        <div id="cockpit-atualizacoes" style="display:flex;align-items:center;gap:16px;padding:8px 16px;border:1px solid var(--border);border-radius:20px;background:var(--card);font-size:11px;flex-shrink:0">
-          <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.5px;white-space:nowrap">ATUALIZADO EM</div>
-          <div style="display:flex;align-items:center;gap:6px;border-left:1px solid var(--border);padding-left:12px">
-            <span>📊</span><div><div style="font-weight:600;color:var(--text)">Cotações</div><div style="color:var(--text3);white-space:nowrap" id="ck-att-cotacao">—</div></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;border-left:1px solid var(--border);padding-left:12px">
-            <span>🎯</span><div><div style="font-weight:600;color:var(--text)">Janus Index</div><div style="color:var(--text3);white-space:nowrap" id="ck-att-janus">—</div></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;border-left:1px solid var(--border);padding-left:12px">
-            <span>💰</span><div><div style="font-weight:600;color:var(--text)">Dividendos</div><div style="color:var(--text3);white-space:nowrap" id="ck-att-dividendos">—</div></div>
-          </div>
-        </div>
+        <!-- IDs ocultos para manter compatibilidade com o JS -->
+        <span id="ck-att-cotacao" style="display:none"></span>
+        <span id="ck-att-janus" style="display:none"></span>
+        <span id="ck-att-dividendos" style="display:none"></span>
       </div>
       <!-- Grid 3 módulos -->
       <div class="cockpit-grid">
