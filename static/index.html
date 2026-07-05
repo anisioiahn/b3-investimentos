@@ -609,34 +609,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <!-- PÁGINA COCKPIT -->
     <div class="page active" id="page-cockpit">
       <!-- Saudação -->
-      <div id="cockpit-header" style="margin-bottom:0.75rem;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+      <div id="cockpit-header" style="margin-bottom:0.75rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
         <div>
           <div style="font-size:20px;font-weight:700;color:var(--text)" id="cockpit-saudacao">Bom dia! 👋</div>
           <div style="font-size:13px;color:var(--text2);margin-top:4px" id="cockpit-resumo-dia">Carregando resumo do mercado...</div>
         </div>
-        <!-- Frame de atualizações -->
-        <div id="cockpit-atualizacoes" style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:var(--card);font-size:11px;min-width:220px">
-          <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:2px">ÚLTIMA ATUALIZAÇÃO</div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:14px">📊</span>
-            <div>
-              <div style="font-weight:600;color:var(--text)">Cotações</div>
-              <div style="color:var(--text3)" id="ck-att-cotacao">—</div>
-            </div>
+        <!-- Frame de atualizações compacto e horizontal -->
+        <div id="cockpit-atualizacoes" style="display:flex;align-items:center;gap:16px;padding:8px 16px;border:1px solid var(--border);border-radius:20px;background:var(--card);font-size:11px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.5px;white-space:nowrap">ATUALIZADO EM</div>
+          <div style="display:flex;align-items:center;gap:6px;border-left:1px solid var(--border);padding-left:12px">
+            <span>📊</span>
+            <div><div style="font-weight:600;color:var(--text);white-space:nowrap">Cotações</div><div style="color:var(--text3);white-space:nowrap" id="ck-att-cotacao">—</div></div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:14px">🎯</span>
-            <div>
-              <div style="font-weight:600;color:var(--text)">Janus Index</div>
-              <div style="color:var(--text3)" id="ck-att-janus">—</div>
-            </div>
+          <div style="display:flex;align-items:center;gap:6px;border-left:1px solid var(--border);padding-left:12px">
+            <span>🎯</span>
+            <div><div style="font-weight:600;color:var(--text);white-space:nowrap">Janus Index</div><div style="color:var(--text3);white-space:nowrap" id="ck-att-janus">—</div></div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:14px">💰</span>
-            <div>
-              <div style="font-weight:600;color:var(--text)">Dividendos</div>
-              <div style="color:var(--text3)" id="ck-att-dividendos">—</div>
-            </div>
+          <div style="display:flex;align-items:center;gap:6px;border-left:1px solid var(--border);padding-left:12px">
+            <span>💰</span>
+            <div><div style="font-weight:600;color:var(--text);white-space:nowrap">Dividendos</div><div style="color:var(--text3);white-space:nowrap" id="ck-att-dividendos">—</div></div>
           </div>
         </div>
       </div>
