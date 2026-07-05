@@ -48,7 +48,7 @@
 [data-tema="escuro"] .resumo-card{background:var(--card)}
 [data-tema="escuro"] .carteira-toolbar{background:#13151f}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
 .app{max-width:960px;margin:0 auto;background:var(--card);min-height:100vh;box-shadow:var(--shadow);overflow-x:hidden}
 
 /* HEADER */
@@ -65,12 +65,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   .tab{display:none!important}
   .timerbar{display:none!important}
   .progress-bar{display:none!important}
-  .content{padding:.75rem;padding-bottom:80px;overflow-x:hidden}
-  .cockpit-grid{grid-template-columns:1fr}
-  .cockpit-card{overflow:hidden;min-width:0;width:100%;box-sizing:border-box}
-  .cockpit-card canvas{max-width:100%!important;width:100%!important}
-  .page{overflow-x:hidden;max-width:100vw}
-  * {box-sizing:border-box}
+  .content{padding:.75rem;padding-bottom:80px;overflow-x:hidden;max-width:100vw}
+  .cockpit-grid{grid-template-columns:1fr;overflow:hidden}
+  .cockpit-grid > *{min-width:0;max-width:100%;overflow:hidden}
+  .cockpit-card{overflow:hidden;min-width:0;width:100%;box-sizing:border-box;max-width:100%}
+  .cockpit-card *{max-width:100%;box-sizing:border-box;word-break:break-word}
+  .cockpit-card canvas{width:100%!important;max-width:100%!important}
+  .ck-op-row,.ck-hm-row{overflow:hidden}
+  .ck-op-empresa{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+  .page{overflow-x:hidden;max-width:100vw;box-sizing:border-box}
   .bottom-bar{
     display:flex;position:fixed;bottom:0;left:0;right:0;z-index:200;
     background:var(--card);border-top:1px solid var(--border);
