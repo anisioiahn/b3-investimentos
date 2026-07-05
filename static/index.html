@@ -53,6 +53,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
 /* HEADER */
 .header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid var(--border);background:#fff;position:sticky;top:0;z-index:100}
+/* ── MOBILE ─────────────────────────────── */
+.bottom-bar{display:none}
+@media(max-width:768px){
+  .header{padding:.75rem 1rem}
+  .hlogo .htitle{font-size:16px}
+  .hlogo .hsub{display:none}
+  .hright .hframe{display:none}
+  .hright{gap:4px}
+  .tabs{display:none}
+  .content{padding:1rem;padding-bottom:80px}
+  .timerbar{display:none}
+  .cockpit-grid{grid-template-columns:1fr}
+  .bottom-bar{
+    display:flex;position:fixed;bottom:0;left:0;right:0;z-index:200;
+    background:var(--card);border-top:1px solid var(--border);
+    box-shadow:0 -4px 20px rgba(0,0,0,.08);
+    padding:8px 0 calc(8px + env(safe-area-inset-bottom));
+  }
+  .bb-item{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    cursor:pointer;padding:4px 0;border:none;background:none;
+    color:var(--text3);transition:color .15s;font-size:10px;font-weight:500
+  }
+  .bb-item.active{color:var(--green)}
+  .bb-item .bb-icon{font-size:22px;line-height:1}
+  .bb-badge{position:absolute;top:-4px;right:-4px;background:#e53935;color:#fff;
+    border-radius:10px;font-size:9px;padding:1px 5px;font-weight:700}
+}
 .hlogo{display:flex;align-items:center;gap:10px}
 .logo{width:38px;height:38px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700}
 .htitle{font-size:17px;font-weight:700}.hsub{font-size:11px;color:var(--text2);margin-top:1px}
@@ -531,11 +559,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       style="background:none;border:none;cursor:pointer;font-size:20px;padding:4px 8px;color:var(--text2);transition:color .15s"
       onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--text2)'">🔍</button>
 
+    <!-- Botão tema — sempre visível (mobile e desktop) -->
+    <button class="btn" id="btn-tema" onclick="alternarTema()" title="Alternar tema" style="font-size:16px;padding:6px 10px">🌙</button>
+
     <!-- Modal de busca -->
     <div id="modal-busca" onclick="if(event.target===this)fecharModalBusca()"
       style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.5);align-items:flex-start;justify-content:center;padding-top:80px">
-      <div style="background:var(--card);border-radius:16px;width:100%;max-width:560px;box-shadow:0 16px 48px rgba(0,0,0,.2);overflow:hidden" onclick="event.stopPropagation()">
-        <!-- Input de busca -->
+      <div style="background:var(--card);border-radius:16px;width:calc(100% - 2rem);max-width:560px;box-shadow:0 16px 48px rgba(0,0,0,.2);overflow:hidden" onclick="event.stopPropagation()">
         <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
           <span style="font-size:18px;color:var(--text3)">🔍</span>
           <input type="text" id="busca-input" placeholder="Digite o ticker ou nome da empresa..."
@@ -545,9 +575,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
             autocomplete="off">
           <button onclick="fecharModalBusca()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3)">✕</button>
         </div>
-        <!-- Resultados -->
-        <div id="busca-dropdown" style="max-height:420px;overflow-y:auto"></div>
-        <!-- Dica -->
+        <div id="busca-dropdown" style="max-height:60vh;overflow-y:auto"></div>
         <div id="busca-dica" style="padding:14px 18px;text-align:center;font-size:12px;color:var(--text3)">
           Digite o ticker (ex: BBAS3) ou nome da empresa
         </div>
@@ -2171,6 +2199,12 @@ async function executarDividendEngine(){
     }catch(e){}
     if(tentativas >= 120){ clearInterval(poll); if(btn) btn.disabled=false; if(icon) icon.classList.remove('spin'); }
   }, 5000);
+}
+
+function atualizarBottomBar(pagina){
+  document.querySelectorAll('.bb-item').forEach(b=>b.classList.remove('active'));
+  const bb = document.getElementById(`bb-${pagina}`);
+  if(bb) bb.classList.add('active');
 }
 
 function toggleMenuSec(){
@@ -5135,6 +5169,30 @@ const _pollDados=setInterval(async()=>{
     </div>
   </div>
 </div>
+
+<!-- BOTTOM BAR MOBILE -->
+<nav class="bottom-bar" id="bottom-bar">
+  <button class="bb-item active" id="bb-cockpit" onclick="goPage('cockpit',this);atualizarBottomBar('cockpit')">
+    <span class="bb-icon">🚀</span>
+    <span>Cockpit</span>
+  </button>
+  <button class="bb-item" id="bb-carteira" onclick="goPage('carteira',this);atualizarBottomBar('carteira')">
+    <span class="bb-icon">💼</span>
+    <span>Carteira</span>
+  </button>
+  <button class="bb-item" id="bb-janus" onclick="goPage('janus',this);atualizarBottomBar('janus')">
+    <span class="bb-icon">🎯</span>
+    <span>Janus</span>
+  </button>
+  <button class="bb-item" id="bb-dividendos" onclick="goPage('dividendos',this);atualizarBottomBar('dividendos')">
+    <span class="bb-icon">💰</span>
+    <span>Dividendos</span>
+  </button>
+  <button class="bb-item" id="bb-setores" onclick="goPage('setores',this);atualizarBottomBar('setores')" style="position:relative">
+    <span class="bb-icon">📊</span>
+    <span>Setores</span>
+  </button>
+</nav>
 
 </body>
 </html>
