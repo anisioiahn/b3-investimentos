@@ -449,6 +449,20 @@ def api_agenda():
         return jsonify(db.db_listar_agenda_carteira(uid(), dias))
     return jsonify(db.db_listar_agenda(dias))
 
+@app.route("/api/agenda/macro", methods=["POST"])
+@requer_auth
+def api_agenda_macro():
+    """Popula eventos macro (COPOM, IPCA, FED, Payroll)."""
+    def _rodar():
+        try:
+            import subprocess, sys
+            subprocess.Popen([sys.executable, "agenda_macro.py"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"[MACRO] Erro: {e}", flush=True)
+    threading.Thread(target=_rodar, daemon=True).start()
+    return jsonify({"ok": True, "msg": "Agenda macro sendo populada"})
+
 @app.route("/api/agenda/debug")
 @requer_auth
 def api_agenda_debug():
@@ -1287,7 +1301,15 @@ if _db_ok:
         db.db_init_dividend_tables(conn_startup)
         db.db_init_agenda_tables(conn_startup)
         conn_startup.close()
-        print("[STARTUP] ✅ Tabelas de snapshot e dividendos verificadas", flush=True)
+        print("[STARTUP] ✅ Tabelas de snapshot, dividendos e agenda verificadas", flush=True)
+        # Popula agenda macro em background
+        def _popular_macro():
+            try:
+                import subprocess, sys
+                subprocess.Popen([sys.executable, "agenda_macro.py"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except: pass
+        threading.Thread(target=_popular_macro, daemon=True).start()
     except Exception as e:
         print(f"[STARTUP] ⚠️ Erro ao verificar tabelas: {e}", flush=True)
 _proximo_update = agora().timestamp() + INTERVALO_INICIAL
