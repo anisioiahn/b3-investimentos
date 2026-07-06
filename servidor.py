@@ -440,6 +440,53 @@ def login_page(): return send_from_directory("static", "login.html")
 _agenda_rodando = False
 _agenda_estado  = {"pct": 0, "msg": ""}
 
+# ── ESTRATÉGIA DO USUÁRIO ─────────────────────────────────────
+@app.route("/api/estrategia", methods=["GET"])
+@requer_auth
+def api_estrategia_get():
+    return jsonify(db.db_buscar_estrategia(uid()))
+
+@app.route("/api/estrategia", methods=["POST"])
+@requer_auth
+def api_estrategia_post():
+    d = request.json or {}
+    ok = db.db_salvar_estrategia(uid(), d)
+    return jsonify({"ok": ok})
+
+# ── TROCAR SENHA ──────────────────────────────────────────────
+@app.route("/api/trocar-senha", methods=["POST"])
+@requer_auth
+def api_trocar_senha():
+    d = request.json or {}
+    senha_atual = d.get("senha_atual","")
+    senha_nova  = d.get("senha_nova","")
+    if not senha_atual or not senha_nova:
+        return jsonify({"erro": "Campos obrigatórios"}), 400
+    if len(senha_nova) < 6:
+        return jsonify({"erro": "A nova senha deve ter pelo menos 6 caracteres"}), 400
+    try:
+        import bcrypt
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT senha_hash FROM usuarios WHERE id=%s", (uid(),))
+            row = cur.fetchone()
+            if not row:
+                conn.close()
+                return jsonify({"erro": "Usuário não encontrado"}), 404
+            senha_hash = row[0]
+            # Verifica senha atual
+            if not bcrypt.checkpw(senha_atual.encode(), senha_hash.encode()):
+                conn.close()
+                return jsonify({"erro": "Senha atual incorreta"}), 401
+            # Salva nova senha
+            novo_hash = bcrypt.hashpw(senha_nova.encode(), bcrypt.gensalt()).decode()
+            cur.execute("UPDATE usuarios SET senha_hash=%s WHERE id=%s", (novo_hash, uid()))
+        conn.commit(); conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"[SENHA] Erro: {e}", flush=True)
+        return jsonify({"erro": "Erro ao alterar senha"}), 500
+
 @app.route("/api/agenda")
 @requer_auth
 def api_agenda():
@@ -1300,6 +1347,7 @@ if _db_ok:
         db.db_init_snapshot_tables(conn_startup)
         db.db_init_dividend_tables(conn_startup)
         db.db_init_agenda_tables(conn_startup)
+        db.db_init_estrategia_table(conn_startup)
         conn_startup.close()
         print("[STARTUP] ✅ Tabelas de snapshot, dividendos e agenda verificadas", flush=True)
         # Popula agenda macro em background
