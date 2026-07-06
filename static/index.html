@@ -1951,22 +1951,36 @@ function _renderCalendario(){
 
 async function _coletarAgenda(){
   const btn = document.getElementById('btn-coletar-agenda');
-  if(btn){ btn.disabled=true; btn.textContent='Coletando...'; }
+  if(btn){ btn.disabled=true; btn.textContent='Iniciando...'; }
   try{
     await fetch('/api/agenda/coletar', {method:'POST'});
     let tentativas = 0;
+    let ultimoPct = 0;
+    let semProgressoCount = 0;
     const poll = setInterval(async()=>{
       tentativas++;
       try{
         const rp = await fetch('/api/agenda/progresso');
         const p = await rp.json();
         if(btn) btn.textContent = `${p.pct||0}%...`;
-        if(!p.rodando || tentativas > 60){
+        // Detecta se parou de progredir
+        if(p.pct === ultimoPct) semProgressoCount++;
+        else { semProgressoCount = 0; ultimoPct = p.pct; }
+        // Para quando finalizar ou ficar travado por muito tempo
+        if(!p.rodando && p.pct >= 95){
           clearInterval(poll);
+          if(btn){ btn.disabled=false; btn.textContent='🔄 Atualizar'; }
+          await carregarAgenda(_agendaApenasCarteira);
+        } else if(semProgressoCount > 20){ // 20 * 5s = 100s sem progresso
+          clearInterval(poll);
+          if(btn){ btn.disabled=false; btn.textContent='🔄 Atualizar'; }
           await carregarAgenda(_agendaApenasCarteira);
         }
-      }catch(e){ clearInterval(poll); }
-    }, 3000);
+      }catch(e){
+        clearInterval(poll);
+        if(btn){ btn.disabled=false; btn.textContent='🔄 Atualizar'; }
+      }
+    }, 5000); // a cada 5 segundos
   }catch(e){
     if(btn){ btn.disabled=false; btn.textContent='🔄 Atualizar'; }
   }
