@@ -1868,12 +1868,13 @@ function _renderCalendario(){
   const diasNoMes = new Date(ano, mes+1, 0).getDate();
   const nomeMes = new Date(ano, mes, 1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
 
-  // Mapeia eventos por dia
+  // Mapeia eventos por dia — aceita tanto "YYYY-MM-DD" quanto "Tue, 07 Jul 2026..."
   const eventosPorDia = {};
   _agendaEventos.forEach(ev => {
-    const d = new Date(ev.data_evento + 'T12:00:00');
-    if(d.getMonth() === mes && d.getFullYear() === ano){
-      const dia = d.getDate();
+    const d = new Date(ev.data_evento);
+    if(isNaN(d)) return;
+    if(d.getUTCMonth() === mes && d.getUTCFullYear() === ano){
+      const dia = d.getUTCDate();
       if(!eventosPorDia[dia]) eventosPorDia[dia] = [];
       eventosPorDia[dia].push(ev);
     }
@@ -1990,8 +1991,9 @@ function _mostrarEventosDia(dia){
   const el = document.getElementById('agenda-detalhe');
   if(!el) return;
   const evs = _agendaEventos.filter(ev=>{
-    const d = new Date(ev.data_evento + 'T12:00:00');
-    return d.getDate()===dia && d.getMonth()===_agendaMes && d.getFullYear()===_agendaAno;
+    const d = new Date(ev.data_evento);
+    if(isNaN(d)) return false;
+    return d.getUTCDate()===dia && d.getUTCMonth()===_agendaMes && d.getUTCFullYear()===_agendaAno;
   });
   if(!evs.length){ el.innerHTML=''; return; }
 
