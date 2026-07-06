@@ -443,11 +443,27 @@ _agenda_estado  = {"pct": 0, "msg": ""}
 @app.route("/api/agenda")
 @requer_auth
 def api_agenda():
-    dias = request.args.get("dias", 30, type=int)
+    dias = request.args.get("dias", 90, type=int)
     apenas_carteira = request.args.get("carteira", "false") == "true"
     if apenas_carteira:
         return jsonify(db.db_listar_agenda_carteira(uid(), dias))
     return jsonify(db.db_listar_agenda(dias))
+
+@app.route("/api/agenda/debug")
+@requer_auth
+def api_agenda_debug():
+    """Diagnóstico — mostra todos os eventos sem filtro de data."""
+    try:
+        conn = db.get_conn()
+        with conn.cursor(cursor_factory=__import__('psycopg2').extras.RealDictCursor) as cur:
+            cur.execute("SELECT COUNT(*) as total FROM agenda_mercado")
+            total = cur.fetchone()['total']
+            cur.execute("SELECT * FROM agenda_mercado ORDER BY data_evento LIMIT 20")
+            rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return jsonify({"total": total, "eventos": rows})
+    except Exception as e:
+        return jsonify({"erro": str(e)})
 
 @app.route("/api/agenda/coletar", methods=["POST"])
 @requer_auth
