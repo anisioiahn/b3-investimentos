@@ -163,14 +163,29 @@ def run_agenda_collector(on_progress=None):
         import db as janus_db
         janus_db.db_init_agenda_tables(conn)
 
-        # Busca todos os ativos com asset_id
+        # Busca apenas ativos que já têm histórico de dividendos
+        # (muito mais rápido que buscar todos os 500+)
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT DISTINCT ticker FROM assets
-                WHERE status = 'ATIVO' AND asset_type = 'ACAO'
-                ORDER BY ticker
+                SELECT DISTINCT a.ticker
+                FROM assets a
+                INNER JOIN dividend_profile dp ON dp.asset_id = a.asset_id
+                WHERE a.status = 'ATIVO'
+                  AND dp.dividend_yield_12m > 0
+                ORDER BY a.ticker
+                LIMIT 200
             """)
             tickers = [r['ticker'] for r in cur.fetchall()]
+
+        # Se não tiver dividend_profile ainda, pega todos
+        if not tickers:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT DISTINCT ticker FROM assets
+                    WHERE status = 'ATIVO' AND asset_type = 'ACAO'
+                    ORDER BY ticker LIMIT 100
+                """)
+                tickers = [r['ticker'] for r in cur.fetchall()]
 
         prog(0, f"Iniciando coleta de {len(tickers)} ativos...")
 
