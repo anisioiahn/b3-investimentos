@@ -436,6 +436,58 @@ def index():
 @app.route("/login")
 def login_page(): return send_from_directory("static", "login.html")
 
+# ── AGENDA DO MERCADO ────────────────────────────────────────
+_agenda_rodando = False
+_agenda_estado  = {"pct": 0, "msg": ""}
+
+@app.route("/api/agenda")
+@requer_auth
+def api_agenda():
+    dias = request.args.get("dias", 30, type=int)
+    apenas_carteira = request.args.get("carteira", "false") == "true"
+    if apenas_carteira:
+        return jsonify(db.db_listar_agenda_carteira(uid(), dias))
+    return jsonify(db.db_listar_agenda(dias))
+
+@app.route("/api/agenda/coletar", methods=["POST"])
+@requer_auth
+def api_agenda_coletar():
+    global _agenda_rodando
+    if _agenda_rodando:
+        return jsonify({"ok": False, "mensagem": "Coleta já em andamento"}), 409
+    def _rodar():
+        global _agenda_rodando, _agenda_estado
+        _agenda_rodando = True
+        try:
+            import subprocess, sys
+            proc = subprocess.Popen(
+                [sys.executable, "agenda_collector.py"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            )
+            for linha in proc.stdout:
+                linha = linha.strip()
+                if not linha: continue
+                print(linha, flush=True)
+                try:
+                    if "%" in linha:
+                        pct = int(linha.split("%")[0].split()[-1])
+                        msg = linha.split("%", 1)[1].strip()
+                        _agenda_estado = {"pct": pct, "msg": msg}
+                except: pass
+            proc.wait()
+            _agenda_estado = {"pct": 100, "msg": "Concluído!"}
+        except Exception as e:
+            print(f"[AGENDA] Erro: {e}", flush=True)
+        finally:
+            _agenda_rodando = False
+    threading.Thread(target=_rodar, daemon=True).start()
+    return jsonify({"ok": True})
+
+@app.route("/api/agenda/progresso")
+@requer_auth
+def api_agenda_progresso():
+    return jsonify({"rodando": _agenda_rodando, **_agenda_estado})
+
 @app.route("/admin")
 def admin_page():
     token = request.cookies.get('janus_admin_token','')
@@ -1213,6 +1265,7 @@ if _db_ok:
         conn_startup = db.get_conn()
         db.db_init_snapshot_tables(conn_startup)
         db.db_init_dividend_tables(conn_startup)
+        db.db_init_agenda_tables(conn_startup)
         conn_startup.close()
         print("[STARTUP] ✅ Tabelas de snapshot e dividendos verificadas", flush=True)
     except Exception as e:
