@@ -458,26 +458,30 @@ def api_agenda_coletar():
     def _rodar():
         global _agenda_rodando, _agenda_estado
         _agenda_rodando = True
+        _agenda_estado = {"pct": 0, "msg": "Iniciando..."}
         try:
             import subprocess, sys
             proc = subprocess.Popen(
                 [sys.executable, "agenda_collector.py"],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
             )
             for linha in proc.stdout:
                 linha = linha.strip()
                 if not linha: continue
                 print(linha, flush=True)
                 try:
-                    if "%" in linha:
-                        pct = int(linha.split("%")[0].split()[-1])
-                        msg = linha.split("%", 1)[1].strip()
-                        _agenda_estado = {"pct": pct, "msg": msg}
+                    if "[AGENDA]" in linha and "%" in linha:
+                        parte = linha.split("[AGENDA]")[1].strip()
+                        if parte[0].isdigit():
+                            pct = int(parte.split("%")[0].strip())
+                            msg = parte.split("%", 1)[1].strip()
+                            _agenda_estado = {"pct": pct, "msg": msg}
                 except: pass
             proc.wait()
             _agenda_estado = {"pct": 100, "msg": "Concluído!"}
         except Exception as e:
             print(f"[AGENDA] Erro: {e}", flush=True)
+            _agenda_estado = {"pct": 0, "msg": f"Erro: {e}"}
         finally:
             _agenda_rodando = False
     threading.Thread(target=_rodar, daemon=True).start()
