@@ -986,3 +986,80 @@ def db_listar_todos_usuarios():
         conn.close()
         return rows
     except: return []
+
+# ── AGENDA DO MERCADO ─────────────────────────────────────────
+def db_init_agenda_tables(conn):
+    """Cria tabela de agenda se não existir."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS agenda_mercado (
+                id SERIAL PRIMARY KEY,
+                ticker TEXT,
+                tipo TEXT NOT NULL,  -- 'DIVIDENDO' | 'BALANCO' | 'OPCOES' | 'MACRO'
+                titulo TEXT NOT NULL,
+                descricao TEXT,
+                data_evento DATE NOT NULL,
+                impacto TEXT DEFAULT 'MEDIO',  -- 'ALTO' | 'MEDIO' | 'BAIXO'
+                valor NUMERIC,  -- valor do dividendo se aplicável
+                fonte TEXT DEFAULT 'AUTO',
+                created_at TEXT,
+                UNIQUE(ticker, tipo, data_evento)
+            );
+            CREATE INDEX IF NOT EXISTS idx_agenda_data ON agenda_mercado(data_evento);
+        """)
+    conn.commit()
+
+def db_salvar_agenda_item(conn, ticker, tipo, titulo, data_evento, descricao='', impacto='MEDIO', valor=None, fonte='AUTO'):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO agenda_mercado (ticker, tipo, titulo, descricao, data_evento, impacto, valor, fonte, created_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (ticker, tipo, data_evento) DO UPDATE SET
+                titulo=EXCLUDED.titulo, descricao=EXCLUDED.descricao,
+                impacto=EXCLUDED.impacto, valor=EXCLUDED.valor
+        """, (ticker, tipo, titulo, descricao, data_evento, impacto, valor, fonte, now))
+    conn.commit()
+
+def db_listar_agenda(dias_futuros=30):
+    """Retorna eventos dos próximos N dias ordenados por data."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM agenda_mercado
+                WHERE data_evento >= CURRENT_DATE
+                  AND data_evento <= CURRENT_DATE + INTERVAL '%s days'
+                ORDER BY data_evento ASC, impacto DESC
+            """ % dias_futuros)
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[AGENDA] Erro listar: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
+
+def db_listar_agenda_carteira(uid, dias_futuros=30):
+    """Retorna eventos apenas dos ativos da carteira do usuário."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT a.* FROM agenda_mercado a
+                INNER JOIN carteira c ON c.ticker = a.ticker AND c.usuario_id = %s AND c.status = 'confirmada'
+                WHERE a.data_evento >= CURRENT_DATE
+                  AND a.data_evento <= CURRENT_DATE + INTERVAL '%s days'
+                UNION
+                SELECT * FROM agenda_mercado
+                WHERE ticker IS NULL
+                  AND data_evento >= CURRENT_DATE
+                  AND data_evento <= CURRENT_DATE + INTERVAL '%s days'
+                ORDER BY data_evento ASC
+            """ % (uid, dias_futuros, dias_futuros))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[AGENDA] Erro listar carteira: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
