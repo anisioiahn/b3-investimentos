@@ -917,6 +917,112 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         </div>
       </div>
       <div style="border-top:1px solid var(--border);margin:1.5rem 0"></div>
+
+      <!-- MINHA ESTRATÉGIA -->
+      <div class="params-section">
+        <div class="params-title">🎯 Minha Estratégia</div>
+        <div class="params-desc">Defina seu perfil de investidor. O Janus usará estas informações para personalizar análises, recomendações e o Cockpit.</div>
+
+        <div style="display:flex;flex-direction:column;gap:1.25rem;margin-top:1rem">
+
+          <!-- Perfil de risco -->
+          <div>
+            <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">Perfil de Risco</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap" id="est-perfil-btns">
+              ${['Conservador','Moderado','Arrojado'].map(p=>`
+                <button onclick="selecionarEstrategia('perfil','${p}',this)"
+                  class="est-btn" data-val="${p}"
+                  style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">
+                  ${p}
+                </button>`).join('')}
+            </div>
+          </div>
+
+          <!-- Objetivo -->
+          <div>
+            <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">Objetivo Principal</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap" id="est-objetivo-btns">
+              ${[['Renda Passiva','💰'],['Crescimento','🚀'],['Equilíbrio','⚖️'],['Aposentadoria','🏖️']].map(([o,ic])=>`
+                <button onclick="selecionarEstrategia('objetivo','${o}',this)"
+                  class="est-btn" data-val="${o}"
+                  style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">
+                  ${ic} ${o}
+                </button>`).join('')}
+            </div>
+          </div>
+
+          <!-- Horizonte -->
+          <div>
+            <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">Horizonte de Investimento</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap" id="est-horizonte-btns">
+              ${[['Curto Prazo','até 2 anos'],['Médio Prazo','2 a 5 anos'],['Longo Prazo','5+ anos']].map(([h,sub])=>`
+                <button onclick="selecionarEstrategia('horizonte','${h}',this)"
+                  class="est-btn" data-val="${h}"
+                  style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">
+                  ${h} <span style="font-size:10px;opacity:.6">${sub}</span>
+                </button>`).join('')}
+            </div>
+          </div>
+
+          <!-- Distribuição alvo -->
+          <div>
+            <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">Distribuição Alvo (%)</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              ${[['acoes','Ações'],['fiis','FIIs'],['etfs','ETFs'],['exterior','Exterior'],['caixa','Caixa']].map(([id,label])=>`
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">${label}</label>
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+                    <input type="range" id="est-${id}" min="0" max="100" value="0" step="5"
+                      oninput="atualizarDistribuicao()"
+                      style="flex:1">
+                    <span id="est-${id}-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
+                  </div>
+                </div>`).join('')}
+            </div>
+            <div id="est-dist-aviso" style="margin-top:8px;font-size:11px;color:#e53935;display:none">
+              ⚠️ A soma deve ser 100%. Atual: <span id="est-dist-total">0</span>%
+            </div>
+          </div>
+
+          <button onclick="salvarEstrategia()"
+            style="padding:12px;border:none;border-radius:10px;background:var(--green);color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">
+            💾 Salvar Estratégia
+          </button>
+          <div id="est-save-msg" style="display:none;font-size:12px;color:var(--green);text-align:center">✅ Estratégia salva!</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:1.5rem 0"></div>
+
+      <!-- TROCAR SENHA -->
+      <div class="params-section">
+        <div class="params-title">🔐 Trocar Senha</div>
+        <div class="params-desc">Altere sua senha de acesso ao Janus.</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:1rem;max-width:400px">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Senha atual</label>
+            <input type="password" id="senha-atual" placeholder="••••••••"
+              style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--card);color:var(--text);box-sizing:border-box;outline:none">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Nova senha</label>
+            <input type="password" id="senha-nova" placeholder="••••••••"
+              style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--card);color:var(--text);box-sizing:border-box;outline:none">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Confirmar nova senha</label>
+            <input type="password" id="senha-confirmar" placeholder="••••••••"
+              style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--card);color:var(--text);box-sizing:border-box;outline:none">
+          </div>
+          <button onclick="trocarSenha()"
+            style="padding:10px;border:none;border-radius:8px;background:var(--green);color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">
+            🔐 Alterar Senha
+          </button>
+          <div id="senha-msg" style="display:none;font-size:12px;text-align:center"></div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:1.5rem 0"></div>
       <div class="params-section">
         <div class="params-title">⚙️ Fontes de Notícias</div>
         <div class="params-desc">Configure as 3 fontes de notícias que aparecerão no painel de análise de cada ativo. Use <code>{ticker}</code> na URL para substituição automática pelo ticker da ação.</div>
@@ -2529,7 +2635,7 @@ function goPage(p,el){
   if(el) el.classList.add('active');
   if(p==='cockpit') renderCockpit();
   if(p==='alertas') renderAlerts();
-  if(p==='params') renderFontes();
+  if(p==='params'){ renderFontes(); carregarEstrategia(); }
   if(p==='carteira'){ renderCarteira(); carregarCarteira(); }
   if(p==='janus') carregarJanusIndex();
   if(p==='dividendos') carregarDividendos();
@@ -3656,6 +3762,124 @@ async function limparDisparados(){
 }
 
 // ── PARÂMETROS ───────────────────────────────────────────────
+// ── MINHA ESTRATÉGIA ─────────────────────────────────────────
+let _estrategia = {perfil:'', objetivo:'', horizonte:'', acoes:0, fiis:0, etfs:0, exterior:0, caixa:0};
+
+async function carregarEstrategia(){
+  try{
+    const r = await fetch('/api/estrategia');
+    if(r.ok){
+      const d = await r.json();
+      if(d && d.perfil){
+        _estrategia = d;
+        // Seleciona botões
+        ['perfil','objetivo','horizonte'].forEach(campo=>{
+          document.querySelectorAll(`#est-${campo}-btns .est-btn`).forEach(btn=>{
+            if(btn.dataset.val === d[campo]) _ativarEstBtn(btn);
+          });
+        });
+        // Sliders
+        ['acoes','fiis','etfs','exterior','caixa'].forEach(k=>{
+          const sl = document.getElementById(`est-${k}`);
+          const vl = document.getElementById(`est-${k}-val`);
+          if(sl) sl.value = d[k]||0;
+          if(vl) vl.textContent = `${d[k]||0}%`;
+        });
+        atualizarDistribuicao();
+      }
+    }
+  }catch(e){}
+}
+
+function _ativarEstBtn(btn){
+  btn.closest('div').querySelectorAll('.est-btn').forEach(b=>{
+    b.style.background = 'var(--card)';
+    b.style.color = 'var(--text)';
+    b.style.borderColor = 'var(--border)';
+    b.style.fontWeight = '400';
+  });
+  btn.style.background = 'var(--green)';
+  btn.style.color = '#fff';
+  btn.style.borderColor = 'var(--green)';
+  btn.style.fontWeight = '700';
+}
+
+function selecionarEstrategia(campo, valor, btn){
+  _estrategia[campo] = valor;
+  _ativarEstBtn(btn);
+}
+
+function atualizarDistribuicao(){
+  let total = 0;
+  ['acoes','fiis','etfs','exterior','caixa'].forEach(k=>{
+    const v = parseInt(document.getElementById(`est-${k}`)?.value||0);
+    const vl = document.getElementById(`est-${k}-val`);
+    if(vl) vl.textContent = `${v}%`;
+    _estrategia[k] = v;
+    total += v;
+  });
+  const aviso = document.getElementById('est-dist-aviso');
+  const tot = document.getElementById('est-dist-total');
+  if(tot) tot.textContent = total;
+  if(aviso) aviso.style.display = total !== 100 && total > 0 ? 'block' : 'none';
+}
+
+async function salvarEstrategia(){
+  const total = ['acoes','fiis','etfs','exterior','caixa'].reduce((s,k)=>s+(_estrategia[k]||0),0);
+  if(total > 0 && total !== 100){
+    alert(`A soma da distribuição deve ser 100%. Atual: ${total}%`);
+    return;
+  }
+  try{
+    const r = await fetch('/api/estrategia', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(_estrategia)
+    });
+    const msg = document.getElementById('est-save-msg');
+    if(r.ok){
+      if(msg){ msg.style.display='block'; msg.style.color='var(--green)'; msg.textContent='✅ Estratégia salva!'; }
+      setTimeout(()=>{ if(msg) msg.style.display='none'; }, 3000);
+    } else {
+      if(msg){ msg.style.display='block'; msg.style.color='#e53935'; msg.textContent='❌ Erro ao salvar'; }
+    }
+  }catch(e){ alert('Erro de conexão'); }
+}
+
+// ── TROCAR SENHA ──────────────────────────────────────────────
+async function trocarSenha(){
+  const atual = document.getElementById('senha-atual')?.value;
+  const nova  = document.getElementById('senha-nova')?.value;
+  const conf  = document.getElementById('senha-confirmar')?.value;
+  const msg   = document.getElementById('senha-msg');
+
+  if(!atual || !nova || !conf){ alert('Preencha todos os campos'); return; }
+  if(nova !== conf){
+    if(msg){ msg.style.display='block'; msg.style.color='#e53935'; msg.textContent='❌ As senhas não coincidem'; }
+    return;
+  }
+  if(nova.length < 6){
+    if(msg){ msg.style.display='block'; msg.style.color='#e53935'; msg.textContent='❌ A nova senha deve ter pelo menos 6 caracteres'; }
+    return;
+  }
+  try{
+    const r = await fetch('/api/trocar-senha', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({senha_atual: atual, senha_nova: nova})
+    });
+    const d = await r.json();
+    if(r.ok){
+      if(msg){ msg.style.display='block'; msg.style.color='var(--green)'; msg.textContent='✅ Senha alterada com sucesso!'; }
+      document.getElementById('senha-atual').value = '';
+      document.getElementById('senha-nova').value = '';
+      document.getElementById('senha-confirmar').value = '';
+    } else {
+      if(msg){ msg.style.display='block'; msg.style.color='#e53935'; msg.textContent=`❌ ${d.erro||'Erro ao alterar senha'}`; }
+    }
+  }catch(e){ alert('Erro de conexão'); }
+}
+
 function renderFontes(){
   if(!fontes) return;
   document.getElementById('fontes-config').innerHTML=fontes.map((f,i)=>`
