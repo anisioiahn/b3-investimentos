@@ -78,6 +78,21 @@ def iniciar_cron_janus():
                           hour=17, minute=30,
                           id="carteira_snapshot_fechamento")
 
+        # Agenda do mercado — toda segunda-feira às 8h
+        def executar_agenda():
+            print("[AGENDA CRON] 📅 Coletando agenda do mercado...", flush=True)
+            try:
+                import subprocess, sys
+                subprocess.Popen([sys.executable, "agenda_collector.py"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                print(f"[AGENDA CRON] ❌ Erro: {e}", flush=True)
+
+        scheduler.add_job(executar_agenda, "cron",
+                          day_of_week="mon",
+                          hour=8, minute=0,
+                          id="agenda_semanal")
+
         scheduler.start()
         print("[JANUS CRON] ✅ Agendamentos configurados:")
         print("  → Coleta fechamento: dias úteis às 19h BRT")
