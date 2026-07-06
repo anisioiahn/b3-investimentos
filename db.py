@@ -1064,3 +1064,67 @@ def db_listar_agenda_carteira(uid, dias_futuros=90):
         return []
     finally:
         conn.close()
+
+# ── ESTRATÉGIA DO USUÁRIO ─────────────────────────────────────
+def db_init_estrategia_table(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS usuario_estrategia (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE UNIQUE,
+                perfil TEXT DEFAULT 'Moderado',
+                objetivo TEXT DEFAULT 'Equilíbrio',
+                horizonte TEXT DEFAULT 'Longo Prazo',
+                pct_acoes INTEGER DEFAULT 0,
+                pct_fiis INTEGER DEFAULT 0,
+                pct_etfs INTEGER DEFAULT 0,
+                pct_exterior INTEGER DEFAULT 0,
+                pct_caixa INTEGER DEFAULT 0,
+                updated_at TEXT
+            )
+        """)
+    conn.commit()
+
+def db_salvar_estrategia(uid, data):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO usuario_estrategia
+                    (usuario_id, perfil, objetivo, horizonte,
+                     pct_acoes, pct_fiis, pct_etfs, pct_exterior, pct_caixa, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (usuario_id) DO UPDATE SET
+                    perfil=EXCLUDED.perfil, objetivo=EXCLUDED.objetivo,
+                    horizonte=EXCLUDED.horizonte, pct_acoes=EXCLUDED.pct_acoes,
+                    pct_fiis=EXCLUDED.pct_fiis, pct_etfs=EXCLUDED.pct_etfs,
+                    pct_exterior=EXCLUDED.pct_exterior, pct_caixa=EXCLUDED.pct_caixa,
+                    updated_at=EXCLUDED.updated_at
+            """, (uid, data.get('perfil'), data.get('objetivo'), data.get('horizonte'),
+                  data.get('acoes',0), data.get('fiis',0), data.get('etfs',0),
+                  data.get('exterior',0), data.get('caixa',0), now))
+        conn.commit(); conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erro salvar estratégia: {e}", flush=True)
+        return False
+
+def db_buscar_estrategia(uid):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM usuario_estrategia WHERE usuario_id=%s", (uid,))
+            row = cur.fetchone()
+        conn.close()
+        if not row: return {}
+        return {
+            'perfil': row['perfil'], 'objetivo': row['objetivo'],
+            'horizonte': row['horizonte'], 'acoes': row['pct_acoes'],
+            'fiis': row['pct_fiis'], 'etfs': row['pct_etfs'],
+            'exterior': row['pct_exterior'], 'caixa': row['pct_caixa']
+        }
+    except Exception as e:
+        print(f"[DB] Erro buscar estratégia: {e}", flush=True)
+        return {}
