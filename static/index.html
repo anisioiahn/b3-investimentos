@@ -929,12 +929,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <div>
             <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">Perfil de Risco</label>
             <div style="display:flex;gap:8px;flex-wrap:wrap" id="est-perfil-btns">
-              ${['Conservador','Moderado','Arrojado'].map(p=>`
-                <button onclick="selecionarEstrategia('perfil','${p}',this)"
-                  class="est-btn" data-val="${p}"
-                  style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">
-                  ${p}
-                </button>`).join('')}
+              <button onclick="selecionarEstrategia('perfil','Conservador',this)" class="est-btn" data-val="Conservador" style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">Conservador</button>
+              <button onclick="selecionarEstrategia('perfil','Moderado',this)" class="est-btn" data-val="Moderado" style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">Moderado</button>
+              <button onclick="selecionarEstrategia('perfil','Arrojado',this)" class="est-btn" data-val="Arrojado" style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">Arrojado</button>
             </div>
           </div>
 
@@ -942,12 +939,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <div>
             <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">Objetivo Principal</label>
             <div style="display:flex;gap:8px;flex-wrap:wrap" id="est-objetivo-btns">
-              ${[['Renda Passiva','💰'],['Crescimento','🚀'],['Equilíbrio','⚖️'],['Aposentadoria','🏖️']].map(([o,ic])=>`
-                <button onclick="selecionarEstrategia('objetivo','${o}',this)"
-                  class="est-btn" data-val="${o}"
-                  style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">
-                  ${ic} ${o}
-                </button>`).join('')}
+              <button onclick="selecionarEstrategia('objetivo','Renda Passiva',this)" class="est-btn" data-val="Renda Passiva" style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">💰 Renda Passiva</button>
+              <button onclick="selecionarEstrategia('objetivo','Crescimento',this)" class="est-btn" data-val="Crescimento" style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">🚀 Crescimento</button>
+              <button onclick="selecionarEstrategia('objetivo','Equilíbrio',this)" class="est-btn" data-val="Equilíbrio" style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">⚖️ Equilíbrio</button>
+              <button onclick="selecionarEstrategia('objetivo','Aposentadoria',this)" class="est-btn" data-val="Aposentadoria" style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">🏖️ Aposentadoria</button>
             </div>
           </div>
 
@@ -955,12 +950,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <div>
             <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">Horizonte de Investimento</label>
             <div style="display:flex;gap:8px;flex-wrap:wrap" id="est-horizonte-btns">
-              ${[['Curto Prazo','até 2 anos'],['Médio Prazo','2 a 5 anos'],['Longo Prazo','5+ anos']].map(([h,sub])=>`
-                <button onclick="selecionarEstrategia('horizonte','${h}',this)"
-                  class="est-btn" data-val="${h}"
-                  style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">
-                  ${h} <span style="font-size:10px;opacity:.6">${sub}</span>
-                </button>`).join('')}
+              <button onclick="selecionarEstrategia('horizonte','Curto Prazo',this)" class="est-btn" data-val="Curto Prazo" style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">Curto Prazo <span style="font-size:10px;opacity:.6">até 2 anos</span></button>
+              <button onclick="selecionarEstrategia('horizonte','Médio Prazo',this)" class="est-btn" data-val="Médio Prazo" style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">Médio Prazo <span style="font-size:10px;opacity:.6">2 a 5 anos</span></button>
+              <button onclick="selecionarEstrategia('horizonte','Longo Prazo',this)" class="est-btn" data-val="Longo Prazo" style="padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s">Longo Prazo <span style="font-size:10px;opacity:.6">5+ anos</span></button>
             </div>
           </div>
 
@@ -968,16 +960,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <div>
             <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">Distribuição Alvo (%)</label>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-              ${[['acoes','Ações'],['fiis','FIIs'],['etfs','ETFs'],['exterior','Exterior'],['caixa','Caixa']].map(([id,label])=>`
-                <div>
-                  <label style="font-size:11px;color:var(--text2)">${label}</label>
-                  <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-                    <input type="range" id="est-${id}" min="0" max="100" value="0" step="5"
-                      oninput="atualizarDistribuicao()"
-                      style="flex:1">
-                    <span id="est-${id}-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
-                  </div>
-                </div>`).join('')}
+              <div>
+                <label style="font-size:11px;color:var(--text2)">Ações</label>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+                  <input type="range" id="est-acoes" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="flex:1">
+                  <span id="est-acoes-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
+                </div>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--text2)">FIIs</label>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+                  <input type="range" id="est-fiis" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="flex:1">
+                  <span id="est-fiis-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
+                </div>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--text2)">ETFs</label>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+                  <input type="range" id="est-etfs" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="flex:1">
+                  <span id="est-etfs-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
+                </div>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--text2)">Exterior</label>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+                  <input type="range" id="est-exterior" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="flex:1">
+                  <span id="est-exterior-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
+                </div>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--text2)">Caixa</label>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+                  <input type="range" id="est-caixa" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="flex:1">
+                  <span id="est-caixa-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
+                </div>
+              </div>
             </div>
             <div id="est-dist-aviso" style="margin-top:8px;font-size:11px;color:#e53935;display:none">
               ⚠️ A soma deve ser 100%. Atual: <span id="est-dist-total">0</span>%
