@@ -5440,16 +5440,26 @@ const _pollDados=setInterval(async()=>{
         <span style="flex:1;height:1px;background:linear-gradient(90deg,#1e2340,transparent)"></span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
-        ${[
-          ['📊','Além dos dados','A maioria das plataformas exibe preços e gráficos. O Janus processa, pondera e interpreta — gerando inteligência acionável a partir dos mesmos dados públicos.'],
-          ['🎯','Score proprietário','O Janus Index é um score único de 0 a 100 que reflete a qualidade real de cada ativo, calculado por engines proprietárias independentes de terceiros.'],
-          ['🤖','IA especializada em B3','A AJIA conhece o contexto completo de cada ativo e atua como analista disponível 24h — contextualizada com fundamentos reais da metodologia Janus.'],
-          ['💼','Gestão integrada','Do alerta de preço ao controle fiscal, do histórico de performance à categorização por estratégia — tudo em um único lugar.']
-        ].map(([ic,t,b])=>`<div style="background:#131729;border:1px solid #1e2340;border-radius:14px;padding:1.5rem;transition:border-color .3s" onmouseover="this.style.borderColor='rgba(22,201,125,0.3)'" onmouseout="this.style.borderColor='#1e2340'">
-          <div style="font-size:1.75rem;margin-bottom:.75rem">${ic}</div>
-          <div style="font-size:.95rem;font-weight:700;color:#fff;margin-bottom:.5rem">${t}</div>
-          <div style="font-size:.85rem;font-weight:300;color:#8b9bc8;line-height:1.6">${b}</div>
-        </div>`).join('')}
+        <div style="background:#131729;border:1px solid #1e2340;border-radius:14px;padding:1.5rem" onmouseover="this.style.borderColor='rgba(22,201,125,0.3)'" onmouseout="this.style.borderColor='#1e2340'">
+          <div style="font-size:1.75rem;margin-bottom:.75rem">📊</div>
+          <div style="font-size:.95rem;font-weight:700;color:#fff;margin-bottom:.5rem">Além dos dados</div>
+          <div style="font-size:.85rem;font-weight:300;color:#8b9bc8;line-height:1.6">A maioria das plataformas exibe preços e gráficos. O Janus processa, pondera e interpreta — gerando inteligência acionável a partir dos mesmos dados públicos.</div>
+        </div>
+        <div style="background:#131729;border:1px solid #1e2340;border-radius:14px;padding:1.5rem" onmouseover="this.style.borderColor='rgba(22,201,125,0.3)'" onmouseout="this.style.borderColor='#1e2340'">
+          <div style="font-size:1.75rem;margin-bottom:.75rem">🎯</div>
+          <div style="font-size:.95rem;font-weight:700;color:#fff;margin-bottom:.5rem">Score proprietário</div>
+          <div style="font-size:.85rem;font-weight:300;color:#8b9bc8;line-height:1.6">O Janus Index é um score único de 0 a 100 que reflete a qualidade real de cada ativo, calculado por engines proprietárias independentes de terceiros.</div>
+        </div>
+        <div style="background:#131729;border:1px solid #1e2340;border-radius:14px;padding:1.5rem" onmouseover="this.style.borderColor='rgba(22,201,125,0.3)'" onmouseout="this.style.borderColor='#1e2340'">
+          <div style="font-size:1.75rem;margin-bottom:.75rem">🤖</div>
+          <div style="font-size:.95rem;font-weight:700;color:#fff;margin-bottom:.5rem">IA especializada em B3</div>
+          <div style="font-size:.85rem;font-weight:300;color:#8b9bc8;line-height:1.6">A AJIA conhece o contexto completo de cada ativo e atua como analista disponível 24h — contextualizada com fundamentos reais da metodologia Janus.</div>
+        </div>
+        <div style="background:#131729;border:1px solid #1e2340;border-radius:14px;padding:1.5rem" onmouseover="this.style.borderColor='rgba(22,201,125,0.3)'" onmouseout="this.style.borderColor='#1e2340'">
+          <div style="font-size:1.75rem;margin-bottom:.75rem">💼</div>
+          <div style="font-size:.95rem;font-weight:700;color:#fff;margin-bottom:.5rem">Gestão integrada</div>
+          <div style="font-size:.85rem;font-weight:300;color:#8b9bc8;line-height:1.6">Do alerta de preço ao controle fiscal, do histórico de performance à categorização por estratégia — tudo em um único lugar.</div>
+        </div>
       </div>
     </div>
 
@@ -5459,18 +5469,30 @@ const _pollDados=setInterval(async()=>{
         Os três pilares
         <span style="flex:1;height:1px;background:linear-gradient(90deg,#1e2340,transparent)"></span>
       </div>
-      ${[
-        ['I','Análise Fundamentalista Proprietária','O Janus coleta dados brutos e calcula seus próprios indicadores — ROE, ROIC, Margem Líquida, Crescimento de Receita, Dividend Score. O resultado é o Janus Index, um score composto que nenhuma outra plataforma replica.','✦ Quality Engine · Dividend Engine'],
-        ['II','Inteligência Artificial Especializada','A AJIA recebe o contexto completo de cada ativo antes de responder — score, indicadores, notícias, sentimento. Não é uma resposta genérica: é uma análise fundamentada na metodologia Janus.','✦ Powered by Anthropic Claude'],
-        ['III','Gestão Completa da Carteira','Categorias, alertas inteligentes, histórico de performance, evolução do score ao longo do tempo e controle fiscal integrado. A carteira como centro de decisão, não apenas registro.','✦ Módulo Fiscal em desenvolvimento']
-      ].map(([n,t,b,tag])=>`<div style="display:grid;grid-template-columns:3rem 1fr;gap:1.25rem;padding:1.5rem 0;border-bottom:1px solid #1e2340">
-        <div style="font-size:1.75rem;font-weight:800;color:#1e2340;line-height:1;padding-top:2px">${n}</div>
+      <div style="display:grid;grid-template-columns:3rem 1fr;gap:1.25rem;padding:1.5rem 0;border-bottom:1px solid #1e2340">
+        <div style="font-size:1.75rem;font-weight:800;color:#1e2340;line-height:1;padding-top:2px">I</div>
         <div>
-          <div style="font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:.5rem">${t}</div>
-          <div style="font-size:.875rem;font-weight:300;color:#8b9bc8;line-height:1.65">${b}</div>
-          <span style="display:inline-flex;align-items:center;gap:6px;margin-top:.75rem;font-size:11px;font-weight:500;color:#16c97d;background:rgba(22,201,125,0.08);border:1px solid rgba(22,201,125,0.2);border-radius:20px;padding:3px 10px">${tag}</span>
+          <div style="font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:.5rem">Análise Fundamentalista Proprietária</div>
+          <div style="font-size:.875rem;font-weight:300;color:#8b9bc8;line-height:1.65">O Janus coleta dados brutos e calcula seus próprios indicadores — ROE, ROIC, Margem Líquida, Crescimento de Receita, Dividend Score. O resultado é o Janus Index, um score composto que nenhuma outra plataforma replica.</div>
+          <span style="display:inline-flex;align-items:center;margin-top:.75rem;font-size:11px;font-weight:500;color:#16c97d;background:rgba(22,201,125,0.08);border:1px solid rgba(22,201,125,0.2);border-radius:20px;padding:3px 10px">✦ Quality Engine · Dividend Engine</span>
         </div>
-      </div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:3rem 1fr;gap:1.25rem;padding:1.5rem 0;border-bottom:1px solid #1e2340">
+        <div style="font-size:1.75rem;font-weight:800;color:#1e2340;line-height:1;padding-top:2px">II</div>
+        <div>
+          <div style="font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:.5rem">Inteligência Artificial Especializada</div>
+          <div style="font-size:.875rem;font-weight:300;color:#8b9bc8;line-height:1.65">A AJIA recebe o contexto completo de cada ativo antes de responder — score, indicadores, notícias, sentimento. Não é uma resposta genérica: é uma análise fundamentada na metodologia Janus.</div>
+          <span style="display:inline-flex;align-items:center;margin-top:.75rem;font-size:11px;font-weight:500;color:#16c97d;background:rgba(22,201,125,0.08);border:1px solid rgba(22,201,125,0.2);border-radius:20px;padding:3px 10px">✦ Powered by Anthropic Claude</span>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:3rem 1fr;gap:1.25rem;padding:1.5rem 0">
+        <div style="font-size:1.75rem;font-weight:800;color:#1e2340;line-height:1;padding-top:2px">III</div>
+        <div>
+          <div style="font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:.5rem">Gestão Completa da Carteira</div>
+          <div style="font-size:.875rem;font-weight:300;color:#8b9bc8;line-height:1.65">Categorias, alertas inteligentes, histórico de performance, evolução do score ao longo do tempo e controle fiscal integrado. A carteira como centro de decisão, não apenas registro.</div>
+          <span style="display:inline-flex;align-items:center;margin-top:.75rem;font-size:11px;font-weight:500;color:#16c97d;background:rgba(22,201,125,0.08);border:1px solid rgba(22,201,125,0.2);border-radius:20px;padding:3px 10px">✦ Módulo Fiscal em desenvolvimento</span>
+        </div>
+      </div>
     </div>
 
     <!-- FILOSOFIA -->
@@ -5485,7 +5507,14 @@ const _pollDados=setInterval(async()=>{
       </div>
       <p style="font-size:.875rem;font-weight:300;color:#8b9bc8;line-height:1.7;max-width:560px;position:relative;z-index:1">Janus é o deus romano das duas faces — uma olhando para o passado (fundamentos históricos), outra para o futuro (perspectivas e tendências). A plataforma une essas duas dimensões para guiar decisões de investimento mais conscientes. O nome não é apenas identidade: é método.</p>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:1.5rem;position:relative;z-index:1">
-        ${['Quality Engine ✓','Dividend Engine ✓','Value Engine','Momentum Engine','Risk Engine','Sentiment Engine','Macro Engine','Governance Engine'].map((e,i)=>`<span style="font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid ${i<2?'rgba(22,201,125,0.4)':'#1e2340'};color:${i<2?'#16c97d':'#8b9bc8'};background:${i<2?'rgba(22,201,125,0.06)':'#131729'}">${e}</span>`).join('')}
+        <span style="font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid rgba(22,201,125,0.4);color:#16c97d;background:rgba(22,201,125,0.06)">Quality Engine ✓</span>
+        <span style="font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid rgba(22,201,125,0.4);color:#16c97d;background:rgba(22,201,125,0.06)">Dividend Engine ✓</span>
+        <span style="font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid #1e2340;color:#8b9bc8;background:#131729">Value Engine</span>
+        <span style="font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid #1e2340;color:#8b9bc8;background:#131729">Momentum Engine</span>
+        <span style="font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid #1e2340;color:#8b9bc8;background:#131729">Risk Engine</span>
+        <span style="font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid #1e2340;color:#8b9bc8;background:#131729">Sentiment Engine</span>
+        <span style="font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid #1e2340;color:#8b9bc8;background:#131729">Macro Engine</span>
+        <span style="font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid #1e2340;color:#8b9bc8;background:#131729">Governance Engine</span>
       </div>
     </div>
 
