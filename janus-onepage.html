@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Janus — Investment Intelligence Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --void:     #07080f;
+    --deep:     #0d1021;
+    --surface:  #131729;
+    --border:   #1e2340;
+    --jade:     #16c97d;
+    --jade-dim: #0f8a54;
+    --sapphire: #2563eb;
+    --mist:     #8b9bc8;
+    --light:    #e8ecf8;
+    --white:    #ffffff;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--void);
+    color: var(--light);
+    overflow-x: hidden;
+  }
+
+  /* ── MODAL OVERLAY ─────────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(7,8,15,0.92);
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-sheet {
+    background: var(--deep);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    width: min(92vw, 860px);
+    max-height: 92vh;
+    overflow-y: auto;
+    position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .modal-close {
+    position: sticky; top: 1.25rem;
+    float: right;
+    margin: 1.25rem 1.25rem 0 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--mist);
+    font-size: 16px;
+    transition: all .2s;
+    z-index: 10;
+  }
+  .modal-close:hover { background: var(--border); color: var(--white); }
+
+  /* ── HERO ───────────────────────────────────────── */
+  .hero {
+    position: relative;
+    padding: 3.5rem 3rem 2.5rem;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Diagonal que separa passado/futuro — o risco estético */
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -40%; right: -10%;
+    width: 60%; height: 200%;
+    background: linear-gradient(135deg, transparent 0%, rgba(37,99,235,0.06) 50%, rgba(22,201,125,0.08) 100%);
+    transform: skewX(-12deg);
+    pointer-events: none;
+  }
+
+  /* Grade de pontos sutil */
+  .hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(139,155,200,0.12) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+  }
+
+  .hero-inner { position: relative; z-index: 1; }
+
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px; font-weight: 500;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--jade);
+    margin-bottom: 1.75rem;
+  }
+  .hero-eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 24px; height: 1px;
+    background: var(--jade);
+  }
+
+  .hero-logo-row {
+    display: flex; align-items: center; gap: 1.25rem;
+    margin-bottom: 2rem;
+  }
+
+  .hero-logo-mark {
+    width: 72px; height: 72px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #1a2a6c, #0d4a8c, #0d8a54);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 40px rgba(22,201,125,0.2), 0 0 80px rgba(37,99,235,0.15);
+    flex-shrink: 0;
+  }
+
+  .hero-logo-svg { width: 42px; height: 42px; }
+
+  .hero-brand {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+
+  .hero-name {
+    font-family: 'Sora', sans-serif;
+    font-size: 2.75rem; font-weight: 800;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    background: linear-gradient(135deg, var(--white) 0%, var(--mist) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-version {
+    font-size: 11px; font-weight: 500;
+    color: var(--mist); letter-spacing: 1px;
+  }
+
+  .hero-tagline {
+    font-family: 'Sora', sans-serif;
+    font-size: clamp(1.5rem, 4vw, 2.25rem);
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.5px;
+    margin-bottom: 1.25rem;
+    max-width: 600px;
+  }
+
+  .hero-tagline em {
+    font-style: normal;
+    background: linear-gradient(90deg, var(--jade), #4ade80);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-sub {
+    font-size: 1rem; font-weight: 300;
+    color: var(--mist);
+    line-height: 1.7;
+    max-width: 520px;
+  }
+
+  /* ── PROPÓSITO ───────────────────────────────────── */
+  .proposito {
+    padding: 2.5rem 3rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .proposito-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+
+  .proposito-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .3s;
+  }
+  .proposito-card:hover { border-color: rgba(22,201,125,0.3); }
+
+  .proposito-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--jade), transparent);
+    opacity: 0;
+    transition: opacity .3s;
+  }
+  .proposito-card:hover::before { opacity: 1; }
+
+  .pc-icon { font-size: 1.75rem; margin-bottom: .75rem; }
+  .pc-title {
+    font-family: 'Sora', sans-serif;
+    font-size: .95rem; font-weight: 700;
+    margin-bottom: .5rem; color: var(--white);
+  }
+  .pc-body {
+    font-size: .85rem; font-weight: 300;
+    color: var(--mist); line-height: 1.6;
+  }
+
+  /* ── PILARES ─────────────────────────────────────── */
+  .pilares {
+    padding: 2.5rem 3rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-size: 11px; font-weight: 500;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--jade); margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--border), transparent);
+  }
+
+  .pilares-list {
+    display: flex; flex-direction: column; gap: 1px;
+  }
+
+  .pilar {
+    display: grid;
+    grid-template-columns: 3rem 1fr;
+    gap: 1.25rem;
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--border);
+    align-items: start;
+  }
+  .pilar:last-child { border-bottom: none; }
+
+  .pilar-num {
+    font-family: 'Sora', sans-serif;
+    font-size: 2rem; font-weight: 800;
+    color: var(--border);
+    line-height: 1;
+    padding-top: 2px;
+  }
+
+  .pilar-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 1.1rem; font-weight: 700;
+    color: var(--white); margin-bottom: .5rem;
+  }
+
+  .pilar-body {
+    font-size: .875rem; font-weight: 300;
+    color: var(--mist); line-height: 1.65;
+  }
+
+  .pilar-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: .75rem;
+    font-size: 11px; font-weight: 500;
+    color: var(--jade);
+    background: rgba(22,201,125,0.08);
+    border: 1px solid rgba(22,201,125,0.2);
+    border-radius: 20px;
+    padding: 3px 10px;
+  }
+
+  /* ── PARA QUEM ───────────────────────────────────── */
+  .para-quem {
+    padding: 2.5rem 3rem;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(37,99,235,0.04), transparent);
+  }
+
+  .pq-destaque {
+    font-family: 'Sora', sans-serif;
+    font-size: 1.35rem; font-weight: 700;
+    color: var(--white); line-height: 1.4;
+    border-left: 3px solid var(--jade);
+    padding-left: 1.25rem;
+    margin-top: 1.5rem;
+  }
+
+  .pq-body {
+    font-size: .9rem; font-weight: 300;
+    color: var(--mist); line-height: 1.7;
+    margin-top: 1rem;
+    max-width: 600px;
+  }
+
+  /* ── FILOSOFIA ───────────────────────────────────── */
+  .filosofia {
+    padding: 2.5rem 3rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .filosofia::before {
+    content: 'JANUS';
+    position: absolute;
+    right: -1rem; bottom: -1rem;
+    font-family: 'Sora', sans-serif;
+    font-size: 8rem; font-weight: 800;
+    color: rgba(255,255,255,0.02);
+    letter-spacing: -4px;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .filosofia-quote {
+    font-family: 'Sora', sans-serif;
+    font-size: clamp(1.1rem, 3vw, 1.5rem);
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--white);
+    position: relative;
+    z-index: 1;
+    margin-top: 1.5rem;
+  }
+
+  .filosofia-quote::before {
+    content: '"';
+    font-size: 4rem; font-weight: 800;
+    color: var(--jade);
+    line-height: 0;
+    vertical-align: -1.5rem;
+    margin-right: .25rem;
+    opacity: 0.6;
+  }
+
+  .filosofia-explain {
+    font-size: .875rem; font-weight: 300;
+    color: var(--mist); line-height: 1.7;
+    margin-top: 1.25rem;
+    max-width: 560px;
+    position: relative; z-index: 1;
+  }
+
+  /* ── ENGINE BADGES ───────────────────────────────── */
+  .engines {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-top: 1.5rem;
+    position: relative; z-index: 1;
+  }
+
+  .engine-badge {
+    font-size: 11px; font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--mist);
+    background: var(--surface);
+  }
+
+  .engine-badge.active {
+    border-color: rgba(22,201,125,0.4);
+    color: var(--jade);
+    background: rgba(22,201,125,0.06);
+  }
+
+  /* ── RODAPÉ ─────────────────────────────────────── */
+  .rodape {
+    padding: 1.5rem 3rem;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 1rem;
+  }
+
+  .rodape-txt {
+    font-size: .8rem; color: var(--mist); font-weight: 300;
+  }
+
+  .btn-fechar {
+    font-family: 'Sora', sans-serif;
+    font-size: .85rem; font-weight: 600;
+    padding: .6rem 1.5rem;
+    border-radius: 10px;
+    border: 1px solid var(--jade);
+    background: rgba(22,201,125,0.1);
+    color: var(--jade);
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-fechar:hover {
+    background: var(--jade);
+    color: var(--void);
+  }
+
+  /* ── RESPONSIVE ─────────────────────────────────── */
+  @media (max-width: 640px) {
+    .hero, .proposito, .pilares, .para-quem, .filosofia, .rodape {
+      padding-left: 1.5rem; padding-right: 1.5rem;
+    }
+    .proposito-grid { grid-template-columns: 1fr; }
+    .hero-name { font-size: 2rem; }
+    .pilar { grid-template-columns: 2.5rem 1fr; }
+    .rodape { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="modal-overlay" id="overlay" onclick="if(event.target===this)fechar()">
+  <div class="modal-sheet">
+
+    <button class="modal-close" onclick="fechar()">✕</button>
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-inner">
+        <div class="hero-eyebrow">Investment Intelligence Platform</div>
+
+        <div class="hero-logo-row">
+          <div class="hero-logo-mark">
+            <!-- Logo Janus em SVG -->
+            <svg class="hero-logo-svg" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="32" cy="32" r="28" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+              <path d="M32 8 L32 56" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+              <!-- Face esquerda (passado) -->
+              <circle cx="22" cy="26" r="4" fill="#2563eb" opacity="0.9"/>
+              <path d="M14 40 Q22 32 22 40" stroke="#2563eb" stroke-width="2" stroke-linecap="round" fill="none"/>
+              <!-- Face direita (futuro) -->
+              <circle cx="42" cy="26" r="4" fill="#16c97d" opacity="0.9"/>
+              <path d="M50 40 Q42 32 42 40" stroke="#16c97d" stroke-width="2" stroke-linecap="round" fill="none"/>
+              <!-- Centro -->
+              <circle cx="32" cy="32" r="3" fill="white" opacity="0.6"/>
+              <!-- Arco superior -->
+              <path d="M18 16 Q32 10 46 16" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+
+          <div class="hero-brand">
+            <div class="hero-name">Janus</div>
+            <div class="hero-version">v3.1.0 · B3 Intelligence</div>
+          </div>
+        </div>
+
+        <h1 class="hero-tagline">
+          Passado e Futuro.<br>
+          <em>Melhores Escolhas.</em>
+        </h1>
+
+        <p class="hero-sub">
+          Uma plataforma de inteligência de investimentos na B3 que transforma dados públicos em decisões mais fundamentadas — para o investidor pessoa física que quer ir além do achismo.
+        </p>
+      </div>
+    </div>
+
+    <!-- PROPÓSITO -->
+    <div class="proposito">
+      <div class="section-label">O que diferencia o Janus</div>
+
+      <div class="proposito-grid">
+        <div class="proposito-card">
+          <div class="pc-icon">📊</div>
+          <div class="pc-title">Além dos dados</div>
+          <div class="pc-body">A maioria das plataformas exibe preços e gráficos. O Janus processa, pondera e interpreta — gerando inteligência acionável a partir dos mesmos dados públicos.</div>
+        </div>
+        <div class="proposito-card">
+          <div class="pc-icon">🎯</div>
+          <div class="pc-title">Score proprietário</div>
+          <div class="pc-body">O Janus Index é um score único de 0 a 100 que reflete a qualidade real de cada ativo, calculado por engines proprietárias independentes da Brapi.</div>
+        </div>
+        <div class="proposito-card">
+          <div class="pc-icon">🤖</div>
+          <div class="pc-title">IA especializada em B3</div>
+          <div class="pc-body">A AJIA não é um chatbot genérico. Ela conhece o contexto completo de cada ativo e atua como analista disponível 24h — contextualizada com fundamentos reais.</div>
+        </div>
+        <div class="proposito-card">
+          <div class="pc-icon">💼</div>
+          <div class="pc-title">Gestão integrada</div>
+          <div class="pc-body">Do alerta de preço ao controle fiscal, do histórico de performance à categorização por estratégia — tudo em um único lugar, sem cruzar múltiplas ferramentas.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PILARES -->
+    <div class="pilares">
+      <div class="section-label">Os três pilares</div>
+
+      <div class="pilares-list">
+        <div class="pilar">
+          <div class="pilar-num">I</div>
+          <div>
+            <div class="pilar-title">Análise Fundamentalista Proprietária</div>
+            <div class="pilar-body">O Janus coleta dados brutos da Brapi e calcula seus próprios indicadores — ROE, ROIC, Margem Líquida, Crescimento de Receita, Dividend Score. O resultado é o Janus Index, um score composto que nenhuma outra plataforma replica.</div>
+            <span class="pilar-tag">✦ Quality Engine · Dividend Engine</span>
+          </div>
+        </div>
+
+        <div class="pilar">
+          <div class="pilar-num">II</div>
+          <div>
+            <div class="pilar-title">Inteligência Artificial Especializada</div>
+            <div class="pilar-body">A AJIA (Analista Janus com Inteligência Artificial) recebe o contexto completo de cada ativo antes de responder — score, indicadores, notícias, sentimento. Não é uma resposta genérica: é uma análise fundamentada na metodologia Janus.</div>
+            <span class="pilar-tag">✦ Powered by Anthropic Claude</span>
+          </div>
+        </div>
+
+        <div class="pilar">
+          <div class="pilar-num">III</div>
+          <div>
+            <div class="pilar-title">Gestão Completa da Carteira</div>
+            <div class="pilar-body">Categorias, alertas inteligentes, histórico de performance, evolução do Janus Index da carteira ao longo do tempo, e controle fiscal integrado. A carteira como centro de decisão, não apenas registro.</div>
+            <span class="pilar-tag">✦ Módulo Fiscal em desenvolvimento</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PARA QUEM -->
+    <div class="para-quem">
+      <div class="section-label">Para quem é</div>
+
+      <div class="pq-destaque">
+        O investidor pessoa física brasileiro que quer tomar decisões baseadas em fundamentos reais — sem precisar ser analista profissional ou pagar por serviços institucionais.
+      </div>
+
+      <p class="pq-body">
+        Quem usa o Janus não precisa cruzar plataformas, interpretar planilhas complexas nem confiar em dicas de terceiros. O sistema faz a triagem, calcula os scores, monitora os alertas e explica o que mudou. O investidor decide.
+      </p>
+    </div>
+
+    <!-- FILOSOFIA -->
+    <div class="filosofia">
+      <div class="section-label">A filosofia</div>
+
+      <div class="filosofia-quote">
+        Passado e Futuro. Melhores Escolhas.
+      </div>
+
+      <p class="filosofia-explain">
+        Janus é o deus romano das duas faces — uma olhando para o passado, outra para o futuro. A plataforma une fundamentos históricos e perspectivas futuras para guiar decisões de investimento mais conscientes. O nome não é apenas identidade: é método.
+      </p>
+
+      <div class="engines">
+        <span class="engine-badge active">Quality Engine ✓</span>
+        <span class="engine-badge active">Dividend Engine ✓</span>
+        <span class="engine-badge">Value Engine</span>
+        <span class="engine-badge">Momentum Engine</span>
+        <span class="engine-badge">Risk Engine</span>
+        <span class="engine-badge">Sentiment Engine</span>
+        <span class="engine-badge">Macro Engine</span>
+        <span class="engine-badge">Governance Engine</span>
+      </div>
+    </div>
+
+    <!-- RODAPÉ -->
+    <div class="rodape">
+      <div class="rodape-txt">
+        Janus v3.1.0 · B3 Investment Intelligence Platform · 2026
+      </div>
+      <button class="btn-fechar" onclick="fechar()">Voltar ao Janus →</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function fechar(){
+    document.getElementById('overlay').style.display = 'none';
+  }
+  // ESC fecha
+  document.addEventListener('keydown', e => {
+    if(e.key === 'Escape') fechar();
+  });
+</script>
+
+</body>
+</html>
