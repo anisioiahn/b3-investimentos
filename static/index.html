@@ -553,7 +553,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 <body>
 <div class="app">
   <div class="header" style="position:relative">
-    <div class="hlogo">
+    <div class="hlogo" onclick="abrirOnePage()" style="cursor:pointer" title="Sobre o Janus">
       <div class="logo" style="background:transparent;padding:0;width:42px;height:42px;border-radius:10px;overflow:hidden">
         <img src="/icon-192.png" alt="Janus" style="width:100%;height:100%;object-fit:cover">
       </div>
@@ -2220,6 +2220,15 @@ function atualizarBottomBar(pagina){
   document.querySelectorAll('.bb-item').forEach(b=>b.classList.remove('active'));
   const bb = document.getElementById(`bb-${pagina}`);
   if(bb) bb.classList.add('active');
+}
+
+function abrirOnePage(){
+  const modal = document.getElementById('modal-onepage');
+  if(modal){ modal.style.display = 'flex'; modal.scrollTop = 0; }
+}
+function fecharOnePage(){
+  const modal = document.getElementById('modal-onepage');
+  if(modal) modal.style.display = 'none';
 }
 
 function toggleMenuSec(){
@@ -5312,6 +5321,111 @@ const _pollDados=setInterval(async()=>{
   <button onclick="fecharBottomMenu()" style="width:100%;margin-top:8px;padding:12px;border:none;border-radius:12px;background:var(--card);font-size:14px;color:var(--text2);cursor:pointer;font-family:inherit">Fechar</button>
 </div>
 <div id="bottom-menu-overlay" onclick="fecharBottomMenu()" style="display:none;position:fixed;inset:0;z-index:198"></div>
+
+<!-- ONE-PAGE INSTITUCIONAL JANUS -->
+<div id="modal-onepage" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(7,8,15,0.92);align-items:center;justify-content:center;backdrop-filter:blur(4px)" onclick="if(event.target===this)fecharOnePage()">
+  <div style="background:#0d1021;border:1px solid #1e2340;border-radius:20px;width:min(92vw,860px);max-height:92vh;overflow-y:auto;position:relative;scrollbar-width:thin" onclick="event.stopPropagation()">
+
+    <button onclick="fecharOnePage()" style="position:sticky;top:1.25rem;float:right;margin:1.25rem 1.25rem 0 0;background:#131729;border:1px solid #1e2340;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#8b9bc8;font-size:16px;z-index:10;transition:all .2s" onmouseover="this.style.background='#1e2340';this.style.color='#fff'" onmouseout="this.style.background='#131729';this.style.color='#8b9bc8'">✕</button>
+
+    <!-- HERO -->
+    <div style="position:relative;padding:3.5rem 3rem 2.5rem;overflow:hidden;border-bottom:1px solid #1e2340">
+      <div style="position:absolute;top:-40%;right:-10%;width:60%;height:200%;background:linear-gradient(135deg,transparent,rgba(37,99,235,0.06),rgba(22,201,125,0.08));transform:skewX(-12deg);pointer-events:none"></div>
+      <div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(139,155,200,0.1) 1px,transparent 1px);background-size:32px 32px;pointer-events:none"></div>
+      <div style="position:relative;z-index:1">
+        <div style="display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:#16c97d;margin-bottom:1.75rem">
+          <span style="display:inline-block;width:24px;height:1px;background:#16c97d"></span>Investment Intelligence Platform
+        </div>
+        <div style="display:flex;align-items:center;gap:1.25rem;margin-bottom:2rem">
+          <div style="width:72px;height:72px;border-radius:18px;background:linear-gradient(135deg,#1a2a6c,#0d4a8c,#0d8a54);display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(22,201,125,0.2),0 0 80px rgba(37,99,235,0.15);flex-shrink:0">
+            <svg width="42" height="42" viewBox="0 0 64 64" fill="none">
+              <circle cx="32" cy="32" r="28" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+              <path d="M32 8 L32 56" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+              <circle cx="22" cy="26" r="4" fill="#2563eb" opacity="0.9"/>
+              <path d="M14 40 Q22 32 22 40" stroke="#2563eb" stroke-width="2" stroke-linecap="round" fill="none"/>
+              <circle cx="42" cy="26" r="4" fill="#16c97d" opacity="0.9"/>
+              <path d="M50 40 Q42 32 42 40" stroke="#16c97d" stroke-width="2" stroke-linecap="round" fill="none"/>
+              <circle cx="32" cy="32" r="3" fill="white" opacity="0.6"/>
+              <path d="M18 16 Q32 10 46 16" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <div style="font-family:system-ui;font-size:2.75rem;font-weight:800;letter-spacing:-1.5px;line-height:1;background:linear-gradient(135deg,#fff,#8b9bc8);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Janus</div>
+            <div style="font-size:11px;color:#8b9bc8;letter-spacing:1px;margin-top:2px">v3.1.0 · B3 Intelligence</div>
+          </div>
+        </div>
+        <h1 style="font-family:system-ui;font-size:clamp(1.5rem,4vw,2.25rem);font-weight:700;line-height:1.2;letter-spacing:-0.5px;margin-bottom:1.25rem;max-width:600px;color:#e8ecf8">
+          Passado e Futuro.<br>
+          <span style="background:linear-gradient(90deg,#16c97d,#4ade80);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Melhores Escolhas.</span>
+        </h1>
+        <p style="font-size:1rem;font-weight:300;color:#8b9bc8;line-height:1.7;max-width:520px">Uma plataforma de inteligência de investimentos na B3 que transforma dados públicos em decisões mais fundamentadas — para o investidor que quer ir além do achismo.</p>
+      </div>
+    </div>
+
+    <!-- O QUE DIFERENCIA -->
+    <div style="padding:2.5rem 3rem;border-bottom:1px solid #1e2340">
+      <div style="display:flex;align-items:center;gap:10px;font-size:11px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:#16c97d;margin-bottom:1.5rem">
+        O que diferencia o Janus
+        <span style="flex:1;height:1px;background:linear-gradient(90deg,#1e2340,transparent)"></span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+        ${[
+          ['📊','Além dos dados','A maioria das plataformas exibe preços e gráficos. O Janus processa, pondera e interpreta — gerando inteligência acionável a partir dos mesmos dados públicos.'],
+          ['🎯','Score proprietário','O Janus Index é um score único de 0 a 100 que reflete a qualidade real de cada ativo, calculado por engines proprietárias independentes de terceiros.'],
+          ['🤖','IA especializada em B3','A AJIA conhece o contexto completo de cada ativo e atua como analista disponível 24h — contextualizada com fundamentos reais da metodologia Janus.'],
+          ['💼','Gestão integrada','Do alerta de preço ao controle fiscal, do histórico de performance à categorização por estratégia — tudo em um único lugar.']
+        ].map(([ic,t,b])=>`<div style="background:#131729;border:1px solid #1e2340;border-radius:14px;padding:1.5rem;transition:border-color .3s" onmouseover="this.style.borderColor='rgba(22,201,125,0.3)'" onmouseout="this.style.borderColor='#1e2340'">
+          <div style="font-size:1.75rem;margin-bottom:.75rem">${ic}</div>
+          <div style="font-size:.95rem;font-weight:700;color:#fff;margin-bottom:.5rem">${t}</div>
+          <div style="font-size:.85rem;font-weight:300;color:#8b9bc8;line-height:1.6">${b}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- OS TRÊS PILARES -->
+    <div style="padding:2.5rem 3rem;border-bottom:1px solid #1e2340">
+      <div style="display:flex;align-items:center;gap:10px;font-size:11px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:#16c97d;margin-bottom:1.5rem">
+        Os três pilares
+        <span style="flex:1;height:1px;background:linear-gradient(90deg,#1e2340,transparent)"></span>
+      </div>
+      ${[
+        ['I','Análise Fundamentalista Proprietária','O Janus coleta dados brutos e calcula seus próprios indicadores — ROE, ROIC, Margem Líquida, Crescimento de Receita, Dividend Score. O resultado é o Janus Index, um score composto que nenhuma outra plataforma replica.','✦ Quality Engine · Dividend Engine'],
+        ['II','Inteligência Artificial Especializada','A AJIA recebe o contexto completo de cada ativo antes de responder — score, indicadores, notícias, sentimento. Não é uma resposta genérica: é uma análise fundamentada na metodologia Janus.','✦ Powered by Anthropic Claude'],
+        ['III','Gestão Completa da Carteira','Categorias, alertas inteligentes, histórico de performance, evolução do score ao longo do tempo e controle fiscal integrado. A carteira como centro de decisão, não apenas registro.','✦ Módulo Fiscal em desenvolvimento']
+      ].map(([n,t,b,tag])=>`<div style="display:grid;grid-template-columns:3rem 1fr;gap:1.25rem;padding:1.5rem 0;border-bottom:1px solid #1e2340">
+        <div style="font-size:1.75rem;font-weight:800;color:#1e2340;line-height:1;padding-top:2px">${n}</div>
+        <div>
+          <div style="font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:.5rem">${t}</div>
+          <div style="font-size:.875rem;font-weight:300;color:#8b9bc8;line-height:1.65">${b}</div>
+          <span style="display:inline-flex;align-items:center;gap:6px;margin-top:.75rem;font-size:11px;font-weight:500;color:#16c97d;background:rgba(22,201,125,0.08);border:1px solid rgba(22,201,125,0.2);border-radius:20px;padding:3px 10px">${tag}</span>
+        </div>
+      </div>`).join('')}
+    </div>
+
+    <!-- FILOSOFIA -->
+    <div style="padding:2.5rem 3rem;position:relative;overflow:hidden;border-bottom:1px solid #1e2340">
+      <div style="position:absolute;right:-1rem;bottom:-1rem;font-size:8rem;font-weight:800;color:rgba(255,255,255,0.02);letter-spacing:-4px;user-select:none;pointer-events:none;line-height:1">JANUS</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:11px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:#16c97d;margin-bottom:1.5rem">
+        A filosofia
+        <span style="flex:1;height:1px;background:linear-gradient(90deg,#1e2340,transparent)"></span>
+      </div>
+      <div style="border-left:3px solid #16c97d;padding-left:1.25rem;margin-bottom:1.25rem;position:relative;z-index:1">
+        <div style="font-size:clamp(1.1rem,3vw,1.4rem);font-weight:700;color:#fff;line-height:1.4">"Passado e Futuro. Melhores Escolhas."</div>
+      </div>
+      <p style="font-size:.875rem;font-weight:300;color:#8b9bc8;line-height:1.7;max-width:560px;position:relative;z-index:1">Janus é o deus romano das duas faces — uma olhando para o passado (fundamentos históricos), outra para o futuro (perspectivas e tendências). A plataforma une essas duas dimensões para guiar decisões de investimento mais conscientes. O nome não é apenas identidade: é método.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:1.5rem;position:relative;z-index:1">
+        ${['Quality Engine ✓','Dividend Engine ✓','Value Engine','Momentum Engine','Risk Engine','Sentiment Engine','Macro Engine','Governance Engine'].map((e,i)=>`<span style="font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid ${i<2?'rgba(22,201,125,0.4)':'#1e2340'};color:${i<2?'#16c97d':'#8b9bc8'};background:${i<2?'rgba(22,201,125,0.06)':'#131729'}">${e}</span>`).join('')}
+      </div>
+    </div>
+
+    <!-- RODAPÉ -->
+    <div style="padding:1.5rem 3rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+      <div style="font-size:.8rem;color:#8b9bc8;font-weight:300">Janus v3.1.0 · B3 Investment Intelligence Platform · 2026</div>
+      <button onclick="fecharOnePage()" style="font-size:.85rem;font-weight:600;padding:.6rem 1.5rem;border-radius:10px;border:1px solid #16c97d;background:rgba(22,201,125,0.1);color:#16c97d;cursor:pointer;transition:all .2s;font-family:inherit" onmouseover="this.style.background='#16c97d';this.style.color='#07080f'" onmouseout="this.style.background='rgba(22,201,125,0.1)';this.style.color='#16c97d'">Voltar ao Janus →</button>
+    </div>
+
+  </div>
+</div>
 
 </body>
 </html>
