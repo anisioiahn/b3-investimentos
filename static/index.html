@@ -1933,20 +1933,43 @@ function _renderCalendario(){
     </div>
 
     <!-- Detalhe do dia selecionado -->
-    <div id="agenda-detalhe" style="margin-top:10px"></div>
+    <div id="agenda-detalhe" style="margin-top:10px"></div>`;
 
-    <!-- Botão atualizar -->
-    ${_agendaEventos.length===0?`<div style="text-align:center;margin-top:10px">
-      <button onclick="fetch('/api/agenda/coletar',{method:'POST'}).then(()=>setTimeout(()=>carregarAgenda(false),3000))"
-        class="btn" style="font-size:11px;padding:4px 12px">📅 Coletar agenda</button>
-    </div>`:''}`;
-
-  // Legenda de impacto
-  el.innerHTML += `<div style="display:flex;gap:10px;margin-top:8px;justify-content:center">
-    ${Object.entries(impactoCor).map(([k,v])=>`<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
-      <div style="width:6px;height:6px;border-radius:50%;background:${v}"></div>${k}
-    </div>`).join('')}
+  // Legenda + botão atualizar
+  el.innerHTML += `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+    <div style="display:flex;gap:10px">
+      ${Object.entries(impactoCor).map(([k,v])=>`<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
+        <div style="width:6px;height:6px;border-radius:50%;background:${v}"></div>${k}
+      </div>`).join('')}
+    </div>
+    <button onclick="_coletarAgenda()" id="btn-coletar-agenda"
+      style="font-size:10px;color:var(--text3);background:none;border:none;cursor:pointer;text-decoration:underline;padding:0">
+      🔄 Atualizar
+    </button>
   </div>`;
+}
+
+async function _coletarAgenda(){
+  const btn = document.getElementById('btn-coletar-agenda');
+  if(btn){ btn.disabled=true; btn.textContent='Coletando...'; }
+  try{
+    await fetch('/api/agenda/coletar', {method:'POST'});
+    let tentativas = 0;
+    const poll = setInterval(async()=>{
+      tentativas++;
+      try{
+        const rp = await fetch('/api/agenda/progresso');
+        const p = await rp.json();
+        if(btn) btn.textContent = `${p.pct||0}%...`;
+        if(!p.rodando || tentativas > 60){
+          clearInterval(poll);
+          await carregarAgenda(_agendaApenasCarteira);
+        }
+      }catch(e){ clearInterval(poll); }
+    }, 3000);
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='🔄 Atualizar'; }
+  }
 }
 
 function _mostrarEventosDia(dia){
