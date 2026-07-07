@@ -865,6 +865,7 @@ def api_historico(ticker):
 
     # 1️⃣ Tenta banco local primeiro (instantâneo)
     hist_banco = db.db_buscar_historico(ticker, intervalo_banco, limit_banco)
+    print(f"[HISTORICO] {ticker} {range_param} → banco:{intervalo_banco}/{limit_banco} → {len(hist_banco)} pts", flush=True)
     if hist_banco:
         print(f"[HISTORICO] ✅ {ticker} {range_param} — banco local ({len(hist_banco)} pts)", flush=True)
         resp = {
@@ -942,15 +943,24 @@ def api_historico_status():
                        MIN(data) as mais_antigo,
                        MAX(data) as mais_recente
                 FROM historico_precos
-                GROUP BY intervalo
-                ORDER BY intervalo
+                GROUP BY intervalo ORDER BY intervalo
             """)
-            rows = [dict(r) for r in cur.fetchall()]
+            tabela = [dict(r) for r in cur.fetchall()]
+            # Lista tickers únicos
+            cur.execute("""
+                SELECT DISTINCT ticker, intervalo, COUNT(*) as pts
+                FROM historico_precos
+                GROUP BY ticker, intervalo
+                ORDER BY ticker, intervalo
+                LIMIT 50
+            """)
+            tickers = [dict(r) for r in cur.fetchall()]
         conn.close()
-        return jsonify({"status": "ok", "tabela": rows,
-                        "total": sum(r['registros'] for r in rows)})
+        return jsonify({"status":"ok","tabela":tabela,
+                        "tickers":tickers,
+                        "total":sum(r['registros'] for r in tabela)})
     except Exception as e:
-        return jsonify({"status": "erro", "erro": str(e)})
+        return jsonify({"status":"erro","erro":str(e)})
 
 @app.route("/api/historico-coletar", methods=["POST"])
 @requer_auth
