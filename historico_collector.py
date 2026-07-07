@@ -36,7 +36,7 @@ def buscar_yahoo(ticker):
         import yfinance as yf
         yf_ticker = ticker if ticker.startswith('^') else f"{ticker}.SA"
         print(f"[HIST] Yahoo {yf_ticker}...", flush=True)
-        hist = yf.Ticker(yf_ticker).history(period="5y", interval="1d")
+        hist = yf.Ticker(yf_ticker).history(period="5y", interval="1d", auto_adjust=False)
         if hist.empty:
             print(f"[HIST] Yahoo {yf_ticker} sem dados", flush=True)
             return []
