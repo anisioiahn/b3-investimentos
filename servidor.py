@@ -928,7 +928,7 @@ def api_historico(ticker):
     return jsonify({"ticker": ticker, "historico": []})
 
 # Rota para disparar carga/atualização do histórico
-@app.route("/api/historico/status")
+@app.route("/api/historico-status")
 @requer_auth
 def api_historico_status():
     """Diagnóstico do banco de histórico."""
@@ -952,7 +952,7 @@ def api_historico_status():
     except Exception as e:
         return jsonify({"status": "erro", "erro": str(e)})
 
-@app.route("/api/historico/coletar", methods=["POST"])
+@app.route("/api/historico-coletar", methods=["POST"])
 @requer_auth
 def api_historico_coletar():
     modo = request.json.get("modo", "full") if request.json else "full"
