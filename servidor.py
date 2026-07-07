@@ -1463,6 +1463,13 @@ if _db_ok:
         db.db_init_historico_table(conn_startup)
         conn_startup.close()
         print("[STARTUP] ✅ Todas as tabelas verificadas", flush=True)
+        # Garante yfinance instalado
+        try:
+            import yfinance
+        except ImportError:
+            import subprocess, sys
+            subprocess.run([sys.executable, "-m", "pip", "install", "yfinance", "--break-system-packages", "-q"])
+            print("[STARTUP] ✅ yfinance instalado", flush=True)
         # Carga inicial do histórico se banco estiver vazio
         def _carga_inicial():
             try:
