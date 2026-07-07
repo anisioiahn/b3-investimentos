@@ -723,6 +723,46 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <span id="ck-att-janus" style="display:none"></span>
         <span id="ck-att-dividendos" style="display:none"></span>
       </div>
+      <!-- Janus Pulse — frame largo -->
+      <div id="janus-pulse-frame" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 20px;margin-bottom:1rem;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+          <span style="font-size:20px">🫀</span>
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;text-transform:uppercase">Janus Pulse</div>
+            <div style="display:flex;align-items:baseline;gap:6px">
+              <span id="pulse-score" style="font-size:28px;font-weight:800;line-height:1">—</span>
+              <span style="font-size:13px;color:var(--text3)">/100</span>
+            </div>
+          </div>
+        </div>
+        <!-- Barra de progresso -->
+        <div style="flex:1;min-width:180px">
+          <div style="background:var(--bg);border-radius:20px;height:10px;overflow:hidden;margin-bottom:4px">
+            <div id="pulse-bar" style="height:100%;border-radius:20px;width:0%;transition:width 1s ease;background:linear-gradient(90deg,#e53935,#f59e0b,#16a34a)"></div>
+          </div>
+          <div id="pulse-label" style="font-size:12px;font-weight:700">Calculando...</div>
+        </div>
+        <!-- Métricas -->
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text3)">Força Setorial</div>
+            <div id="pulse-setores" style="font-size:14px;font-weight:700">—</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text3)">Score Médio</div>
+            <div id="pulse-score-medio" style="font-size:14px;font-weight:700">—</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text3)">Em Alta</div>
+            <div id="pulse-alta" style="font-size:14px;font-weight:700">—</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text3)">Momentum</div>
+            <div id="pulse-momentum" style="font-size:14px;font-weight:700">—</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Grid 3 módulos -->
       <div class="cockpit-grid">
         <!-- Módulo 1: IBOVESPA + Termômetro -->
@@ -1463,7 +1503,7 @@ async function carregarDados(){
     renderSectors();
     if(currentSector && _paginaAtiva !== 'carteira') renderEmpresas(true);
     if(_paginaAtiva !== 'carteira') { renderAlerts(); updateAltCnt(); }
-    if(_paginaAtiva === 'cockpit') renderCockpit();
+    if(_paginaAtiva === 'cockpit'){ renderCockpit(); calcularJanusPulse(); }
   }catch(e){
     document.getElementById('status-txt').textContent='Erro de conexão';
     document.getElementById('sdot').className='dot err';
@@ -2178,6 +2218,7 @@ function _agendaMesProximo(){
 
 function renderCockpit(){
   _renderCockpitSaudacao();
+  calcularJanusPulse();
   _renderCockpitHeatmap();
   _renderCockpitOportunidades();
   _renderCockpitDividendos();
@@ -2294,6 +2335,83 @@ async function _renderCockpitEstrategia(){
         Editar perfil →
       </button>
     </div>`;
+}
+
+// ── JANUS PULSE ──────────────────────────────────────────────
+function calcularJanusPulse(){
+  const setores = Object.values(DADOS.setores||{});
+  if(!setores.length) return;
+
+  const todasEmpresas = setores.flatMap(s=>s.empresas||[]).filter(e=>e.preco!=null);
+  if(!todasEmpresas.length) return;
+
+  // 1. Força setorial (30%) — % de ativos em alta por setor, média entre setores
+  const forcaSetorial = setores.map(s=>{
+    const emps = s.empresas?.filter(e=>e.preco!=null)||[];
+    if(!emps.length) return 0;
+    return emps.filter(e=>(e.variacao||0)>0).length / emps.length * 100;
+  });
+  const mediaForca = forcaSetorial.reduce((a,b)=>a+b,0) / forcaSetorial.length;
+
+  // 2. Amplitude (20%) — % de todos os ativos em alta
+  const emAlta = todasEmpresas.filter(e=>(e.variacao||0)>0).length;
+  const amplitude = emAlta / todasEmpresas.length * 100;
+
+  // 3. Momentum (20%) — variação média ponderada pelo volume/preço
+  const variacoes = todasEmpresas.map(e=>e.variacao||0).filter(v=>!isNaN(v));
+  const momentum = variacoes.length > 0
+    ? variacoes.reduce((a,b)=>a+b,0) / variacoes.length
+    : 0;
+  // Normaliza momentum: -3% = 0, 0% = 50, +3% = 100
+  const momentumScore = Math.max(0, Math.min(100, (momentum + 3) / 6 * 100));
+
+  // 4. Janus Index médio (30%) — score médio do ranking
+  const scores = (_janusRanking||[]).filter(j=>j.score!=null).map(j=>j.score);
+  const scoreMedio = scores.length > 0
+    ? scores.reduce((a,b)=>a+b,0) / scores.length
+    : null;
+  const scoreNorm = scoreMedio !== null ? scoreMedio : 50; // já é 0-100
+
+  // Pulse final ponderado
+  const pulse = Math.round(
+    mediaForca   * 0.30 +
+    scoreNorm    * 0.30 +
+    amplitude    * 0.20 +
+    momentumScore* 0.20
+  );
+
+  // Labels
+  const label = pulse >= 71 ? '💚 Muito Favorável'
+              : pulse >= 51 ? '🟢 Favorável'
+              : pulse >= 31 ? '🟡 Neutro'
+              : '🔴 Pessimista';
+
+  const cor = pulse >= 71 ? '#16a34a'
+            : pulse >= 51 ? '#22c55e'
+            : pulse >= 31 ? '#f59e0b'
+            : '#e53935';
+
+  // Atualiza DOM
+  const scoreEl = document.getElementById('pulse-score');
+  const barEl   = document.getElementById('pulse-bar');
+  const labelEl = document.getElementById('pulse-label');
+
+  if(scoreEl){ scoreEl.textContent = pulse; scoreEl.style.color = cor; }
+  if(barEl)  { barEl.style.width = `${pulse}%`; }
+  if(labelEl){ labelEl.textContent = label; labelEl.style.color = cor; }
+
+  const setEl  = document.getElementById('pulse-setores');
+  const altEl  = document.getElementById('pulse-alta');
+  const momEl  = document.getElementById('pulse-momentum');
+  const scoEl  = document.getElementById('pulse-score-medio');
+
+  if(setEl)  setEl.textContent  = `${mediaForca.toFixed(0)}%`;
+  if(altEl)  altEl.textContent  = `${amplitude.toFixed(0)}%`;
+  if(momEl){
+    momEl.textContent = `${momentum>=0?'+':''}${momentum.toFixed(2)}%`;
+    momEl.style.color = momentum>=0?'#16a34a':'#e53935';
+  }
+  if(scoEl)  scoEl.textContent  = scoreMedio !== null ? scoreMedio.toFixed(1) : '—';
 }
 
 function _renderCockpitSaudacao(){
