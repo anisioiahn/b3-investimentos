@@ -93,7 +93,20 @@ def iniciar_cron_janus():
                           hour=8, minute=0,
                           id="agenda_semanal")
 
-        # Janus Index — madrugada (2h) de segunda a sexta
+        # Histórico de preços — atualização diária às 18h
+        def executar_historico_update():
+            print("[HIST CRON] 📈 Atualizando histórico diário...", flush=True)
+            try:
+                import subprocess, sys
+                subprocess.Popen([sys.executable, "historico_collector.py", "update"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                print(f"[HIST CRON] ❌ Erro: {e}", flush=True)
+
+        scheduler.add_job(executar_historico_update, "cron",
+                          day_of_week="mon-fri",
+                          hour=18, minute=0,
+                          id="historico_update_diario")
         def executar_janus_noturno():
             print("[JANUS CRON] 🌙 Coleta noturna do Janus Index iniciando...", flush=True)
             from janus_routes import _janus_estado, _rodar_coleta
