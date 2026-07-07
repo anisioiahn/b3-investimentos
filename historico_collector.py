@@ -43,13 +43,17 @@ def buscar_yahoo(ticker):
         registros = []
         for dt, row in hist.iterrows():
             try:
+                # Com auto_adjust=False, 'Close' é o preço real sem ajuste
+                # 'Adj Close' seria o ajustado — ignoramos
+                close = float(row['Close']) if 'Close' in row and row['Close'] else None
+                if not close: continue
                 registros.append({
                     'date':   int(dt.timestamp()),
-                    'open':   float(row['Open'])   if row['Open']   else None,
-                    'high':   float(row['High'])   if row['High']   else None,
-                    'low':    float(row['Low'])    if row['Low']    else None,
-                    'close':  float(row['Close'])  if row['Close']  else None,
-                    'volume': int(row['Volume'])   if row['Volume'] else None,
+                    'open':   float(row['Open'])   if 'Open'   in row and row['Open']   else None,
+                    'high':   float(row['High'])   if 'High'   in row and row['High']   else None,
+                    'low':    float(row['Low'])    if 'Low'    in row and row['Low']    else None,
+                    'close':  close,
+                    'volume': int(row['Volume'])   if 'Volume' in row and row['Volume'] else None,
                 })
             except: continue
         print(f"[HIST] Yahoo {yf_ticker} → {len(registros)} pts", flush=True)
