@@ -2421,24 +2421,14 @@ function _renderCockpitSaudacao(){
   const nome = nomeEl?.textContent?.split(' ')[0] || '';
   document.getElementById('cockpit-saudacao').textContent = `${saud}${nome ? ', ' + nome : ''}! 👋`;
 
-  // Resumo do mercado
-  const setores = Object.values(DADOS.setores||{});
-  if(!setores.length){
-    document.getElementById('cockpit-resumo-dia').textContent = 'Aguardando dados do mercado...';
-  } else {
-    const todasEmpresas = setores.flatMap(s=>s.empresas||[]).filter(e=>e.preco!=null);
-    const emAlta  = todasEmpresas.filter(e=>(e.variacao||0)>0).length;
-    const emBaixa = todasEmpresas.filter(e=>(e.variacao||0)<0).length;
-    const humor = emAlta > emBaixa ? '🟢 mercado majoritariamente em alta'
-                : emBaixa > emAlta ? '🔴 mercado majoritariamente em baixa'
-                : '🟡 mercado equilibrado';
-    // Alertas disparados
-    const qtdDisparados = (_disparadosServidor||[]).length;
-    const alertasTxt = qtdDisparados > 0
-      ? ` · 🚨 ${qtdDisparados} alerta${qtdDisparados>1?'s':''} disparado${qtdDisparados>1?'s':''}`
-      : '';
+  // Alertas disparados
+  const qtdDisparados = (_disparadosServidor||[]).length;
+  if(qtdDisparados > 0){
     document.getElementById('cockpit-resumo-dia').innerHTML =
-      `${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})} · ${humor} (▲${emAlta} · ▼${emBaixa} ativos)${alertasTxt?`<span style="color:#e53935;font-weight:600">${alertasTxt}</span>`:''}`;
+      `${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})} · <span style="color:#e53935;font-weight:600">🚨 ${qtdDisparados} alerta${qtdDisparados>1?'s':''} disparado${qtdDisparados>1?'s':''}</span>`;
+  } else {
+    document.getElementById('cockpit-resumo-dia').textContent =
+      new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
   }
 
   // Datas de atualização — cockpit e menu mobile
