@@ -871,6 +871,31 @@ def api_historico(ticker):
     _cache_historico[cache_key] = {"data": resp, "ts": agora_ts}
     return jsonify(resp)
 
+@app.route("/api/teste-brapi/<ticker>")
+@requer_auth
+def api_teste_brapi(ticker):
+    """Testa quais ranges a Brapi aceita para o token atual."""
+    testes = [
+        ("1mo","1d"), ("3mo","1d"), ("6mo","1d"),
+        ("1y","1d"),  ("2y","1d"),  ("5y","1d"),
+    ]
+    resultados = []
+    for range_p, interval_p in testes:
+        try:
+            url = f"{QUOTE_URL}/{ticker}?range={range_p}&interval={interval_p}&token={TOKEN_BRAPI}"
+            r = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=10)
+            pts = 0
+            if r.status_code == 200:
+                res = r.json().get("results",[])
+                if res:
+                    pts = len(res[0].get("historicalDataPrice",[]))
+            resultados.append({"range":range_p,"interval":interval_p,
+                               "status":r.status_code,"pts":pts})
+        except Exception as e:
+            resultados.append({"range":range_p,"interval":interval_p,
+                               "status":"erro","erro":str(e)})
+    return jsonify(resultados)
+
 @app.route("/api/historico-status")
 @requer_auth
 def api_historico_status():
