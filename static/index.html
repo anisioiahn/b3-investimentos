@@ -1318,6 +1318,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <button class="range-btn" onclick="filtrarChart(90,this)">3M</button>
           <button class="range-btn" onclick="filtrarChart(180,this)">6M</button>
           <button class="range-btn" onclick="filtrarChart(365,this)">1A</button>
+          <button class="range-btn" onclick="filtrarChart(1825,this)">5A</button>
         </div>
       </div>
       <div class="chart-wrap">
@@ -3592,8 +3593,10 @@ async function filtrarChart(dias, btn){
   btn.classList.add('active');
 
   // Mapeia dias para range da Brapi
-  const rangeMap = {30:'1mo', 90:'3mo', 180:'6mo', 365:'1y'};
+  const rangeMap = {30:'1mo', 90:'3mo', 180:'6mo', 365:'1y', 1825:'5y'};
+  const intervalMap = {30:'1d', 90:'1d', 180:'1d', 365:'1d', 1825:'1mo'};
   const range = rangeMap[dias] || '1mo';
+  const interval = intervalMap[dias] || '1d';
 
   // Verifica se já tem dados suficientes em cache
   const cutoff = Date.now() - dias*86400000;
@@ -3609,7 +3612,7 @@ async function filtrarChart(dias, btn){
     document.getElementById('chart-loading').textContent='Carregando...';
     if(chartInstance){chartInstance.destroy();chartInstance=null;}
     try{
-      const r = await fetch(`/api/historico/${_painelTicker}?range=${range}&interval=1d`);
+      const r = await fetch(`/api/historico/${_painelTicker}?range=${range}&interval=${interval}`);
       const d = await r.json();
       chartDataFull = d.historico || [];
       if(chartDataFull.length){
