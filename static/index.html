@@ -965,42 +965,63 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <!-- Distribuição alvo -->
           <div>
             <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">Distribuição Alvo (%)</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="display:flex;flex-direction:column;gap:12px">
+
               <div>
-                <label style="font-size:11px;color:var(--text2)">Ações</label>
-                <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-                  <input type="range" id="est-acoes" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="flex:1">
-                  <span id="est-acoes-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <div>
+                    <label style="font-size:12px;font-weight:600">📈 Ações</label>
+                    <div style="font-size:10px;color:var(--text3)">Empresas listadas na B3. Maior potencial de ganho e dividendos, mas também maior volatilidade.</div>
+                  </div>
+                  <span id="est-acoes-val" style="font-size:13px;font-weight:700;min-width:36px;text-align:right">0%</span>
                 </div>
+                <input type="range" id="est-acoes" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="width:100%;margin-top:4px">
               </div>
+
               <div>
-                <label style="font-size:11px;color:var(--text2)">FIIs</label>
-                <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-                  <input type="range" id="est-fiis" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="flex:1">
-                  <span id="est-fiis-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <div>
+                    <label style="font-size:12px;font-weight:600">🏢 FIIs</label>
+                    <div style="font-size:10px;color:var(--text3)">Fundos imobiliários. Pagam rendimentos mensais isentos de IR para PF. Ex: HGLG11, MXRF11.</div>
+                  </div>
+                  <span id="est-fiis-val" style="font-size:13px;font-weight:700;min-width:36px;text-align:right">0%</span>
                 </div>
+                <input type="range" id="est-fiis" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="width:100%;margin-top:4px">
               </div>
+
               <div>
-                <label style="font-size:11px;color:var(--text2)">ETFs</label>
-                <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-                  <input type="range" id="est-etfs" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="flex:1">
-                  <span id="est-etfs-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <div>
+                    <label style="font-size:12px;font-weight:600">📦 ETFs</label>
+                    <div style="font-size:10px;color:var(--text3)">Fundos que replicam índices. Diversificação passiva e de baixo custo. Ex: BOVA11, IVVB11.</div>
+                  </div>
+                  <span id="est-etfs-val" style="font-size:13px;font-weight:700;min-width:36px;text-align:right">0%</span>
                 </div>
+                <input type="range" id="est-etfs" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="width:100%;margin-top:4px">
               </div>
+
               <div>
-                <label style="font-size:11px;color:var(--text2)">Exterior</label>
-                <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-                  <input type="range" id="est-exterior" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="flex:1">
-                  <span id="est-exterior-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <div>
+                    <label style="font-size:12px;font-weight:600">🌍 Exterior</label>
+                    <div style="font-size:10px;color:var(--text3)">BDRs e ETFs internacionais. Protege contra desvalorização do Real. Ex: AAPL34, MSFT34.</div>
+                  </div>
+                  <span id="est-exterior-val" style="font-size:13px;font-weight:700;min-width:36px;text-align:right">0%</span>
                 </div>
+                <input type="range" id="est-exterior" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="width:100%;margin-top:4px">
               </div>
+
               <div>
-                <label style="font-size:11px;color:var(--text2)">Caixa</label>
-                <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-                  <input type="range" id="est-caixa" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="flex:1">
-                  <span id="est-caixa-val" style="font-size:12px;font-weight:700;min-width:30px">0%</span>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <div>
+                    <label style="font-size:12px;font-weight:600">💵 Caixa</label>
+                    <div style="font-size:10px;color:var(--text3)">Reserva em ativos líquidos e seguros. Tesouro Selic, CDBs, fundos DI. Reserva de oportunidade.</div>
+                  </div>
+                  <span id="est-caixa-val" style="font-size:13px;font-weight:700;min-width:36px;text-align:right">0%</span>
                 </div>
+                <input type="range" id="est-caixa" min="0" max="100" value="0" step="5" oninput="atualizarDistribuicao()" style="width:100%;margin-top:4px">
               </div>
+
             </div>
             <div id="est-dist-aviso" style="margin-top:8px;font-size:11px;color:#e53935;display:none">
               ⚠️ A soma deve ser 100%. Atual: <span id="est-dist-total">0</span>%
@@ -2191,14 +2212,15 @@ async function _renderCockpitEstrategia(){
   const confirmadas = (_carteira||[]).filter(p=>p.status==='confirmada');
   const totalAtual = confirmadas.reduce((s,p)=>s+(p.valor_atual||p.valor_investido||0),0);
 
-  // Classifica por tipo (simplificado por ticker)
+  // Classifica por asset_type (preciso) — fallback por ticker
   const realDist = {acoes:0, fiis:0, etfs:0, exterior:0, caixa:0};
   confirmadas.forEach(p=>{
-    const t = p.ticker||'';
     const va = p.valor_atual||p.valor_investido||0;
-    if(t.endsWith('11') && !t.startsWith('ETF')) realDist.fiis += va;
-    else if(t.includes('ETF') || t.startsWith('BOVA') || t.startsWith('IVVB')) realDist.etfs += va;
-    else realDist.acoes += va;
+    const tipo = (p.asset_type||'').toUpperCase();
+    if(tipo === 'FII')        realDist.fiis += va;
+    else if(tipo === 'ETF')   realDist.etfs += va;
+    else if(tipo === 'BDR')   realDist.exterior += va;
+    else                      realDist.acoes += va;
   });
 
   // Converte para %
