@@ -124,24 +124,26 @@ def run_historico_collector(modo='full', on_progress=None):
 
             # ── 5 anos MENSAL ──────────────────────────
             ultimo_mo = ultimo_registro(conn, ticker, '1mo')
-            # Importa se não tem ou está desatualizado há mais de 30 dias
-            if not ultimo_mo or (hoje - ultimo_mo).days > 30:
+            # Só pula se já tem dados mensais E estão atualizados
+            if ultimo_mo and (hoje - ultimo_mo).days <= 35:
+                print(f"[HIST] {ticker} 1mo já atualizado ({ultimo_mo})", flush=True)
+            else:
                 hist_5y = buscar_brapi(ticker, '5y', '1mo')
                 salvos = salvar_lote(conn, ticker, hist_5y, '1mo')
                 total_salvos += salvos
-                if salvos:
-                    print(f"[HIST] {ticker} 5y/1mo → {salvos} pts salvos", flush=True)
+                print(f"[HIST] {ticker} 5y/1mo → {salvos} pts salvos", flush=True)
                 time.sleep(0.5)
 
             # ── 1 ano DIÁRIO ───────────────────────────
             ultimo_1d = ultimo_registro(conn, ticker, '1d')
-            # Importa se não tem ou está desatualizado há mais de 1 dia
-            if not ultimo_1d or (hoje - ultimo_1d).days > 1:
+            # Só pula se já tem dados diários E estão atualizados
+            if ultimo_1d and (hoje - ultimo_1d).days <= 3:
+                print(f"[HIST] {ticker} 1d já atualizado ({ultimo_1d})", flush=True)
+            else:
                 hist_1y = buscar_brapi(ticker, '1y', '1d')
                 salvos = salvar_lote(conn, ticker, hist_1y, '1d')
                 total_salvos += salvos
-                if salvos:
-                    print(f"[HIST] {ticker} 1y/1d → {salvos} pts salvos", flush=True)
+                print(f"[HIST] {ticker} 1y/1d → {salvos} pts salvos", flush=True)
                 time.sleep(0.5)
 
         prog(100, f"Concluído! {total_salvos} registros salvos de {total} ativos")
