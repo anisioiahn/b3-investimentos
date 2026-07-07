@@ -21,15 +21,24 @@ def buscar_brapi(ticker, range_param, interval_param, tentativas=3):
     for t in range(tentativas):
         try:
             r = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=30)
+            print(f"[HIST] Brapi {ticker} {range_param}/{interval_param} → status {r.status_code}", flush=True)
             if r.status_code == 200:
                 results = r.json().get("results", [])
                 if results:
-                    return results[0].get("historicalDataPrice", [])
+                    hist = results[0].get("historicalDataPrice", [])
+                    print(f"[HIST] Brapi {ticker} → {len(hist)} pontos brutos", flush=True)
+                    if hist:
+                        print(f"[HIST] Exemplo ponto: {hist[0]}", flush=True)
+                    return hist
+                else:
+                    print(f"[HIST] Brapi {ticker} → sem results no JSON", flush=True)
             elif r.status_code == 429:
                 print(f"[HIST] Rate limit — aguardando 30s...", flush=True)
                 time.sleep(30)
+            else:
+                print(f"[HIST] Erro HTTP {r.status_code} para {ticker}", flush=True)
         except Exception as e:
-            print(f"[HIST] Erro tentativa {t+1}: {e}", flush=True)
+            print(f"[HIST] Erro tentativa {t+1} {ticker}: {e}", flush=True)
             time.sleep(2)
     return []
 
