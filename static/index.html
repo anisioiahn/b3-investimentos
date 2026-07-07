@@ -3143,30 +3143,25 @@ async function abrirGrafico(ticker){
     <div class="jaia-bubble">Analisando <strong>${co.nome} (${ticker})</strong> ...</div>
   </div>`;
 
-  // Busca tudo em paralelo — começa com 1M para carregar rápido
-  const [hist, nots, scoreData] = await Promise.all([
-    fetchComTimeout(`/api/historico/${ticker}?range=1mo&interval=1d`, 15000),
-    fetchComTimeout(`/api/noticias/${ticker}`, 40000),
-    fetchComTimeout(`/api/janus/score/${ticker}`, 15000),
-  ]);
+  // 1️⃣ Histórico PRIMEIRO — gráfico aparece imediatamente
+  const hist = await fetchComTimeout(`/api/historico/${ticker}?range=1mo&interval=1d`, 15000);
   const det = hist;
 
-  // Atualiza stats com detalhe
+  // Atualiza stats
   if(det && !det.erro){
     if(det.preco){
       const vrD=det.variacao||0, vpD=det.variacao_pct||0, clsD=vrD>=0?'up':'dn';
       document.querySelector('#modal-stats .stat-box:nth-child(1) .stat-value').innerHTML=`R$ ${det.preco.toFixed(2)}`;
-      document.querySelector('#modal-stats .stat-box:nth-child(2) .stat-value').innerHTML=`<span class="${clsD}">${vrD>=0?'+':''}${vrD.toFixed(2)} (${vpD>=0?'+':''}${vpD.toFixed(2)}%)</span>`;
+      document.querySelector('#modal-stats .stat-box:nth-child(2) .stat-value').innerHTML=`<span class="${clsD}">${vrD>=0?'+':''} ${vrD.toFixed(2)} (${vpD>=0?'+':''} ${vpD.toFixed(2)}%)</span>`;
     }
     if(det.minima_dia) document.getElementById('ms-min').textContent=`R$ ${det.minima_dia.toFixed(2)}`;
     if(det.maxima_dia) document.getElementById('ms-max').textContent=`R$ ${det.maxima_dia.toFixed(2)}`;
   }
 
-  // Gráfico — setTimeout para garantir que o canvas tem dimensões após animação
+  // Gráfico imediato
   chartDataFull=(hist&&hist.historico)||[];
   if(chartDataFull.length>0){
     document.getElementById('chart-loading').style.display='none';
-    // Ativa botão 1M (índice 0) dentro do painel de ativo especificamente
     const rangeBtns = document.querySelectorAll('.chart-ranges .range-btn');
     rangeBtns.forEach(b=>b.classList.remove('active'));
     if(rangeBtns[0]) rangeBtns[0].classList.add('active');
@@ -3176,7 +3171,12 @@ async function abrirGrafico(ticker){
     document.getElementById('chart-loading').textContent='Histórico não disponível.';
   }
 
-  // Notícias
+  // 2️⃣ Notícias e score em background — não bloqueiam o gráfico
+  const [nots, scoreData] = await Promise.all([
+    fetchComTimeout(`/api/noticias/${ticker}`, 40000),
+    fetchComTimeout(`/api/janus/score/${ticker}`, 15000),
+  ]);
+
   if(nots) renderNoticias(nots);
   else document.getElementById('noticias-grid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:1rem">Não foi possível carregar notícias.</div>';
 
