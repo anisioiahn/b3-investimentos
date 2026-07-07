@@ -958,11 +958,10 @@ def api_historico_coletar():
     modo = request.json.get("modo", "full") if request.json else "full"
     def _rodar():
         try:
-            import subprocess, sys
-            subprocess.Popen([sys.executable, "historico_collector.py", modo],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            from historico_collector import run_historico_collector
+            run_historico_collector(modo=modo)
         except Exception as e:
-            print(f"[HIST] Erro ao iniciar collector: {e}", flush=True)
+            print(f"[HIST] Erro: {e}", flush=True)
     threading.Thread(target=_rodar, daemon=True).start()
     return jsonify({"ok": True, "modo": modo})
 
@@ -1493,9 +1492,8 @@ if _db_ok:
                 total = db.db_total_historico()
                 if total < 1000:
                     print(f"[STARTUP] 📈 Histórico vazio ({total} registros) — iniciando carga inicial...", flush=True)
-                    import subprocess, sys
-                    subprocess.Popen([sys.executable, "historico_collector.py", "carteira"],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    from historico_collector import run_historico_collector
+                    run_historico_collector(modo='carteira')
                 else:
                     print(f"[STARTUP] ✅ Histórico local: {total} registros", flush=True)
             except Exception as e:
