@@ -1136,3 +1136,107 @@ def db_buscar_estrategia(uid):
     except Exception as e:
         print(f"[DB] Erro buscar estratégia: {e}", flush=True)
         return {}
+
+# ── HISTÓRICO DE PREÇOS ───────────────────────────────────────
+def db_init_historico_table(conn):
+    """Cria tabela de histórico de preços se não existir."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS historico_precos (
+                ticker TEXT NOT NULL,
+                data DATE NOT NULL,
+                open NUMERIC,
+                high NUMERIC,
+                low NUMERIC,
+                close NUMERIC NOT NULL,
+                volume BIGINT,
+                intervalo TEXT NOT NULL DEFAULT '1d',
+                PRIMARY KEY (ticker, data, intervalo)
+            );
+            CREATE INDEX IF NOT EXISTS idx_hist_ticker_data
+                ON historico_precos(ticker, data DESC);
+            CREATE INDEX IF NOT EXISTS idx_hist_ticker_intervalo
+                ON historico_precos(ticker, intervalo, data DESC);
+        """)
+    conn.commit()
+
+def db_salvar_historico_lote(conn, ticker, registros, intervalo='1d'):
+    """Salva lote de registros de histórico. registros = [{date, open, high, low, close, volume}]"""
+    if not registros: return 0
+    with conn.cursor() as cur:
+        args = []
+        for r in registros:
+            try:
+                from datetime import datetime
+                dt = datetime.utcfromtimestamp(r['date']).date() if isinstance(r['date'], (int,float)) else r['date']
+                args.append((
+                    ticker, dt, intervalo,
+                    r.get('open'), r.get('high'), r.get('low'),
+                    r.get('close'), r.get('volume')
+                ))
+            except: continue
+        if not args: return 0
+        psycopg2.extras.execute_values(cur, """
+            INSERT INTO historico_precos (ticker, data, intervalo, open, high, low, close, volume)
+            VALUES %s
+            ON CONFLICT (ticker, data, intervalo) DO UPDATE SET
+                open=EXCLUDED.open, high=EXCLUDED.high,
+                low=EXCLUDED.low, close=EXCLUDED.close,
+                volume=EXCLUDED.volume
+        """, args, template="(%s,%s,%s,%s,%s,%s,%s,%s)")
+    conn.commit()
+    return len(args)
+
+def db_buscar_historico(ticker, intervalo='1d', limit=365):
+    """Busca histórico local do banco."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT data, open, high, low, close, volume
+                FROM historico_precos
+                WHERE ticker=%s AND intervalo=%s
+                ORDER BY data ASC
+                LIMIT %s
+            """, (ticker, intervalo, limit))
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                r['date'] = int(r['data'].strftime('%s')) if hasattr(r['data'], 'strftime') else r['data']
+                r['close'] = float(r['close']) if r['close'] else None
+                r['open']  = float(r['open'])  if r['open']  else None
+                r['high']  = float(r['high'])  if r['high']  else None
+                r['low']   = float(r['low'])   if r['low']   else None
+                del r['data']
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[DB] Erro buscar histórico {ticker}: {e}", flush=True)
+        return []
+
+def db_ultimo_historico(ticker, intervalo='1d'):
+    """Retorna a data do registro mais recente."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT MAX(data) FROM historico_precos
+                WHERE ticker=%s AND intervalo=%s
+            """, (ticker, intervalo))
+            row = cur.fetchone()
+        conn.close()
+        return row[0] if row else None
+    except: return None
+
+def db_total_historico(ticker=None):
+    """Conta total de registros no histórico."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            if ticker:
+                cur.execute("SELECT COUNT(*) FROM historico_precos WHERE ticker=%s", (ticker,))
+            else:
+                cur.execute("SELECT COUNT(*) FROM historico_precos")
+            total = cur.fetchone()[0]
+        conn.close()
+        return total
+    except: return 0
