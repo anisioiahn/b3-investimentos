@@ -896,6 +896,22 @@ def api_teste_brapi(ticker):
                                "status":"erro","erro":str(e)})
     return jsonify(resultados)
 
+@app.route("/api/historico-limpar", methods=["POST"])
+@requer_auth
+def api_historico_limpar():
+    """Limpa histórico do banco para reimportar com preços corretos."""
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM historico_precos WHERE intervalo='1d'")
+            deletados = cur.rowcount
+        conn.commit()
+        conn.close()
+        print(f"[HIST] 🗑️ {deletados} registros deletados para reimportação", flush=True)
+        return jsonify({"ok": True, "deletados": deletados})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)})
+
 @app.route("/api/historico-status")
 @requer_auth
 def api_historico_status():
