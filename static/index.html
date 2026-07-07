@@ -3594,36 +3594,22 @@ async function filtrarChart(dias, btn){
   document.querySelectorAll('.chart-ranges .range-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
 
-  const rangeMap    = {30:'1mo', 90:'3mo', 180:'6mo', 365:'1y', 1825:'5y'};
-  const intervalMap = {30:'1d',  90:'1d',  180:'1d',  365:'1d', 1825:'1mo'};
-  const range    = rangeMap[dias]    || '1mo';
-  const interval = intervalMap[dias] || '1d';
+  const rangeMap = {30:'1mo', 90:'3mo', 180:'6mo', 365:'1y', 1825:'5y'};
+  const range = rangeMap[dias] || '1mo';
 
-  // Verifica se cache já cobre o período pedido
-  const cutoff = Date.now() - dias*86400000;
-  const cacheCobreOPeriodo = chartDataFull.length > 0 &&
-    (chartDataFull[0].date*1000) <= cutoff;
-
-  if(cacheCobreOPeriodo){
-    // Filtra do cache — instantâneo
-    renderChart(chartDataFull.filter(d=>(d.date*1000)>=cutoff));
-    return;
-  }
-
-  // Busca do banco (vai ser rápido) ou Brapi como fallback
   document.getElementById('chart-loading').style.display='flex';
   document.getElementById('chart-loading').textContent='Carregando...';
   if(chartInstance){chartInstance.destroy();chartInstance=null;}
+
   try{
-    const r = await fetch(`/api/historico/${_painelTicker}?range=${range}&interval=${interval}`);
+    const r = await fetch(`/api/historico/${_painelTicker}?range=${range}`);
     const d = await r.json();
-    if(d.historico?.length){
-      // Atualiza cache com o range maior
-      chartDataFull = d.historico;
+    chartDataFull = d.historico || [];
+    if(chartDataFull.length){
       document.getElementById('chart-loading').style.display='none';
       renderChart(chartDataFull);
     } else {
-      document.getElementById('chart-loading').textContent='Histórico não disponível.';
+      document.getElementById('chart-loading').textContent='Histórico não disponível no banco.';
     }
   }catch(e){
     document.getElementById('chart-loading').textContent='Erro ao carregar histórico.';
