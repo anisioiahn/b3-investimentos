@@ -93,10 +93,43 @@ def iniciar_cron_janus():
                           hour=8, minute=0,
                           id="agenda_semanal")
 
+        # Janus Index — madrugada (2h) de segunda a sexta
+        def executar_janus_noturno():
+            print("[JANUS CRON] 🌙 Coleta noturna do Janus Index iniciando...", flush=True)
+            from janus_routes import _janus_estado, _rodar_coleta
+            if _janus_estado["rodando"]:
+                print("[JANUS CRON] ⚠️ Coleta já em andamento, pulando...", flush=True)
+                return
+            threading.Thread(target=_rodar_coleta, daemon=True).start()
+
+        scheduler.add_job(executar_janus_noturno, "cron",
+                          day_of_week="mon-fri",
+                          hour=2, minute=0,
+                          id="janus_coleta_noturna")
+
+        # Dividend Engine — sábado às 3h (semanal)
+        def executar_dividendos_noturno():
+            print("[DIVIDEND CRON] 🌙 Coleta semanal de dividendos iniciando...", flush=True)
+            try:
+                import subprocess, sys
+                subprocess.Popen([sys.executable, "dividend_collector.py"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                print(f"[DIVIDEND CRON] ❌ Erro: {e}", flush=True)
+
+        scheduler.add_job(executar_dividendos_noturno, "cron",
+                          day_of_week="sat",
+                          hour=3, minute=0,
+                          id="dividend_coleta_semanal")
+
         scheduler.start()
         print("[JANUS CRON] ✅ Agendamentos configurados:")
-        print("  → Coleta fechamento: dias úteis às 19h BRT")
-        print("  → Coleta abertura:   dias úteis às 10h BRT")
+        print("  → Coleta abertura:      dias úteis às 10h BRT")
+        print("  → Coleta fechamento:    dias úteis às 19h BRT")
+        print("  → Coleta noturna:       dias úteis às 02h BRT")
+        print("  → Snapshot carteira:    dias úteis às 17:30h BRT")
+        print("  → Agenda do mercado:    segunda-feira às 08h BRT")
+        print("  → Dividend Engine:      sábado às 03h BRT")
         return scheduler
 
     except ImportError:
