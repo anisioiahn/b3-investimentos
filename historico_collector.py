@@ -131,16 +131,34 @@ def run_historico_collector(modo='full', on_progress=None):
             if i % 5 == 0:
                 prog(pct, f"{i+1}/{total} — {ticker}")
 
-            # ── 5 anos MENSAL ──────────────────────────
-            ultimo_mo = ultimo_registro(conn, ticker, '1mo')
-            # Só pula se já tem dados mensais E estão atualizados
-            if ultimo_mo and (hoje - ultimo_mo).days <= 35:
-                print(f"[HIST] {ticker} 1mo já atualizado ({ultimo_mo})", flush=True)
+            # ── 5 anos DIÁRIO ──────────────────────────
+            # Brapi suporta apenas interval=1d, então salvamos diário
+            # e no frontend usamos amostragem para o gráfico de 5A
+            ultimo_mo = ultimo_registro(conn, ticker, '1d')
+            # Só importa se não tem dados além de 1 ano
+            tem_5anos = False
+            if ultimo_mo:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT MIN(data) FROM historico_precos
+                        WHERE ticker=%s AND intervalo='1d'
+                    """, (ticker,))
+                    row = cur.fetchone()
+                    if row and row[0]:
+                        from datetime import date as date_cls
+                        anos = (date_cls.today() - row[0]).days / 365
+                        tem_5anos = anos >= 4  # considera ok se tem 4+ anos
+
+            if tem_5anos:
+                print(f"[HIST] {ticker} já tem histórico longo ({row[0]})", flush=True)
             else:
-                hist_5y = buscar_brapi(ticker, '5y', '1mo')
-                salvos = salvar_lote(conn, ticker, hist_5y, '1mo')
+                hist_5y = buscar_brapi(ticker, '5y', '1d')
+                if not hist_5y:
+                    # Fallback: tenta 2y
+                    hist_5y = buscar_brapi(ticker, '2y', '1d')
+                salvos = salvar_lote(conn, ticker, hist_5y, '1d')
                 total_salvos += salvos
-                print(f"[HIST] {ticker} 5y/1mo → {salvos} pts salvos", flush=True)
+                print(f"[HIST] {ticker} 5y/1d → {salvos} pts salvos", flush=True)
                 time.sleep(0.5)
 
             # ── 1 ano DIÁRIO ───────────────────────────
