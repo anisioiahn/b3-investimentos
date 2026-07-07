@@ -1188,28 +1188,31 @@ def db_salvar_historico_lote(conn, ticker, registros, intervalo='1d'):
     return len(args)
 
 def db_buscar_historico(ticker, intervalo='1d', limit=365):
-    """Busca histórico local do banco."""
+    """Busca histórico local do banco — registros mais recentes."""
     try:
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT
-                    EXTRACT(EPOCH FROM data)::BIGINT as date,
-                    open, high, low, close, volume
-                FROM historico_precos
-                WHERE ticker=%s AND intervalo=%s
-                ORDER BY data ASC
-                LIMIT %s
+                SELECT date, open, high, low, close, volume FROM (
+                    SELECT
+                        EXTRACT(EPOCH FROM data)::BIGINT as date,
+                        open, high, low, close, volume
+                    FROM historico_precos
+                    WHERE ticker=%s AND intervalo=%s
+                    ORDER BY data DESC
+                    LIMIT %s
+                ) sub
+                ORDER BY date ASC
             """, (ticker, intervalo, limit))
             rows = []
             for r in cur.fetchall():
                 rows.append({
                     'date':   int(r['date']),
-                    'open':   float(r['open'])  if r['open']  else None,
-                    'high':   float(r['high'])  if r['high']  else None,
-                    'low':    float(r['low'])   if r['low']   else None,
-                    'close':  float(r['close']) if r['close'] else None,
-                    'volume': int(r['volume'])  if r['volume'] else None,
+                    'open':   float(r['open'])   if r['open']   else None,
+                    'high':   float(r['high'])   if r['high']   else None,
+                    'low':    float(r['low'])    if r['low']    else None,
+                    'close':  float(r['close'])  if r['close']  else None,
+                    'volume': int(r['volume'])   if r['volume'] else None,
                 })
         conn.close()
         return rows
