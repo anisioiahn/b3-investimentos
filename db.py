@@ -502,14 +502,22 @@ def db_listar_carteira(uid):
     try:
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT * FROM carteira WHERE usuario_id=%s ORDER BY status, ticker", (uid,))
+            cur.execute("""
+                SELECT c.*, COALESCE(a.asset_type, 'ACAO') as asset_type
+                FROM carteira c
+                LEFT JOIN assets a ON a.ticker = c.ticker AND a.status = 'ATIVO'
+                WHERE c.usuario_id = %s
+                ORDER BY c.status, c.ticker
+            """, (uid,))
             rows = [dict(r) for r in cur.fetchall()]
             for r in rows:
                 if r.get('preco_medio'): r['preco_medio'] = float(r['preco_medio'])
                 if r.get('quantidade'): r['quantidade'] = float(r['quantidade'])
         conn.close()
         return rows
-    except: return []
+    except Exception as e:
+        print(f"[DB] Erro listar carteira: {e}", flush=True)
+        return []
 
 def db_salvar_posicao(uid, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora):
     """Salva/atualiza posição como CONFIRMADA (fluxo manual normal)."""
