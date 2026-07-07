@@ -835,9 +835,11 @@ def api_historico(ticker):
 
     # Mapeia range → intervalo e limit no banco
     RANGE_MAP = {
-        '1mo': ('1d',  31),  '3mo': ('1d',  93),
-        '6mo': ('1d', 186),  '1y':  ('1d', 365),
-        '5y':  ('1mo', 60),
+        '1mo': ('1d',  31),
+        '3mo': ('1d',  93),
+        '6mo': ('1d', 186),
+        '1y':  ('1d', 365),
+        '5y':  ('1d', 1825),
     }
     intervalo_banco, limit_banco = RANGE_MAP.get(range_param, ('1d', 365))
 
