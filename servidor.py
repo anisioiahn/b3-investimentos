@@ -793,42 +793,124 @@ def api_ibovespa():
 @requer_auth
 def api_historico(ticker):
     ticker = ticker.upper()
-    range_param = request.args.get('range', '1y')
+    range_param    = request.args.get('range', '1mo')
     interval_param = request.args.get('interval', '1d')
     cache_key = f"{ticker}_{range_param}_{interval_param}"
     agora_ts = time.time()
 
-    # Cache de 5 minutos
+    # Cache de 5 minutos em memória
     if cache_key in _cache_historico:
         cached = _cache_historico[cache_key]
         if agora_ts - cached["ts"] < CACHE_HISTORICO_TTL:
             return jsonify(cached["data"])
+
+    # Mapeia range → intervalo e limit para consulta no banco
+    RANGE_MAP = {
+        '1mo':  ('1d',  31),
+        '3mo':  ('1d',  93),
+        '6mo':  ('1d', 186),
+        '1y':   ('1d', 365),
+        '2y':   ('1mo', 24),
+        '5y':   ('1mo', 60),
+        '10y':  ('1mo', 120),
+    }
+    intervalo_banco, limit_banco = RANGE_MAP.get(range_param, ('1d', 365))
+
+    # Busca preço atual do cache de cotações (já em memória)
+    preco_atual = None
+    variacao = None
+    variacao_pct = None
+    minima = None
+    maxima = None
+    for s in _cache.get("setores", {}).values():
+        for e in s.get("empresas", []):
+            if e.get("ticker") == ticker:
+                preco_atual = e.get("preco")
+                variacao    = e.get("variacao")
+                variacao_pct= e.get("variacao_pct")
+                minima      = e.get("minima")
+                maxima      = e.get("maxima")
+                break
+        if preco_atual: break
+
+    # 1️⃣ Tenta banco local primeiro (instantâneo)
+    hist_banco = db.db_buscar_historico(ticker, intervalo_banco, limit_banco)
+    if hist_banco:
+        print(f"[HISTORICO] ✅ {ticker} {range_param} — banco local ({len(hist_banco)} pts)", flush=True)
+        resp = {
+            "ticker": ticker,
+            "preco": preco_atual,
+            "variacao": variacao,
+            "variacao_pct": variacao_pct,
+            "minima_dia": minima,
+            "maxima_dia": maxima,
+            "historico": hist_banco,
+            "fonte": "banco"
+        }
+        _cache_historico[cache_key] = {"data": resp, "ts": agora_ts}
+        return jsonify(resp)
+
+    # 2️⃣ Fallback: busca na Brapi e salva no banco para próxima vez
+    print(f"[HISTORICO] ⚡ {ticker} {range_param} — sem dados locais, buscando Brapi...", flush=True)
     try:
         t0 = time.time()
         r = requests.get(
             f"{QUOTE_URL}/{ticker}?range={range_param}&interval={interval_param}&token={TOKEN_BRAPI}",
             timeout=15)
         t1 = time.time()
-        print(f"[HISTORICO] {ticker} {range_param}/{interval_param}: {round(t1-t0,1)}s", flush=True)
+        print(f"[HISTORICO] Brapi: {ticker} {range_param} — {round(t1-t0,1)}s", flush=True)
         if r.status_code == 200:
             results = r.json().get("results", [])
             if results:
                 d = results[0]
                 hist = d.get("historicalDataPrice", [])
+                if not preco_atual:
+                    preco_atual  = d.get("regularMarketPrice")
+                    variacao     = d.get("regularMarketChange")
+                    variacao_pct = d.get("regularMarketChangePercent")
+                    minima       = d.get("regularMarketDayLow")
+                    maxima       = d.get("regularMarketDayHigh")
+
+                # Salva no banco em background
+                if hist:
+                    def _salvar():
+                        try:
+                            conn_s = db.get_conn()
+                            db.db_salvar_historico_lote(conn_s, ticker, hist, interval_param)
+                            conn_s.close()
+                        except: pass
+                    threading.Thread(target=_salvar, daemon=True).start()
+
                 resp = {
                     "ticker": ticker,
-                    "preco": d.get("regularMarketPrice"),
-                    "variacao": d.get("regularMarketChange"),
-                    "variacao_pct": d.get("regularMarketChangePercent"),
-                    "minima_dia": d.get("regularMarketDayLow"),
-                    "maxima_dia": d.get("regularMarketDayHigh"),
-                    "historico": [{"date": h.get("date"), "close": h.get("close")} for h in hist if h.get("close")]
+                    "preco": preco_atual,
+                    "variacao": variacao,
+                    "variacao_pct": variacao_pct,
+                    "minima_dia": minima,
+                    "maxima_dia": maxima,
+                    "historico": [{"date": h.get("date"), "close": h.get("close")} for h in hist if h.get("close")],
+                    "fonte": "brapi"
                 }
                 _cache_historico[cache_key] = {"data": resp, "ts": agora_ts}
                 return jsonify(resp)
     except Exception as e:
-        print(f"[HISTORICO] Erro {ticker}: {e}", flush=True)
+        print(f"[HISTORICO] ❌ Erro Brapi {ticker}: {e}", flush=True)
     return jsonify({"ticker": ticker, "historico": []})
+
+# Rota para disparar carga/atualização do histórico
+@app.route("/api/historico/coletar", methods=["POST"])
+@requer_auth
+def api_historico_coletar():
+    modo = request.json.get("modo", "full") if request.json else "full"
+    def _rodar():
+        try:
+            import subprocess, sys
+            subprocess.Popen([sys.executable, "historico_collector.py", modo],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"[HIST] Erro ao iniciar collector: {e}", flush=True)
+    threading.Thread(target=_rodar, daemon=True).start()
+    return jsonify({"ok": True, "modo": modo})
 
 @app.route("/api/detalhe/<ticker>")
 @requer_auth
@@ -1348,7 +1430,23 @@ if _db_ok:
         db.db_init_dividend_tables(conn_startup)
         db.db_init_agenda_tables(conn_startup)
         db.db_init_estrategia_table(conn_startup)
+        db.db_init_historico_table(conn_startup)
         conn_startup.close()
+        print("[STARTUP] ✅ Todas as tabelas verificadas", flush=True)
+        # Carga inicial do histórico se banco estiver vazio
+        def _carga_inicial():
+            try:
+                total = db.db_total_historico()
+                if total < 1000:
+                    print(f"[STARTUP] 📈 Histórico vazio ({total} registros) — iniciando carga inicial...", flush=True)
+                    import subprocess, sys
+                    subprocess.Popen([sys.executable, "historico_collector.py", "carteira"],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                else:
+                    print(f"[STARTUP] ✅ Histórico local: {total} registros", flush=True)
+            except Exception as e:
+                print(f"[STARTUP] ⚠️ Erro verificar histórico: {e}", flush=True)
+        threading.Thread(target=_carga_inicial, daemon=True).start()
         print("[STARTUP] ✅ Tabelas de snapshot, dividendos e agenda verificadas", flush=True)
         # Popula agenda macro em background
         def _popular_macro():
