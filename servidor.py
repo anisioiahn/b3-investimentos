@@ -896,6 +896,35 @@ def api_teste_brapi(ticker):
                                "status":"erro","erro":str(e)})
     return jsonify(resultados)
 
+@app.route("/api/teste-yahoo/<ticker>")
+@requer_auth
+def api_teste_yahoo(ticker):
+    """Testa o que o Yahoo Finance retorna para um ticker."""
+    try:
+        import yfinance as yf
+        yf_ticker = ticker if ticker.startswith('^') else f"{ticker}.SA"
+        t = yf.Ticker(yf_ticker)
+        # Busca últimos 5 dias com e sem ajuste
+        hist_adj  = t.history(period="5d", interval="1d", auto_adjust=True)
+        hist_raw  = t.history(period="5d", interval="1d", auto_adjust=False)
+        result = {
+            "ticker": yf_ticker,
+            "colunas_adj":  list(hist_adj.columns),
+            "colunas_raw":  list(hist_raw.columns),
+            "ultimos_adj":  [{
+                "data": str(dt.date()),
+                "close_adj": float(row['Close'])
+            } for dt, row in hist_adj.tail(3).iterrows()],
+            "ultimos_raw":  [{
+                "data": str(dt.date()),
+                "close_raw": float(row['Close']),
+                "adj_close": float(row['Adj Close']) if 'Adj Close' in row else None
+            } for dt, row in hist_raw.tail(3).iterrows()],
+        }
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"erro": str(e)})
+
 @app.route("/api/historico-limpar", methods=["POST"])
 @requer_auth
 def api_historico_limpar():
