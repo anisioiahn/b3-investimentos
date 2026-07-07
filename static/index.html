@@ -3166,8 +3166,10 @@ async function abrirGrafico(ticker){
   chartDataFull=(hist&&hist.historico)||[];
   if(chartDataFull.length>0){
     document.getElementById('chart-loading').style.display='none';
-    document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.range-btn')[3].classList.add('active');
+    // Ativa botão 1M (índice 0) dentro do painel de ativo especificamente
+    const rangeBtns = document.querySelectorAll('.chart-ranges .range-btn');
+    rangeBtns.forEach(b=>b.classList.remove('active'));
+    if(rangeBtns[0]) rangeBtns[0].classList.add('active');
     setTimeout(()=>renderChart(chartDataFull), 100);
   } else {
     document.getElementById('chart-loading').style.display='flex';
@@ -3589,7 +3591,7 @@ function renderNoticias(data){
 }
 
 async function filtrarChart(dias, btn){
-  document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.chart-ranges .range-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
 
   // Mapeia dias para range da Brapi
