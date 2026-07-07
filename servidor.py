@@ -764,25 +764,55 @@ def api_ibovespa():
         cached = _cache_historico[cache_key]
         if agora_ts - cached["ts"] < CACHE_HISTORICO_TTL:
             return jsonify(cached["data"])
+
+    # Mapeia range → intervalo e limit para banco local
+    RANGE_MAP = {
+        '1mo': ('1d',  31), '3mo': ('1d',  93),
+        '6mo': ('1d', 186), '1y':  ('1d', 365),
+        '2y':  ('1mo', 24), '5y':  ('1mo', 60),
+    }
+    intervalo_banco, limit_banco = RANGE_MAP.get(range_param, ('1d', 31))
+
+    # 1️⃣ Tenta banco local primeiro
+    hist_banco = db.db_buscar_historico('^BVSP', intervalo_banco, limit_banco)
+    if hist_banco:
+        precos = [h['close'] for h in hist_banco if h.get('close')]
+        var_pct = round((precos[-1]-precos[0])/precos[0]*100, 2) if len(precos)>=2 else 0
+        resp = {"ticker":"IBOVESPA","preco":precos[-1] if precos else None,
+                "variacao_pct_periodo":var_pct,"historico":hist_banco,"fonte":"banco"}
+        _cache_historico[cache_key] = {"data": resp, "ts": agora_ts}
+        return jsonify(resp)
+
+    # 2️⃣ Fallback Brapi com timeout maior para 5y
+    timeout = 45 if range_param in ('5y','2y') else 20
     try:
-        ticker_ibov = "%5EBVSP"  # ^BVSP URL encoded
+        ticker_ibov = "%5EBVSP"
         r = requests.get(
             f"{QUOTE_URL}/{ticker_ibov}?range={range_param}&interval={interval_param}&token={TOKEN_BRAPI}",
-            timeout=20)
+            timeout=timeout)
         if r.status_code == 200:
             results = r.json().get("results", [])
             if results:
                 d = results[0]
                 hist = d.get("historicalDataPrice", [])
-                # Calcula variação no período
                 precos = [h.get("close") for h in hist if h.get("close")]
                 var_pct = round((precos[-1]-precos[0])/precos[0]*100, 2) if len(precos)>=2 else 0
                 resp = {
                     "ticker": "IBOVESPA",
                     "preco": d.get("regularMarketPrice"),
                     "variacao_pct_periodo": var_pct,
-                    "historico": [{"date": h.get("date"), "close": h.get("close")} for h in hist if h.get("close")]
+                    "historico": [{"date": h.get("date"), "close": h.get("close")} for h in hist if h.get("close")],
+                    "fonte": "brapi"
                 }
+                # Salva no banco em background
+                if hist:
+                    def _salvar_ibov():
+                        try:
+                            conn_s = db.get_conn()
+                            db.db_salvar_historico_lote(conn_s, '^BVSP', hist, interval_param)
+                            conn_s.close()
+                        except: pass
+                    threading.Thread(target=_salvar_ibov, daemon=True).start()
                 _cache_historico[cache_key] = {"data": resp, "ts": agora_ts}
                 return jsonify(resp)
     except Exception as e:
@@ -898,6 +928,30 @@ def api_historico(ticker):
     return jsonify({"ticker": ticker, "historico": []})
 
 # Rota para disparar carga/atualização do histórico
+@app.route("/api/historico/status")
+@requer_auth
+def api_historico_status():
+    """Diagnóstico do banco de histórico."""
+    try:
+        conn = db.get_conn()
+        with conn.cursor(cursor_factory=__import__('psycopg2').extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT intervalo,
+                       COUNT(DISTINCT ticker) as tickers,
+                       COUNT(*) as registros,
+                       MIN(data) as mais_antigo,
+                       MAX(data) as mais_recente
+                FROM historico_precos
+                GROUP BY intervalo
+                ORDER BY intervalo
+            """)
+            rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return jsonify({"status": "ok", "tabela": rows,
+                        "total": sum(r['registros'] for r in rows)})
+    except Exception as e:
+        return jsonify({"status": "erro", "erro": str(e)})
+
 @app.route("/api/historico/coletar", methods=["POST"])
 @requer_auth
 def api_historico_coletar():
