@@ -896,6 +896,25 @@ def api_teste_brapi(ticker):
                                "status":"erro","erro":str(e)})
     return jsonify(resultados)
 
+@app.route("/api/historico-debug/<ticker>")
+@requer_auth
+def api_historico_debug(ticker):
+    """Mostra últimos 5 registros do banco para um ticker."""
+    try:
+        conn = db.get_conn()
+        with conn.cursor(cursor_factory=__import__('psycopg2').extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT data, open, high, low, close, volume, intervalo
+                FROM historico_precos
+                WHERE ticker=%s AND intervalo='1d'
+                ORDER BY data DESC LIMIT 5
+            """, (ticker.upper(),))
+            rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return jsonify({"ticker": ticker, "banco": rows})
+    except Exception as e:
+        return jsonify({"erro": str(e)})
+
 @app.route("/api/teste-yahoo/<ticker>")
 @requer_auth
 def api_teste_yahoo(ticker):
