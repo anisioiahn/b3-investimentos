@@ -487,12 +487,21 @@ def executar_backtest(params):
 
     print(f"[BT] Concluído: retorno={metricas.get('retorno_pct')}% | ops={metricas.get('n_operacoes')}", flush=True)
 
+    # Janus Score e Selos
+    janus_score_est = calcular_janus_score_estrategia(metricas)
+    selos           = calcular_selos(metricas, {
+        'alpha_ibov': alpha,
+        'ibovespa':   {'retorno_pct': retorno_ibov},
+    }, janus_score_est)
+
     return {
         'ticker':         ticker,
         'estrategia':     estrategia,
         'data_inicio':    str(data_inicio),
         'data_fim':       str(data_fim),
         'metricas':       metricas,
+        'janus_score':    janus_score_est,
+        'selos':          selos,
         'benchmarks': {
             'ibovespa': {
                 'retorno_pct':  retorno_ibov,
@@ -800,3 +809,127 @@ def executar_backtest_multiplos(params):
         'operacoes': sorted(total_operacoes, key=lambda x: x.get('data', '')),
         'n_dias': len(datas_ref or []),
     }
+
+# ── JANUS SCORE DE ESTRATÉGIAS ───────────────────────────────
+
+def calcular_janus_score_estrategia(metricas, n_anos=None):
+    """
+    Calcula o Janus Score de uma estratégia (0-100).
+    Baseado em múltiplos fatores de qualidade e consistência.
+    """
+    import math
+
+    score = 0.0
+    detalhes = {}
+
+    # 1. RENTABILIDADE ANUALIZADA (0-20 pts)
+    ret_anual = metricas.get('retorno_anualizado', 0) or 0
+    pts_ret = min(20, max(0, ret_anual / 2))  # 40%aa = 20pts
+    score += pts_ret
+    detalhes['rentabilidade'] = round(pts_ret, 1)
+
+    # 2. SHARPE RATIO (0-20 pts)
+    sharpe = metricas.get('sharpe', 0) or 0
+    pts_sharpe = min(20, max(0, sharpe * 10))  # Sharpe 2.0 = 20pts
+    score += pts_sharpe
+    detalhes['sharpe'] = round(pts_sharpe, 1)
+
+    # 3. DRAWDOWN MÁXIMO (0-20 pts) — menor é melhor
+    drawdown = abs(metricas.get('drawdown_max', -100) or -100)
+    if drawdown <= 5:    pts_dd = 20
+    elif drawdown <= 10: pts_dd = 16
+    elif drawdown <= 15: pts_dd = 12
+    elif drawdown <= 20: pts_dd = 8
+    elif drawdown <= 30: pts_dd = 4
+    else:                pts_dd = 0
+    score += pts_dd
+    detalhes['drawdown'] = round(pts_dd, 1)
+
+    # 4. TAXA DE ACERTO (0-15 pts)
+    acerto = metricas.get('taxa_acerto', 0) or 0
+    pts_acerto = min(15, max(0, (acerto - 30) / 3))  # 75% = 15pts
+    score += pts_acerto
+    detalhes['taxa_acerto'] = round(pts_acerto, 1)
+
+    # 5. PROFIT FACTOR (0-15 pts)
+    pf = metricas.get('profit_factor', 0) or 0
+    pts_pf = min(15, max(0, (pf - 1) * 7.5))  # PF=3 = 15pts
+    score += pts_pf
+    detalhes['profit_factor'] = round(pts_pf, 1)
+
+    # 6. NÚMERO DE OPERAÇÕES (0-5 pts) — evita over/underfitting
+    n_ops = metricas.get('n_operacoes', 0) or 0
+    if n_ops >= 30:   pts_ops = 5
+    elif n_ops >= 15: pts_ops = 3
+    elif n_ops >= 5:  pts_ops = 1
+    else:             pts_ops = 0
+    score += pts_ops
+    detalhes['operacoes'] = round(pts_ops, 1)
+
+    # 7. SORTINO RATIO (0-5 pts)
+    sortino = metricas.get('sortino', 0) or 0
+    pts_sortino = min(5, max(0, sortino * 2.5))
+    score += pts_sortino
+    detalhes['sortino'] = round(pts_sortino, 1)
+
+    score = max(0, min(100, round(score, 1)))
+
+    # Classificação
+    if score >= 85:   classe = 'Excepcional'
+    elif score >= 70: classe = 'Excelente'
+    elif score >= 55: classe = 'Bom'
+    elif score >= 40: classe = 'Regular'
+    else:             classe = 'Fraco'
+
+    return {
+        'score': score,
+        'classe': classe,
+        'detalhes': detalhes
+    }
+
+def calcular_selos(metricas, benchmarks, janus_score):
+    """
+    Calcula selos automáticos baseados nas métricas da estratégia.
+    Retorna lista de selos conquistados.
+    """
+    selos = []
+    score    = janus_score.get('score', 0)
+    drawdown = abs(metricas.get('drawdown_max', -999) or -999)
+    sharpe   = metricas.get('sharpe', 0) or 0
+    ret_anual= metricas.get('retorno_anualizado', 0) or 0
+    acerto   = metricas.get('taxa_acerto', 0) or 0
+    pf       = metricas.get('profit_factor', 0) or 0
+    n_ops    = metricas.get('n_operacoes', 0) or 0
+    alpha    = benchmarks.get('alpha_ibov', 0) or 0
+
+    # Selos de qualidade geral
+    if score >= 85:
+        selos.append({'id':'ouro',    'nome':'🥇 Ouro Janus',   'desc':'Estratégia excepcional em todos os critérios'})
+    elif score >= 70:
+        selos.append({'id':'prata',   'nome':'🥈 Prata Janus',  'desc':'Excelente relação risco/retorno'})
+    elif score >= 55:
+        selos.append({'id':'bronze',  'nome':'🥉 Bronze Janus', 'desc':'Boa estratégia com resultados consistentes'})
+
+    # Selos técnicos específicos
+    if drawdown <= 10:
+        selos.append({'id':'baixo_dd', 'nome':'🛡️ Baixo Risco',  'desc':f'Drawdown máximo de apenas {drawdown:.1f}%'})
+
+    if sharpe >= 1.5:
+        selos.append({'id':'sharpe',  'nome':'📐 Alto Sharpe',   'desc':f'Sharpe Ratio de {sharpe:.2f}'})
+
+    if acerto >= 65:
+        selos.append({'id':'acerto',  'nome':'🎯 Alta Precisão', 'desc':f'{acerto:.0f}% de operações vencedoras'})
+
+    if alpha >= 20:
+        selos.append({'id':'alpha',   'nome':'🚀 Bate o IBOV',   'desc':f'+{alpha:.1f}% acima do Ibovespa'})
+
+    if pf >= 2.5:
+        selos.append({'id':'pf',      'nome':'💰 Alto Lucro',    'desc':f'Profit Factor de {pf:.1f}'})
+
+    if ret_anual >= 25:
+        selos.append({'id':'retorno', 'nome':'📈 Alto Retorno',  'desc':f'{ret_anual:.1f}% ao ano'})
+
+    if n_ops >= 50:
+        selos.append({'id':'robusto', 'nome':'⚙️ Robusto',       'desc':f'{n_ops} operações testadas'})
+
+    return selos
