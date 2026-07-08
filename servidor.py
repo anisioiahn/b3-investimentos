@@ -964,6 +964,19 @@ def api_bt_estrategias_post():
 def api_bt_estrategias_publicas():
     return jsonify(db.db_listar_estrategias_bt(publicas=True))
 
+@app.route("/api/backtesting/excluir/<int:bt_id>", methods=["DELETE"])
+@requer_auth
+def api_bt_excluir(bt_id):
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM backtesting_resultados WHERE id=%s AND usuario_id=%s",
+                       (bt_id, uid()))
+        conn.commit(); conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
 @app.route("/api/backtesting/historico")
 @requer_auth
 def api_bt_historico():
