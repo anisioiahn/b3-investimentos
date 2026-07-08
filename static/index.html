@@ -3661,7 +3661,7 @@ async function carregarComunidade(){
       ${ordenado.slice(0,9).map(e=>{
         const estrelas = parseFloat(e.media_estrelas||0);
         const starsHtml = [1,2,3,4,5].map(s=>
-          `<span style="color:${s<=Math.round(estrelas)?'#f59e0b':'var(--border)';font-size:14px">★</span>`
+          `<span style="color:${s<=Math.round(estrelas)?'#f59e0b':'var(--border)'};font-size:14px">★</span>`
         ).join('');
         return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem">
           <div style="font-size:13px;font-weight:700;margin-bottom:2px">${e.nome}</div>
@@ -3757,7 +3757,7 @@ async function abrirDetalhesComunidade(eid, nome){
 
       <!-- Estrelas -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
-        <div>${[1,2,3,4,5].map(s=>`<span style="color:${s<=Math.round(estrelas.media||0)?'#f59e0b':'var(--border)';font-size:18px">★</span>`).join('')}</div>
+        <div>${[1,2,3,4,5].map(s=>`<span style="color:${s<=Math.round(estrelas.media||0)?'#f59e0b':'var(--border)'};font-size:18px">★</span>`).join('')}</div>
         <span style="font-size:13px;font-weight:700">${estrelas.media||0}</span>
         <span style="font-size:12px;color:var(--text3)">(${estrelas.total||0} avaliações)</span>
         ${estrelas.minha_avaliacao?`<span style="font-size:11px;color:var(--green);margin-left:auto">Sua avaliação: ${'★'.repeat(estrelas.minha_avaliacao)}</span>`:''}
