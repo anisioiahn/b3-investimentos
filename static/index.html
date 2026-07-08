@@ -3349,6 +3349,39 @@ function _renderBtResultado(d){
   }[d.estrategia] || d.estrategia;
 
   resEl.innerHTML = `
+    <!-- Janus Score + Selos -->
+    ${d.janus_score ? `
+    <div class="cockpit-card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap">
+        <!-- Score -->
+        <div style="text-align:center;flex-shrink:0">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:4px">JANUS SCORE</div>
+          <div style="font-size:42px;font-weight:800;line-height:1;color:${d.janus_score.score>=85?'#16a34a':d.janus_score.score>=70?'#22c55e':d.janus_score.score>=55?'#f59e0b':d.janus_score.score>=40?'#f97316':'#e53935'}">${d.janus_score.score}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px">${d.janus_score.classe}</div>
+        </div>
+        <!-- Barra de score -->
+        <div style="flex:1;min-width:160px">
+          <div style="background:var(--bg);border-radius:20px;height:10px;overflow:hidden;margin-bottom:6px">
+            <div style="height:100%;width:${d.janus_score.score}%;border-radius:20px;transition:width 1s;background:linear-gradient(90deg,#e53935,#f59e0b,#16a34a)"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:10px;color:var(--text3)">
+            ${Object.entries(d.janus_score.detalhes||{}).map(([k,v])=>{
+              const labels = {rentabilidade:'Rentabilidade',sharpe:'Sharpe',drawdown:'Drawdown',taxa_acerto:'Taxa Acerto',profit_factor:'Profit Factor',operacoes:'Operações',sortino:'Sortino'};
+              return `<div style="display:flex;justify-content:space-between"><span>${labels[k]||k}</span><span style="font-weight:600">${v}pts</span></div>`;
+            }).join('')}
+          </div>
+        </div>
+        <!-- Selos -->
+        ${d.selos?.length ? `
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${d.selos.map(s=>`
+            <div title="${s.desc}" style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;cursor:help">
+              ${s.nome}
+            </div>`).join('')}
+        </div>` : ''}
+      </div>
+    </div>` : ''}
+
     <!-- Header resultado -->
     <div class="cockpit-card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
@@ -3438,7 +3471,24 @@ function _renderBtResultado(d){
           </tbody>
         </table>
       </div>
-    </div>` : ''}`;
+    </div>` : ''}
+
+    <!-- AJIA Analysis -->
+    <div class="cockpit-card" id="bt-ajia-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <div class="cockpit-card-title" style="margin:0">🤖 Análise da AJIA</div>
+        <button onclick="_gerarAjiaBacktest()" id="btn-ajia-bt"
+          style="font-size:11px;padding:5px 12px;border:1px solid var(--green);border-radius:8px;background:rgba(22,163,74,0.08);color:var(--green);cursor:pointer">
+          ✨ Gerar análise
+        </button>
+      </div>
+      <div id="bt-ajia-resultado" style="font-size:13px;color:var(--text2);line-height:1.6">
+        Clique em "✨ Gerar análise" para que a AJIA analise esta estratégia.
+      </div>
+    </div>`;
+
+  // Guarda resultado para AJIA
+  window._btUltimoResultado = d;
 
   // Renderiza gráfico
   setTimeout(()=>{
@@ -3532,6 +3582,31 @@ async function publicarSimulacao(btId, estrategia, ticker){
   const d = await r.json();
   if(d.ok){ alert(`✅ "${nome}" publicada!`); carregarComunidade(); }
   else alert('❌ Erro ao publicar.');
+}
+
+async function _gerarAjiaBacktest(){
+  const btn = document.getElementById('btn-ajia-bt');
+  const el  = document.getElementById('bt-ajia-resultado');
+  if(!window._btUltimoResultado){ return; }
+  if(btn){ btn.disabled=true; btn.textContent='Analisando...'; }
+  if(el)  el.innerHTML = '<span style="color:var(--text3)">⏳ A AJIA está analisando esta estratégia...</span>';
+  try{
+    const r = await fetch('/api/backtesting/ajia-analise',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(window._btUltimoResultado)
+    });
+    const d = await r.json();
+    if(d.ok && el){
+      el.innerHTML = d.analise.replace(/\n/g,'<br>');
+      if(btn){ btn.disabled=false; btn.textContent='↻ Nova análise'; }
+    } else {
+      if(el) el.textContent = 'Erro ao gerar análise.';
+      if(btn){ btn.disabled=false; btn.textContent='✨ Gerar análise'; }
+    }
+  }catch(e){
+    if(el) el.textContent = 'Erro de conexão.';
+    if(btn){ btn.disabled=false; btn.textContent='✨ Gerar análise'; }
+  }
 }
 
 async function _aplicarBtAlerta(ticker, estrategia){
