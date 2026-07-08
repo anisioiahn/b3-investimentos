@@ -3596,6 +3596,11 @@ async function carregarBtHistorico(){
               <td style="padding:8px 8px;text-align:right">${b.sharpe!=null&&!isNaN(b.sharpe)?parseFloat(b.sharpe).toFixed(2):'—'}</td>
               <td style="padding:8px 8px;text-align:right;color:#e53935">${b.drawdown_max!=null&&!isNaN(b.drawdown_max)?parseFloat(b.drawdown_max).toFixed(1)+'%':'—'}</td>
               <td style="padding:8px 8px;text-align:center;white-space:nowrap">
+                <button onclick="verResultadoSimulacao(${b.id})"
+                  title="Ver resultado completo"
+                  style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3);margin-right:4px"
+                  onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'"
+                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">📊</button>
                 <button onclick="publicarSimulacao(${b.id},'${b.estrategia}','${ticker}')"
                   title="Publicar na comunidade"
                   style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3);margin-right:4px"
@@ -3670,7 +3675,8 @@ async function carregarComunidade(){
           ${e.descricao?`<div style="font-size:11px;color:var(--text2);margin-bottom:8px;border-left:2px solid var(--border);padding-left:6px">${e.descricao}</div>`:''}
           <div style="display:flex;gap:4px">
             <button onclick="abrirDetalhesComunidade(${e.id},this)" data-nome="${(e.nome||'').replace(/"/g,'&quot;')}" class="btn" style="flex:1;font-size:11px;padding:5px">💬 Ver (${e.total_comentarios||0})</button>
-            <button onclick="avaliarEstrategia(${e.id})" class="btn" style="font-size:11px;padding:5px">⭐ Avaliar</button>
+            <button onclick="usarEstrategiaComunidade(${e.id},'${e.tipo||'buy_hold'}')" class="btn" style="font-size:11px;padding:5px;background:var(--green);color:#fff;border-color:var(--green)">▶ Usar</button>
+            <button onclick="avaliarEstrategia(${e.id})" class="btn" style="font-size:11px;padding:5px">⭐</button>
           </div>
         </div>`;
       }).join('')}
@@ -3678,6 +3684,36 @@ async function carregarComunidade(){
   }catch(e){
     if(el) el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Erro ao carregar</div>';
   }
+}
+
+async function verResultadoSimulacao(btId){
+  const resEl = document.getElementById('bt-resultado');
+  resEl.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--text3)"><div style="font-size:24px">⏳</div><div style="margin-top:.5rem">Carregando resultado...</div></div>`;
+  try{
+    const r = await fetch(`/api/backtesting/resultado/${btId}`);
+    const d = await r.json();
+    if(d.erro){ resEl.innerHTML=`<div style="color:#e53935;padding:2rem;text-align:center">❌ ${d.erro}</div>`; return; }
+    _renderBtResultado(d);
+    // Scroll para o resultado
+    resEl.scrollIntoView({behavior:'smooth', block:'start'});
+  }catch(e){
+    resEl.innerHTML=`<div style="color:#e53935;padding:2rem;text-align:center">❌ Erro ao carregar</div>`;
+  }
+}
+
+function usarEstrategiaComunidade(eid, tipo){
+  // Seleciona a estratégia no formulário
+  const radios = document.querySelectorAll('input[name="bt-estrategia"]');
+  radios.forEach(r=>{
+    if(r.value === tipo){
+      r.checked = true;
+      selecionarBtEstrategia(tipo, r.closest('label'));
+    }
+  });
+  // Scroll para o topo do formulário
+  document.getElementById('bt-estrategias')?.scrollIntoView({behavior:'smooth', block:'start'});
+  // Incrementa uso na comunidade
+  fetch(`/api/backtesting/estrategias/${eid}/usar`, {method:'POST'}).catch(()=>{});
 }
 
 async function avaliarEstrategia(eid){
