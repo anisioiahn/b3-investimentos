@@ -1392,31 +1392,6 @@ def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False, r
         print(f"[DB] Erro salvar estratégia BT: {e}", flush=True)
         return None
 
-def db_listar_estrategias_bt(uid=None, publicas=False, limit=20):
-    try:
-        conn = get_conn()
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            if publicas:
-                cur.execute("""
-                    SELECT e.*, u.nome as autor
-                    FROM backtesting_estrategias e
-                    JOIN usuarios u ON u.id = e.usuario_id
-                    WHERE e.publica = TRUE
-                    ORDER BY e.usos DESC, e.retorno_medio DESC NULLS LAST
-                    LIMIT %s
-                """, (limit,))
-            else:
-                cur.execute("""
-                    SELECT * FROM backtesting_estrategias
-                    WHERE usuario_id=%s ORDER BY created_at DESC LIMIT %s
-                """, (uid, limit))
-            return [dict(r) for r in cur.fetchall()]
-    except Exception as e:
-        print(f"[DB] Erro listar estratégias BT: {e}", flush=True)
-        return []
-    finally:
-        conn.close()
-
 def db_incrementar_uso_estrategia(estrategia_id, retorno_pct, sharpe):
     try:
         conn = get_conn()
