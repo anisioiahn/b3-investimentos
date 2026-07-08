@@ -959,15 +959,26 @@ Gere uma análise em 3-4 parágrafos curtos cobrindo:
 Seja direto, use linguagem clara para investidor pessoa física. Máximo 200 palavras."""
 
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
-        msg = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=500,
-            messages=[{"role":"user","content": prompt}]
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_KEY,
+                "anthropic-version": "2023-06-01"
+            },
+            json={
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 500,
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=30
         )
-        analise = msg.content[0].text
-        return jsonify({"ok": True, "analise": analise})
+        if resp.status_code == 200:
+            analise = resp.json()["content"][0]["text"]
+            return jsonify({"ok": True, "analise": analise})
+        else:
+            print(f"[AJIA BT] Erro HTTP {resp.status_code}: {resp.text[:200]}", flush=True)
+            return jsonify({"ok": False, "erro": f"Erro {resp.status_code}"}), 500
     except Exception as e:
         print(f"[AJIA BT] Erro: {e}", flush=True)
         return jsonify({"ok": False, "erro": str(e)}), 500
@@ -1069,6 +1080,41 @@ def api_bt_estrategias_post():
 @requer_auth
 def api_bt_estrategias_publicas():
     return jsonify(db.db_listar_estrategias_bt(publicas=True))
+
+@app.route("/api/backtesting/resultado/<int:bt_id>")
+@requer_auth
+def api_bt_resultado(bt_id):
+    """Retorna o resultado completo de um backtest salvo."""
+    try:
+        conn = db.get_conn()
+        with conn.cursor(cursor_factory=__import__('psycopg2').extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT resultado_json FROM backtesting_resultados
+                WHERE id=%s AND usuario_id=%s
+            """, (bt_id, uid()))
+            row = cur.fetchone()
+        conn.close()
+        if not row:
+            return jsonify({"erro": "Simulação não encontrada"}), 404
+        import json
+        resultado = row['resultado_json']
+        if isinstance(resultado, str):
+            resultado = json.loads(resultado)
+        return jsonify(resultado)
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/api/backtesting/estrategias/<int:eid>/usar", methods=["POST"])
+@requer_auth
+def api_bt_usar_estrategia(eid):
+    """Incrementa contador de usos de uma estratégia."""
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("UPDATE backtesting_estrategias SET usos=usos+1 WHERE id=%s", (eid,))
+        conn.commit(); conn.close()
+        return jsonify({"ok": True})
+    except: return jsonify({"ok": False})
 
 @app.route("/api/backtesting/excluir/<int:bt_id>", methods=["DELETE"])
 @requer_auth
