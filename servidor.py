@@ -942,6 +942,41 @@ def api_bt_multiplos():
         return jsonify(resultado), 400
     return jsonify(resultado)
 
+@app.route("/api/backtesting/estrategias/<int:eid>/avaliar", methods=["POST"])
+@requer_auth
+def api_bt_avaliar(eid):
+    estrelas = (request.json or {}).get('estrelas', 0)
+    if not 1 <= estrelas <= 5:
+        return jsonify({"erro": "Estrelas deve ser entre 1 e 5"}), 400
+    ok = db.db_avaliar_estrategia(eid, uid(), estrelas)
+    return jsonify({"ok": ok})
+
+@app.route("/api/backtesting/estrategias/<int:eid>/comentar", methods=["POST"])
+@requer_auth
+def api_bt_comentar(eid):
+    d = request.json or {}
+    comentario = d.get('comentario', '').strip()
+    if not comentario:
+        return jsonify({"erro": "Comentário vazio"}), 400
+    # Busca nome do usuário
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT nome FROM usuarios WHERE id=%s", (uid(),))
+            row = cur.fetchone()
+            nome = row[0] if row else 'Usuário'
+        conn.close()
+    except: nome = 'Usuário'
+    cid = db.db_comentar_estrategia(eid, uid(), nome, comentario)
+    return jsonify({"ok": bool(cid), "id": cid})
+
+@app.route("/api/backtesting/estrategias/<int:eid>/detalhes")
+@requer_auth
+def api_bt_detalhes(eid):
+    comentarios = db.db_listar_comentarios(eid)
+    estrelas    = db.db_media_estrelas(eid, uid())
+    return jsonify({"comentarios": comentarios, "estrelas": estrelas})
+
 @app.route("/api/backtesting/estrategias", methods=["GET"])
 @requer_auth
 def api_bt_estrategias_get():
@@ -1681,6 +1716,7 @@ if _db_ok:
         db.db_init_historico_table(conn_startup)
         db.db_init_backtesting_tables(conn_startup)
         db.db_init_backtesting_v2_tables(conn_startup)
+        db.db_init_backtesting_social_tables(conn_startup)
         conn_startup.close()
         print("[STARTUP] ✅ Todas as tabelas verificadas", flush=True)
         # Garante yfinance instalado
