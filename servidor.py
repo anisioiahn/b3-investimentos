@@ -908,6 +908,62 @@ def api_bt_executar():
         return jsonify(resultado), 400
     return jsonify(resultado)
 
+@app.route("/api/backtesting/multiplos", methods=["POST"])
+@requer_auth
+def api_bt_multiplos():
+    """Backtest em múltiplos ativos."""
+    u = uid()
+    if _bt_rodando.get(u):
+        return jsonify({"erro": "Já existe uma simulação em andamento"}), 409
+    params = request.json or {}
+    resultado_container = {}
+
+    def _rodar():
+        _bt_rodando[u] = True
+        try:
+            from backtesting_engine import executar_backtest_multiplos
+            resultado = executar_backtest_multiplos(params)
+            resultado_container['resultado'] = resultado
+            if 'erro' not in resultado:
+                db.db_salvar_backtest(u, resultado, params)
+        except Exception as e:
+            print(f"[BT] Erro múltiplos: {e}", flush=True)
+            resultado_container['resultado'] = {'erro': str(e)}
+        finally:
+            _bt_rodando[u] = False
+
+    t = threading.Thread(target=_rodar, daemon=True)
+    t.start()
+    t.join(timeout=120)
+    resultado = resultado_container.get('resultado')
+    if not resultado:
+        return jsonify({"erro": "Timeout"}), 504
+    if 'erro' in resultado:
+        return jsonify(resultado), 400
+    return jsonify(resultado)
+
+@app.route("/api/backtesting/estrategias", methods=["GET"])
+@requer_auth
+def api_bt_estrategias_get():
+    publicas = request.args.get('publicas', 'false') == 'true'
+    return jsonify(db.db_listar_estrategias_bt(uid(), publicas))
+
+@app.route("/api/backtesting/estrategias", methods=["POST"])
+@requer_auth
+def api_bt_estrategias_post():
+    d = request.json or {}
+    eid = db.db_salvar_estrategia_bt(
+        uid(), d.get('nome','Minha estratégia'),
+        d.get('descricao',''), d.get('tipo','personalizada'),
+        d.get('regras',{}), d.get('publica', False)
+    )
+    return jsonify({"ok": bool(eid), "id": eid})
+
+@app.route("/api/backtesting/estrategias/publicas")
+@requer_auth
+def api_bt_estrategias_publicas():
+    return jsonify(db.db_listar_estrategias_bt(publicas=True))
+
 @app.route("/api/backtesting/historico")
 @requer_auth
 def api_bt_historico():
@@ -1604,6 +1660,7 @@ if _db_ok:
         db.db_init_estrategia_table(conn_startup)
         db.db_init_historico_table(conn_startup)
         db.db_init_backtesting_tables(conn_startup)
+        db.db_init_backtesting_v2_tables(conn_startup)
         conn_startup.close()
         print("[STARTUP] ✅ Todas as tabelas verificadas", flush=True)
         # Garante yfinance instalado
