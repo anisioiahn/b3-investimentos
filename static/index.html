@@ -3686,6 +3686,82 @@ async function carregarComunidade(){
   }
 }
 
+async function _publicarBtResultado(estrategia, dadosStr){
+  let dados;
+  try{ dados = typeof dadosStr==='string' ? JSON.parse(dadosStr.replace(/&quot;/g,'"')) : dadosStr; }
+  catch(e){ dados={}; }
+
+  const nomeEst = {
+    'buy_hold':'Buy & Hold','medias_moveis':'Médias Móveis',
+    'rsi':'RSI / IFR','janus_score':'Janus Score','personalizada':'Personalizada'
+  };
+  const ticker = dados.ticker || (dados.tickers||[]).join('+') || '';
+  const sugestao = `${nomeEst[estrategia]||estrategia}${ticker?' — '+ticker:''}`;
+  const nome = prompt('Nome para publicar na comunidade:', sugestao);
+  if(!nome) return;
+  const descricao = prompt('Descrição (opcional):') || '';
+
+  const m  = dados.metricas   || {};
+  const bm = dados.benchmarks || {};
+
+  const r = await fetch('/api/backtesting/estrategias', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      nome, descricao, tipo: estrategia,
+      regras:        dados.regras || {estrategia, parametros: dados.parametros||{}},
+      publica:       true,
+      retorno_medio: m.retorno_pct   || null,
+      sharpe_medio:  m.sharpe        || null,
+      ticker:        dados.ticker    || null,
+      tickers:       dados.tickers   || null,
+      data_inicio:   dados.data_inicio || null,
+      data_fim:      dados.data_fim    || null,
+      capital_inicial: m.capital_inicial || null,
+    })
+  });
+  const d = await r.json();
+  if(d.ok){ carregarComunidade(); alert(`✅ "${nome}" publicada na comunidade!`); }
+  else alert('❌ Erro ao publicar. Tente novamente.');
+}
+
+async function publicarSimulacao(btId, estrategia, ticker){
+  // Busca resultado completo do banco para pegar todos os dados
+  const r = await fetch(`/api/backtesting/resultado/${btId}`);
+  const resultado = await r.json();
+  if(resultado.erro){ alert('❌ Erro ao carregar simulação'); return; }
+
+  const nomeEst = {
+    'buy_hold':'Buy & Hold','medias_moveis':'Médias Móveis',
+    'rsi':'RSI / IFR','janus_score':'Janus Score','personalizada':'Personalizada'
+  };
+  const sugestao = `${nomeEst[estrategia]||estrategia}${ticker?' — '+ticker:''}`;
+  const nome = prompt('Nome para publicar na comunidade:', sugestao);
+  if(!nome) return;
+  const descricao = prompt('Descrição (opcional):') || '';
+
+  const m  = resultado.metricas   || {};
+  const bm = resultado.benchmarks || {};
+
+  const p = await fetch('/api/backtesting/estrategias', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      nome, descricao, tipo: estrategia,
+      regras:        resultado.regras || {estrategia, parametros: resultado.parametros||{}},
+      publica:       true,
+      retorno_medio: m.retorno_pct     || null,
+      sharpe_medio:  m.sharpe          || null,
+      ticker:        resultado.ticker  || null,
+      tickers:       resultado.tickers || null,
+      data_inicio:   resultado.data_inicio || null,
+      data_fim:      resultado.data_fim    || null,
+      capital_inicial: m.capital_inicial   || null,
+    })
+  });
+  const d = await p.json();
+  if(d.ok){ carregarComunidade(); alert(`✅ "${nome}" publicada!`); }
+  else alert('❌ Erro ao publicar');
+}
+
 async function verResultadoSimulacao(btId){
   const resEl = document.getElementById('bt-resultado');
   resEl.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--text3)"><div style="font-size:24px">⏳</div><div style="margin-top:.5rem">Carregando resultado...</div></div>`;
