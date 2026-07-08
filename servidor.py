@@ -1068,11 +1068,24 @@ def api_bt_estrategias_post():
             f = float(v)
             return None if (math.isnan(f) or math.isinf(f)) else f
         except: return None
+
+    # Dados da simulação que originou a publicação
+    simulacao_params = None
+    if d.get('ticker') or d.get('tickers') or d.get('data_inicio'):
+        simulacao_params = {
+            'ticker':       d.get('ticker'),
+            'tickers':      d.get('tickers'),
+            'data_inicio':  d.get('data_inicio'),
+            'data_fim':     d.get('data_fim'),
+            'capital_inicial': d.get('capital_inicial'),
+        }
+
     eid = db.db_salvar_estrategia_bt(
         uid(), d.get('nome','Minha estratégia'),
         d.get('descricao',''), d.get('tipo','personalizada'),
         d.get('regras',{}), d.get('publica', False),
-        safe(d.get('retorno_medio')), safe(d.get('sharpe_medio'))
+        safe(d.get('retorno_medio')), safe(d.get('sharpe_medio')),
+        simulacao_params
     )
     return jsonify({"ok": bool(eid), "id": eid})
 
@@ -1101,6 +1114,26 @@ def api_bt_resultado(bt_id):
         if isinstance(resultado, str):
             resultado = json.loads(resultado)
         return jsonify(resultado)
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/api/backtesting/estrategias/<int:eid>")
+@requer_auth
+def api_bt_estrategia_get(eid):
+    """Retorna dados completos de uma estratégia incluindo simulacao_params."""
+    try:
+        conn = db.get_conn()
+        with conn.cursor(cursor_factory=__import__('psycopg2').extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT e.*, u.nome as autor
+                FROM backtesting_estrategias e
+                JOIN usuarios u ON u.id = e.usuario_id
+                WHERE e.id = %s
+            """, (eid,))
+            row = cur.fetchone()
+        conn.close()
+        if not row: return jsonify({"erro": "Não encontrada"}), 404
+        return jsonify(dict(row))
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
 
