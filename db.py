@@ -1357,6 +1357,7 @@ def db_init_backtesting_v2_tables(conn):
                 descricao TEXT,
                 tipo TEXT DEFAULT 'personalizada',
                 regras JSONB NOT NULL,
+                simulacao_params JSONB,
                 publica BOOLEAN DEFAULT FALSE,
                 usos INTEGER DEFAULT 0,
                 retorno_medio NUMERIC,
@@ -1369,9 +1370,14 @@ def db_init_backtesting_v2_tables(conn):
             CREATE INDEX IF NOT EXISTS idx_bt_est_usuario
                 ON backtesting_estrategias(usuario_id);
         """)
+        # Adiciona coluna se não existir (para bancos já criados)
+        cur.execute("""
+            ALTER TABLE backtesting_estrategias
+            ADD COLUMN IF NOT EXISTS simulacao_params JSONB
+        """)
     conn.commit()
 
-def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False, retorno_medio=None, sharpe_medio=None):
+def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False, retorno_medio=None, sharpe_medio=None, simulacao_params=None):
     import json
     from datetime import datetime, timezone, timedelta
     now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
@@ -1380,11 +1386,13 @@ def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False, r
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO backtesting_estrategias
-                    (usuario_id, nome, descricao, tipo, regras, publica,
-                     retorno_medio, sharpe_medio, created_at, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-            """, (uid, nome, descricao, tipo, json.dumps(regras), publica,
-                  retorno_medio, sharpe_medio, now, now))
+                    (usuario_id, nome, descricao, tipo, regras, simulacao_params,
+                     publica, retorno_medio, sharpe_medio, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+            """, (uid, nome, descricao, tipo,
+                  json.dumps(regras),
+                  json.dumps(simulacao_params) if simulacao_params else None,
+                  publica, retorno_medio, sharpe_medio, now, now))
             row = cur.fetchone()
         conn.commit(); conn.close()
         return row[0] if row else None
