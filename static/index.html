@@ -3738,8 +3738,7 @@ async function confirmarAvaliacao(eid){
   _estrelaSelecionada = 0;
   document.getElementById('modal-avaliar')?.remove();
   document.getElementById('modal-detalhes')?.remove();
-  if(d.ok){ carregarComunidade(); alert('✅ Avaliação registrada!'); }
-  else alert('❌ Erro ao avaliar');
+  if(d.ok){ carregarComunidade(); }
 }
 
 async function abrirDetalhesComunidade(eid, el){
@@ -3767,28 +3766,30 @@ async function abrirDetalhesComunidade(eid, el){
         ${estrelas.minha_avaliacao?`<span style="font-size:11px;color:var(--green);margin-left:auto">Sua avaliação: ${'★'.repeat(estrelas.minha_avaliacao)}</span>`:''}
       </div>
 
-      <!-- Comentários -->
-      <div style="font-size:13px;font-weight:700;margin-bottom:.75rem">💬 Comentários (${comentarios.length})</div>
-      <div id="comentarios-lista-${eid}" style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem;max-height:250px;overflow-y:auto">
-        ${comentarios.length ? comentarios.map(c=>`
-          <div style="background:var(--bg);border-radius:10px;padding:.75rem">
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-              <span style="font-size:12px;font-weight:700">${c.nome_usuario}</span>
-              <span style="font-size:10px;color:var(--text3)">${new Date(c.created_at).toLocaleDateString('pt-BR')}</span>
-            </div>
-            <div style="font-size:12px;color:var(--text)">${c.comentario}</div>
-          </div>`).join('')
-          : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Seja o primeiro a comentar!</div>'}
-      </div>
-
-      <!-- Novo comentário -->
-      <div style="border-top:1px solid var(--border);padding-top:1rem">
+      <!-- Novo comentário PRIMEIRO -->
+      <div style="margin-bottom:1rem">
         <textarea id="novo-comentario-${eid}" placeholder="Escreva seu comentário sobre esta estratégia..."
           style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;min-height:70px;background:var(--card);color:var(--text);font-family:inherit;box-sizing:border-box"></textarea>
         <button onclick="enviarComentario(${eid})" class="btn"
           style="width:100%;margin-top:6px;padding:8px;background:var(--green);color:#fff;border-color:var(--green);font-size:13px">
           Enviar comentário
         </button>
+      </div>
+
+      <!-- Comentários existentes -->
+      <div style="border-top:1px solid var(--border);padding-top:1rem">
+        <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:.75rem">💬 Comentários (${comentarios.length})</div>
+        <div id="comentarios-lista-${eid}" style="display:flex;flex-direction:column;gap:.75rem;max-height:220px;overflow-y:auto">
+          ${comentarios.length ? comentarios.map(c=>`
+            <div style="background:var(--bg);border-radius:10px;padding:.75rem">
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                <span style="font-size:12px;font-weight:700">${c.nome_usuario}</span>
+                <span style="font-size:10px;color:var(--text3)">${new Date(c.created_at).toLocaleDateString('pt-BR')}</span>
+              </div>
+              <div style="font-size:12px;color:var(--text)">${c.comentario}</div>
+            </div>`).join('')
+            : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Nenhum comentário ainda. Seja o primeiro!</div>'}
+        </div>
       </div>
     </div>`;
   modal.onclick = ()=>modal.remove();
@@ -3815,7 +3816,6 @@ async function enviarComentario(eid){
     document.getElementById('modal-detalhes')?.remove();
     document.getElementById('modal-avaliar')?.remove();
     carregarComunidade();
-    alert('✅ Comentário enviado!');
   } else {
     if(btn){ btn.disabled=false; btn.textContent='Enviar comentário'; }
     alert('❌ Erro ao comentar');
