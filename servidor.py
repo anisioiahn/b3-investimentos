@@ -908,6 +908,66 @@ def api_bt_executar():
         return jsonify(resultado), 400
     return jsonify(resultado)
 
+@app.route("/api/backtesting/ajia-analise", methods=["POST"])
+@requer_auth
+def api_bt_ajia():
+    """Gera análise da AJIA para um resultado de backtest."""
+    d = request.json or {}
+    metricas   = d.get('metricas', {})
+    benchmarks = d.get('benchmarks', {})
+    ticker     = d.get('ticker', '')
+    estrategia = d.get('estrategia', '')
+    janus_score= d.get('janus_score', {})
+    selos      = d.get('selos', [])
+
+    nomes_est = {
+        'buy_hold':'Buy and Hold','medias_moveis':'Médias Móveis',
+        'rsi':'RSI/IFR','janus_score':'Janus Score','personalizada':'Personalizada'
+    }
+
+    prompt = f"""Você é a AJIA, analista especializada em investimentos na B3.
+Analise o resultado deste backtest de forma objetiva e didática em português.
+
+ESTRATÉGIA: {nomes_est.get(estrategia, estrategia)} em {ticker}
+PERÍODO: {d.get('data_inicio')} até {d.get('data_fim')} ({d.get('n_dias', 0)} dias úteis)
+
+MÉTRICAS:
+- Retorno total: {metricas.get('retorno_pct', 0)}%
+- Retorno anualizado: {metricas.get('retorno_anualizado', 0)}%
+- vs IBOVESPA: {benchmarks.get('alpha_ibov', 0):+.1f}%
+- vs CDI: {metricas.get('retorno_pct', 0) - (benchmarks.get('cdi', {}).get('retorno_pct', 0) or 0):.1f}%
+- Drawdown máximo: {metricas.get('drawdown_max', 0)}%
+- Sharpe Ratio: {metricas.get('sharpe', 0)}
+- Sortino Ratio: {metricas.get('sortino', 0)}
+- Taxa de acerto: {metricas.get('taxa_acerto', 0)}%
+- Profit Factor: {metricas.get('profit_factor', 0)}
+- Operações: {metricas.get('n_operacoes', 0)}
+
+JANUS SCORE: {janus_score.get('score', 0)}/100 ({janus_score.get('classe', '')})
+SELOS: {', '.join([s['nome'] for s in selos]) if selos else 'Nenhum'}
+
+Gere uma análise em 3-4 parágrafos curtos cobrindo:
+1. Resumo do desempenho geral
+2. Pontos fortes da estratégia
+3. Pontos de atenção e riscos
+4. Recomendação final
+
+Seja direto, use linguagem clara para investidor pessoa física. Máximo 200 palavras."""
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        msg = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=500,
+            messages=[{"role":"user","content": prompt}]
+        )
+        analise = msg.content[0].text
+        return jsonify({"ok": True, "analise": analise})
+    except Exception as e:
+        print(f"[AJIA BT] Erro: {e}", flush=True)
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
 @app.route("/api/backtesting/multiplos", methods=["POST"])
 @requer_auth
 def api_bt_multiplos():
