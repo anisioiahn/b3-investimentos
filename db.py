@@ -1331,3 +1331,86 @@ def db_listar_backtests(uid, limit=10):
         return []
     finally:
         conn.close()
+
+# ── BACKTESTING v2 — ESTRATÉGIAS COMPARTILHADAS ───────────────
+def db_init_backtesting_v2_tables(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS backtesting_estrategias (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER,
+                nome TEXT NOT NULL,
+                descricao TEXT,
+                tipo TEXT DEFAULT 'personalizada',
+                regras JSONB NOT NULL,
+                publica BOOLEAN DEFAULT FALSE,
+                usos INTEGER DEFAULT 0,
+                retorno_medio NUMERIC,
+                sharpe_medio NUMERIC,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_bt_est_publica
+                ON backtesting_estrategias(publica, usos DESC);
+            CREATE INDEX IF NOT EXISTS idx_bt_est_usuario
+                ON backtesting_estrategias(usuario_id);
+        """)
+    conn.commit()
+
+def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False):
+    import json
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO backtesting_estrategias
+                    (usuario_id, nome, descricao, tipo, regras, publica, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+            """, (uid, nome, descricao, tipo, json.dumps(regras), publica, now, now))
+            row = cur.fetchone()
+        conn.commit(); conn.close()
+        return row[0] if row else None
+    except Exception as e:
+        print(f"[DB] Erro salvar estratégia BT: {e}", flush=True)
+        return None
+
+def db_listar_estrategias_bt(uid=None, publicas=False, limit=20):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            if publicas:
+                cur.execute("""
+                    SELECT e.*, u.nome as autor
+                    FROM backtesting_estrategias e
+                    JOIN usuarios u ON u.id = e.usuario_id
+                    WHERE e.publica = TRUE
+                    ORDER BY e.usos DESC, e.retorno_medio DESC NULLS LAST
+                    LIMIT %s
+                """, (limit,))
+            else:
+                cur.execute("""
+                    SELECT * FROM backtesting_estrategias
+                    WHERE usuario_id=%s ORDER BY created_at DESC LIMIT %s
+                """, (uid, limit))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro listar estratégias BT: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
+
+def db_incrementar_uso_estrategia(estrategia_id, retorno_pct, sharpe):
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE backtesting_estrategias SET
+                    usos = usos + 1,
+                    retorno_medio = COALESCE((retorno_medio * usos + %s) / (usos + 1), %s),
+                    sharpe_medio  = COALESCE((sharpe_medio  * usos + %s) / (usos + 1), %s)
+                WHERE id = %s
+            """, (retorno_pct, retorno_pct, sharpe, sharpe, estrategia_id))
+        conn.commit(); conn.close()
+    except: pass
