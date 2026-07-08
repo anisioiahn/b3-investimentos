@@ -3379,16 +3379,36 @@ function _renderBtResultado(d){
     ${d.operacoes?.length > 2 ? `
     <div class="cockpit-card">
       <div class="cockpit-card-title">📋 Operações (${d.operacoes.length})</div>
-      <div style="max-height:200px;overflow-y:auto">
-        ${d.operacoes.map(op=>`
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-            <span style="color:${op.tipo==='COMPRA'?'#16a34a':'#e53935'};font-weight:700">${op.tipo}</span>
-            <span style="color:var(--text2)">${op.data}</span>
-            <span>R$ ${op.preco?.toFixed(2)}</span>
-            ${op.resultado_pct != null
-              ? `<span style="font-weight:700;color:${op.resultado_pct>=0?'#16a34a':'#e53935'}">${op.resultado_pct>=0?'+':''}${op.resultado_pct.toFixed(2)}%</span>`
-              : '<span style="color:var(--text3)">—</span>'}
-          </div>`).join('')}
+      <div style="max-height:220px;overflow-y:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.5px">
+              <th style="padding:4px 8px;text-align:left;font-weight:600">Tipo</th>
+              <th style="padding:4px 8px;text-align:left;font-weight:600">Ativo</th>
+              <th style="padding:4px 8px;text-align:left;font-weight:600">Data</th>
+              <th style="padding:4px 8px;text-align:right;font-weight:600">Preço</th>
+              <th style="padding:4px 8px;text-align:right;font-weight:600">Qtd</th>
+              <th style="padding:4px 8px;text-align:right;font-weight:600">Resultado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${d.operacoes.map(op=>`
+              <tr style="border-top:1px solid var(--border)">
+                <td style="padding:6px 8px">
+                  <span style="font-weight:700;font-size:11px;color:${op.tipo==='COMPRA'?'#16a34a':'#e53935'};
+                    background:${op.tipo==='COMPRA'?'rgba(22,163,74,0.1)':'rgba(229,57,53,0.1)'};
+                    padding:2px 8px;border-radius:20px">${op.tipo}</span>
+                </td>
+                <td style="padding:6px 8px;font-weight:700">${op.ticker || d.ticker || '—'}</td>
+                <td style="padding:6px 8px;color:var(--text2)">${op.data}</td>
+                <td style="padding:6px 8px;text-align:right">R$ ${op.preco?.toFixed(2)}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text3)">${op.quantidade?.toFixed(0)??'—'}</td>
+                <td style="padding:6px 8px;text-align:right;font-weight:700;color:${op.resultado_pct==null?'var(--text3)':op.resultado_pct>=0?'#16a34a':'#e53935'}">
+                  ${op.resultado_pct!=null?(op.resultado_pct>=0?'+':'')+op.resultado_pct.toFixed(2)+'%':'—'}
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
       </div>
     </div>` : ''}`;
 
