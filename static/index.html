@@ -3475,36 +3475,83 @@ async function _aplicarBtAlerta(ticker, estrategia){
 }
 
 async function carregarBtHistorico(){
+  const el = document.getElementById('bt-historico');
+  if(!el) return;
   try{
     const r = await fetch('/api/backtesting/historico');
     const lista = await r.json();
-    const el = document.getElementById('bt-historico');
     if(!lista?.length){
       el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Nenhuma simulação executada ainda</div>';
       return;
     }
-    el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="color:var(--text3);text-align:left">
-        <th style="padding:6px 8px">Ativo</th><th style="padding:6px 8px">Estratégia</th>
-        <th style="padding:6px 8px">Período</th><th style="padding:6px 8px;text-align:right">Retorno</th>
-        <th style="padding:6px 8px;text-align:right">vs IBOV</th><th style="padding:6px 8px;text-align:right">Sharpe</th>
-        <th style="padding:6px 8px;text-align:right">Drawdown</th>
-      </tr></thead>
-      <tbody>${lista.map(b=>{
-        const cor = b.retorno_pct >= 0 ? '#16a34a' : '#e53935';
-        const alpha = b.alpha != null ? (b.alpha >= 0 ? `+${b.alpha.toFixed(1)}%` : `${b.alpha.toFixed(1)}%`) : '—';
-        const alphaCor = b.alpha >= 0 ? '#16a34a' : '#e53935';
-        return `<tr style="border-top:1px solid var(--border)">
-          <td style="padding:6px 8px;font-weight:700">${b.ticker}</td>
-          <td style="padding:6px 8px;color:var(--text2)">${b.estrategia}</td>
-          <td style="padding:6px 8px;color:var(--text3)">${b.data_inicio} → ${b.data_fim}</td>
-          <td style="padding:6px 8px;text-align:right;font-weight:700;color:${cor}">${b.retorno_pct >= 0 ? '+' : ''}${b.retorno_pct}%</td>
-          <td style="padding:6px 8px;text-align:right;color:${alphaCor}">${alpha}</td>
-          <td style="padding:6px 8px;text-align:right">${b.sharpe?.toFixed(2) ?? '—'}</td>
-          <td style="padding:6px 8px;text-align:right;color:#e53935">${b.drawdown_max}%</td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table></div>`;
+
+    const nomeEst = {
+      'buy_hold':'Buy & Hold','medias_moveis':'Médias Móveis',
+      'rsi':'RSI','janus_score':'Janus Score','personalizada':'Personalizada'
+    };
+
+    const fmtData = d => {
+      if(!d) return '—';
+      try{ return new Date(d).toLocaleDateString('pt-BR'); }catch{ return d; }
+    };
+
+    const fmtPct = v => {
+      if(v == null || isNaN(v)) return '—';
+      return `${v >= 0 ? '+' : ''}${parseFloat(v).toFixed(1)}%`;
+    };
+
+    el.innerHTML = `<div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border)">
+            <th style="padding:6px 8px;text-align:left;font-weight:600">Ativo</th>
+            <th style="padding:6px 8px;text-align:left;font-weight:600">Estratégia</th>
+            <th style="padding:6px 8px;text-align:left;font-weight:600">De</th>
+            <th style="padding:6px 8px;text-align:left;font-weight:600">Até</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:600">Retorno</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:600">vs IBOV</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:600">Sharpe</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:600">Drawdown</th>
+            <th style="padding:6px 8px;text-align:center;font-weight:600">Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lista.map(b=>{
+            const ret = parseFloat(b.retorno_pct);
+            const corRet = !isNaN(ret) ? (ret>=0?'#16a34a':'#e53935') : 'var(--text3)';
+            const alpha  = parseFloat(b.alpha);
+            const corAlpha = !isNaN(alpha) ? (alpha>=0?'#16a34a':'#e53935') : 'var(--text3)';
+            const ticker = b.ticker || (b.tickers?.join('+')) || '—';
+            return `<tr style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+              <td style="padding:8px 8px;font-weight:700">${ticker}</td>
+              <td style="padding:8px 8px;color:var(--text2)">${nomeEst[b.estrategia]||b.estrategia}</td>
+              <td style="padding:8px 8px;color:var(--text3)">${fmtData(b.data_inicio)}</td>
+              <td style="padding:8px 8px;color:var(--text3)">${fmtData(b.data_fim)}</td>
+              <td style="padding:8px 8px;text-align:right;font-weight:700;color:${corRet}">${fmtPct(b.retorno_pct)}</td>
+              <td style="padding:8px 8px;text-align:right;color:${corAlpha}">${fmtPct(b.alpha)}</td>
+              <td style="padding:8px 8px;text-align:right">${b.sharpe!=null&&!isNaN(b.sharpe)?parseFloat(b.sharpe).toFixed(2):'—'}</td>
+              <td style="padding:8px 8px;text-align:right;color:#e53935">${b.drawdown_max!=null&&!isNaN(b.drawdown_max)?parseFloat(b.drawdown_max).toFixed(1)+'%':'—'}</td>
+              <td style="padding:8px 8px;text-align:center">
+                <button onclick="excluirBtSimulacao(${b.id})"
+                  style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3)"
+                  onmouseover="this.style.borderColor='#e53935';this.style.color='#e53935'"
+                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">✕</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }catch(e){
+    console.error('[BT] Erro histórico:', e);
+  }
+}
+
+async function excluirBtSimulacao(id){
+  if(!confirm('Excluir esta simulação?')) return;
+  try{
+    await fetch(`/api/backtesting/excluir/${id}`, {method:'DELETE'});
+    carregarBtHistorico();
   }catch(e){}
 }
 
