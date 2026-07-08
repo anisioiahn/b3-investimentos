@@ -1279,12 +1279,19 @@ def db_init_backtesting_tables(conn):
 
 def db_salvar_backtest(uid, resultado, parametros):
     from datetime import datetime, timezone, timedelta
+    import json, math
     now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
     m   = resultado.get('metricas', {})
     bm  = resultado.get('benchmarks', {})
+
+    def safe(v):
+        try:
+            f = float(v)
+            return None if (math.isnan(f) or math.isinf(f)) else f
+        except: return None
+
     try:
         conn = get_conn()
-        import json
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO backtesting_resultados
@@ -1296,14 +1303,21 @@ def db_salvar_backtest(uid, resultado, parametros):
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING id
             """, (
-                uid, resultado.get('ticker'), resultado.get('estrategia'),
+                uid,
+                resultado.get('ticker') or ','.join(resultado.get('tickers',[])),
+                resultado.get('estrategia'),
                 json.dumps(parametros),
                 resultado.get('data_inicio'), resultado.get('data_fim'),
-                m.get('capital_inicial'), m.get('capital_final'),
-                m.get('retorno_pct'), bm.get('ibovespa',{}).get('retorno_pct'),
-                bm.get('cdi',{}).get('retorno_pct'), bm.get('alpha_ibov'),
-                m.get('drawdown_max'), m.get('sharpe'), m.get('n_operacoes'),
-                json.dumps(resultado), now
+                safe(m.get('capital_inicial')), safe(m.get('capital_final')),
+                safe(m.get('retorno_pct')),
+                safe(bm.get('ibovespa',{}).get('retorno_pct')),
+                safe(bm.get('cdi',{}).get('retorno_pct')),
+                safe(bm.get('alpha_ibov')),
+                safe(m.get('drawdown_max')),
+                safe(m.get('sharpe')),
+                m.get('n_operacoes'),
+                json.dumps(resultado, default=str),
+                now
             ))
             row = cur.fetchone()
         conn.commit(); conn.close()
