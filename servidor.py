@@ -952,10 +952,17 @@ def api_bt_estrategias_get():
 @requer_auth
 def api_bt_estrategias_post():
     d = request.json or {}
+    import math
+    def safe(v):
+        try:
+            f = float(v)
+            return None if (math.isnan(f) or math.isinf(f)) else f
+        except: return None
     eid = db.db_salvar_estrategia_bt(
         uid(), d.get('nome','Minha estratégia'),
         d.get('descricao',''), d.get('tipo','personalizada'),
-        d.get('regras',{}), d.get('publica', False)
+        d.get('regras',{}), d.get('publica', False),
+        safe(d.get('retorno_medio')), safe(d.get('sharpe_medio'))
     )
     return jsonify({"ok": bool(eid), "id": eid})
 
