@@ -3337,254 +3337,172 @@ async function executarBacktest(){
 }
 
 function _renderBtResultado(d){
-  const m  = d.metricas || {};
-  const bm = d.benchmarks || {};
-  const ibov = bm.ibovespa || {};
+  const m   = d.metricas    || {};
+  const bm  = d.benchmarks  || {};
+  const ibov= bm.ibovespa   || {};
+  const js  = d.janus_score || {};
   const resEl = document.getElementById('bt-resultado');
-
-  const corRetorno = m.retorno_pct >= 0 ? '#16a34a' : '#e53935';
   const nomeEst = {
-    'buy_hold': 'Buy and Hold', 'medias_moveis': 'Médias Móveis',
-    'rsi': 'RSI / IFR', 'janus_score': 'Janus Score'
+    'buy_hold':'Buy and Hold','medias_moveis':'Médias Móveis',
+    'rsi':'RSI / IFR','janus_score':'Janus Score','personalizada':'Personalizada'
   }[d.estrategia] || d.estrategia;
 
+  const corScore = js.score>=85?'#16a34a':js.score>=70?'#22c55e':js.score>=55?'#f59e0b':js.score>=40?'#f97316':'#e53935';
+  const fmtPct = (v,digits=1) => {
+    if(v==null||isNaN(v)) return '—';
+    return (v>=0?'+':'')+parseFloat(v).toFixed(digits)+'%';
+  };
+
   resEl.innerHTML = `
-    <!-- Janus Score + Selos -->
-    ${d.janus_score ? `
+    <!-- 1. Janus Score + Selos -->
+    ${js.score!=null ? `
     <div class="cockpit-card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap">
-        <!-- Score -->
         <div style="text-align:center;flex-shrink:0">
-          <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:4px">JANUS SCORE</div>
-          <div style="font-size:42px;font-weight:800;line-height:1;color:${d.janus_score.score>=85?'#16a34a':d.janus_score.score>=70?'#22c55e':d.janus_score.score>=55?'#f59e0b':d.janus_score.score>=40?'#f97316':'#e53935'}">${d.janus_score.score}</div>
-          <div style="font-size:12px;color:var(--text2);margin-top:2px">${d.janus_score.classe}</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:2px">JANUS SCORE</div>
+          <div style="font-size:44px;font-weight:800;line-height:1;color:${corScore}">${js.score}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">${js.classe}</div>
         </div>
-        <!-- Barra de score -->
-        <div style="flex:1;min-width:160px">
-          <div style="background:var(--bg);border-radius:20px;height:10px;overflow:hidden;margin-bottom:6px">
-            <div style="height:100%;width:${d.janus_score.score}%;border-radius:20px;transition:width 1s;background:linear-gradient(90deg,#e53935,#f59e0b,#16a34a)"></div>
+        <div style="flex:1;min-width:140px">
+          <div style="background:var(--bg);border-radius:20px;height:8px;overflow:hidden;margin-bottom:8px">
+            <div style="height:100%;width:${js.score}%;border-radius:20px;background:linear-gradient(90deg,#e53935,#f59e0b,#16a34a)"></div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:10px;color:var(--text3)">
-            ${Object.entries(d.janus_score.detalhes||{}).map(([k,v])=>{
-              const labels = {rentabilidade:'Rentabilidade',sharpe:'Sharpe',drawdown:'Drawdown',taxa_acerto:'Taxa Acerto',profit_factor:'Profit Factor',operacoes:'Operações',sortino:'Sortino'};
-              return `<div style="display:flex;justify-content:space-between"><span>${labels[k]||k}</span><span style="font-weight:600">${v}pts</span></div>`;
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:10px;color:var(--text3)">
+            ${Object.entries(js.detalhes||{}).map(([k,v])=>{
+              const lb={rentabilidade:'Rentabilidade',sharpe:'Sharpe',drawdown:'Drawdown',taxa_acerto:'Acerto',profit_factor:'Profit Factor',operacoes:'Operações',sortino:'Sortino'};
+              return `<div style="display:flex;justify-content:space-between;padding:1px 0"><span>${lb[k]||k}</span><span style="font-weight:600;color:var(--text)">${v}pts</span></div>`;
             }).join('')}
           </div>
         </div>
-        <!-- Selos -->
-        ${d.selos?.length ? `
-        <div style="display:flex;flex-direction:column;gap:4px">
-          ${d.selos.map(s=>`
-            <div title="${s.desc}" style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;cursor:help">
-              ${s.nome}
-            </div>`).join('')}
+        ${(d.selos||[]).length ? `
+        <div style="display:flex;flex-wrap:wrap;gap:4px;max-width:200px">
+          ${d.selos.map(s=>`<span title="${s.desc}" style="padding:3px 10px;background:var(--bg);border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;cursor:help;white-space:nowrap">${s.nome}</span>`).join('')}
         </div>` : ''}
       </div>
     </div>` : ''}
 
-    <!-- Header resultado -->
+    <!-- 2. Header + Botões + Métricas + Gráfico -->
     <div class="cockpit-card" style="margin-bottom:1rem">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
+      <!-- Header -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap">
         <div>
-          <div style="font-size:16px;font-weight:700">${d.ticker || d.tickers?.join(' + ')} — ${nomeEst}</div>
-          <div style="font-size:12px;color:var(--text3)">${d.data_inicio} → ${d.data_fim} · ${d.n_dias} dias úteis</div>
+          <div style="font-size:15px;font-weight:700">${d.ticker||d.tickers?.join(' + ')} — ${nomeEst}</div>
+          <div style="font-size:11px;color:var(--text3)">${d.data_inicio} → ${d.data_fim} · ${d.n_dias||0} dias úteis</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="_publicarBtResultado('${d.estrategia}',${JSON.stringify({
-            ticker: d.ticker||null,
-            tickers: d.tickers||null,
-            metricas: d.metricas,
-            benchmarks: d.benchmarks,
-            regras: d.regras||null,
-            parametros: d.parametros||null
-          }).replace(/"/g,'&quot;')})" class="btn"
-            style="font-size:12px;padding:6px 12px;border-color:#f59e0b;color:#f59e0b">
-            🌐 Publicar na Comunidade
-          </button>
-          <button onclick="_aplicarBtAlerta('${d.ticker||d.tickers?.[0]}','${d.estrategia}')" class="btn"
-            style="font-size:12px;padding:6px 12px;border-color:var(--green);color:var(--green)">
-            🔔 Aplicar como Alerta
-          </button>
+          <button onclick="_publicarBtResultado('${d.estrategia}',${JSON.stringify({ticker:d.ticker||null,tickers:d.tickers||null,metricas:d.metricas,benchmarks:d.benchmarks,regras:d.regras||null,parametros:d.parametros||null}).replace(/"/g,'&quot;')})" class="btn" style="font-size:11px;padding:5px 10px;border-color:#f59e0b;color:#f59e0b">🌐 Publicar</button>
+          <button onclick="_aplicarBtAlerta('${d.ticker||d.tickers?.[0]}','${d.estrategia}')" class="btn" style="font-size:11px;padding:5px 10px;border-color:var(--green);color:var(--green)">🔔 Alerta</button>
         </div>
       </div>
 
-      <!-- Métricas principais -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1rem">
+      <!-- Métricas em grid -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-bottom:1rem">
         ${[
           ['Capital Final', `R$ ${(m.capital_final||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`, null],
-          ['Retorno', `${m.retorno_pct >= 0 ? '+' : ''}${m.retorno_pct}%`, m.retorno_pct >= 0 ? '#16a34a' : '#e53935'],
-          ['vs IBOVESPA', ibov.retorno_pct != null ? `${m.retorno_pct - ibov.retorno_pct >= 0 ? '+' : ''}${(m.retorno_pct - ibov.retorno_pct).toFixed(1)}%` : '—', bm.alpha_ibov >= 0 ? '#16a34a' : '#e53935'],
-          ['vs CDI', bm.cdi?.retorno_pct != null ? `${(m.retorno_pct - bm.cdi.retorno_pct) >= 0 ? '+' : ''}${(m.retorno_pct - bm.cdi.retorno_pct).toFixed(1)}%` : '—', (m.retorno_pct - (bm.cdi?.retorno_pct||0)) >= 0 ? '#16a34a' : '#e53935'],
-          ['Drawdown Máx', `${m.drawdown_max}%`, '#e53935'],
-          ['Sharpe', m.sharpe, m.sharpe >= 1 ? '#16a34a' : m.sharpe >= 0 ? '#f59e0b' : '#e53935'],
-          ['Operações', m.n_operacoes, null],
-          ['Taxa Acerto', `${m.taxa_acerto}%`, m.taxa_acerto >= 50 ? '#16a34a' : '#e53935'],
-        ].map(([label, valor, cor])=>`
-          <div style="background:var(--bg);border-radius:10px;padding:.75rem;text-align:center">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${label}</div>
-            <div style="font-size:16px;font-weight:700;color:${cor||'var(--text)'}">${valor??'—'}</div>
+          ['Retorno', fmtPct(m.retorno_pct,2), (m.retorno_pct||0)>=0?'#16a34a':'#e53935'],
+          ['vs IBOVESPA', fmtPct(bm.alpha_ibov,1), (bm.alpha_ibov||0)>=0?'#16a34a':'#e53935'],
+          ['vs CDI', fmtPct((m.retorno_pct||0)-(bm.cdi?.retorno_pct||0),1), ((m.retorno_pct||0)-(bm.cdi?.retorno_pct||0))>=0?'#16a34a':'#e53935'],
+          ['Drawdown Máx', `${m.drawdown_max||0}%`, '#e53935'],
+          ['Sharpe', m.sharpe!=null?parseFloat(m.sharpe).toFixed(2):'—', (m.sharpe||0)>=1?'#16a34a':(m.sharpe||0)>=0?'#f59e0b':'#e53935'],
+          ['Operações', m.n_operacoes??'—', null],
+          ['Taxa Acerto', m.taxa_acerto!=null?`${m.taxa_acerto}%`:'—', (m.taxa_acerto||0)>=50?'#16a34a':'#e53935'],
+        ].map(([lbl,val,cor])=>`
+          <div style="background:var(--bg);border-radius:8px;padding:.6rem;text-align:center">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:2px;text-transform:uppercase;letter-spacing:.3px">${lbl}</div>
+            <div style="font-size:14px;font-weight:700;color:${cor||'var(--text)'}">${val}</div>
           </div>`).join('')}
       </div>
 
       <!-- Gráfico -->
-      <div style="position:relative;height:220px;margin-bottom:.5rem">
+      <div style="height:200px;margin-bottom:.5rem">
         <canvas id="bt-chart"></canvas>
       </div>
-      <div style="display:flex;gap:12px;justify-content:center;font-size:11px">
-        <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:2px;background:var(--green)"></span> ${nomeEst}</span>
-        ${ibov.retorno_pct != null ? `<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:2px;background:#f59e0b"></span> IBOVESPA</span>` : ''}
+      <div style="display:flex;gap:12px;justify-content:center;font-size:11px;color:var(--text3)">
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:2px;background:#16a34a;display:inline-block"></span>${nomeEst}</span>
+        ${ibov.retorno_pct!=null?`<span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:2px;background:#f59e0b;display:inline-block"></span>IBOVESPA</span>`:''}
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:2px;background:#6366f1;display:inline-block;border-top:2px dashed #6366f1;height:0"></span>CDI ~${(bm.cdi?.retorno_pct||0).toFixed(0)}%</span>
       </div>
     </div>
 
-    <!-- Operações -->
-    ${d.operacoes?.length > 2 ? `
-    <div class="cockpit-card">
+    <!-- 3. Operações -->
+    ${(d.operacoes||[]).length>2?`
+    <div class="cockpit-card" style="margin-bottom:1rem">
       <div class="cockpit-card-title">📋 Operações (${d.operacoes.length})</div>
-      <div style="max-height:220px;overflow-y:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead>
-            <tr style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.5px">
-              <th style="padding:4px 8px;text-align:left;font-weight:600">Tipo</th>
-              <th style="padding:4px 8px;text-align:left;font-weight:600">Ativo</th>
-              <th style="padding:4px 8px;text-align:left;font-weight:600">Data</th>
-              <th style="padding:4px 8px;text-align:right;font-weight:600">Preço</th>
-              <th style="padding:4px 8px;text-align:right;font-weight:600">Qtd</th>
-              <th style="padding:4px 8px;text-align:right;font-weight:600">Resultado</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${d.operacoes.map(op=>`
-              <tr style="border-top:1px solid var(--border)">
-                <td style="padding:6px 8px">
-                  <span style="font-weight:700;font-size:11px;color:${op.tipo==='COMPRA'?'#16a34a':'#e53935'};
-                    background:${op.tipo==='COMPRA'?'rgba(22,163,74,0.1)':'rgba(229,57,53,0.1)'};
-                    padding:2px 8px;border-radius:20px">${op.tipo}</span>
-                </td>
-                <td style="padding:6px 8px;font-weight:700">${op.ticker || d.ticker || '—'}</td>
-                <td style="padding:6px 8px;color:var(--text2)">${op.data}</td>
-                <td style="padding:6px 8px;text-align:right">R$ ${op.preco?.toFixed(2)}</td>
-                <td style="padding:6px 8px;text-align:right;color:var(--text3)">${op.quantidade?.toFixed(0)??'—'}</td>
-                <td style="padding:6px 8px;text-align:right;font-weight:700;color:${op.resultado_pct==null?'var(--text3)':op.resultado_pct>=0?'#16a34a':'#e53935'}">
-                  ${op.resultado_pct!=null?(op.resultado_pct>=0?'+':'')+op.resultado_pct.toFixed(2)+'%':'—'}
-                </td>
-              </tr>`).join('')}
+      <div style="max-height:200px;overflow-y:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead><tr style="color:var(--text3);font-size:10px;border-bottom:1px solid var(--border)">
+            <th style="padding:4px 6px;text-align:left">Tipo</th>
+            <th style="padding:4px 6px;text-align:left">Ativo</th>
+            <th style="padding:4px 6px;text-align:left">Data</th>
+            <th style="padding:4px 6px;text-align:right">Preço</th>
+            <th style="padding:4px 6px;text-align:right">Resultado</th>
+          </tr></thead>
+          <tbody>${d.operacoes.map(op=>`
+            <tr style="border-top:1px solid var(--border)">
+              <td style="padding:5px 6px"><span style="font-weight:700;font-size:10px;color:${op.tipo==='COMPRA'?'#16a34a':'#e53935'};background:${op.tipo==='COMPRA'?'rgba(22,163,74,0.1)':'rgba(229,57,53,0.1)'};padding:2px 6px;border-radius:20px">${op.tipo}</span></td>
+              <td style="padding:5px 6px;font-weight:700">${op.ticker||d.ticker||'—'}</td>
+              <td style="padding:5px 6px;color:var(--text2)">${op.data}</td>
+              <td style="padding:5px 6px;text-align:right">R$ ${(op.preco||0).toFixed(2)}</td>
+              <td style="padding:5px 6px;text-align:right;font-weight:700;color:${op.resultado_pct==null?'var(--text3)':op.resultado_pct>=0?'#16a34a':'#e53935'}">${op.resultado_pct!=null?(op.resultado_pct>=0?'+':'')+op.resultado_pct.toFixed(2)+'%':'—'}</td>
+            </tr>`).join('')}
           </tbody>
         </table>
       </div>
     </div>` : ''}
 
-    <!-- AJIA Analysis -->
+    <!-- 4. AJIA -->
     <div class="cockpit-card" id="bt-ajia-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
         <div class="cockpit-card-title" style="margin:0">🤖 Análise da AJIA</div>
         <button onclick="_gerarAjiaBacktest()" id="btn-ajia-bt"
-          style="font-size:11px;padding:5px 12px;border:1px solid var(--green);border-radius:8px;background:rgba(22,163,74,0.08);color:var(--green);cursor:pointer">
+          style="font-size:11px;padding:5px 12px;border:1px solid var(--green);border-radius:8px;background:rgba(22,163,74,0.08);color:var(--green);cursor:pointer;font-family:inherit">
           ✨ Gerar análise
         </button>
       </div>
-      <div id="bt-ajia-resultado" style="font-size:13px;color:var(--text2);line-height:1.6">
+      <div id="bt-ajia-resultado" style="font-size:12px;color:var(--text2);line-height:1.7">
         Clique em "✨ Gerar análise" para que a AJIA analise esta estratégia.
       </div>
     </div>`;
 
-  // Guarda resultado para AJIA
   window._btUltimoResultado = d;
 
   // Renderiza gráfico
   setTimeout(()=>{
     const ctx = document.getElementById('bt-chart')?.getContext('2d');
     if(!ctx) return;
-    if(_btChartInstance){ _btChartInstance.destroy(); }
+    if(_btChartInstance){ _btChartInstance.destroy(); _btChartInstance=null; }
     const datas  = d.curva_patrimonio?.datas  || [];
-    const valores = d.curva_patrimonio?.valores || [];
+    const valores= d.curva_patrimonio?.valores || [];
+    if(!valores.length){ return; }
     const datasets = [{
       label: nomeEst, data: valores,
-      borderColor: 'var(--green)', backgroundColor: 'rgba(22,163,74,0.1)',
+      borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.08)',
       borderWidth: 2, pointRadius: 0, fill: true, tension: 0.3
     }];
     if(ibov.patrimonio?.length){
       datasets.push({
-        label: 'IBOVESPA', data: ibov.patrimonio,
-        borderColor: '#f59e0b', backgroundColor: 'transparent',
-        borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.3
+        label:'IBOVESPA', data: ibov.patrimonio,
+        borderColor:'#f59e0b', backgroundColor:'transparent',
+        borderWidth:1.5, pointRadius:0, fill:false, tension:0.3
       });
     }
     _btChartInstance = new Chart(ctx, {
-      type: 'line',
-      data: { labels: datas, datasets },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: c => `R$ ${c.parsed.y.toLocaleString('pt-BR',{minimumFractionDigits:2})}` }}
+      type:'line',
+      data:{ labels: datas, datasets },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{label:c=>`R$ ${c.parsed.y.toLocaleString('pt-BR',{minimumFractionDigits:2})}`}}
         },
-        scales: {
-          x: { grid:{display:false}, ticks:{maxTicksLimit:6, font:{size:9}} },
-          y: { position:'right', ticks:{callback:v=>`R$${(v/1000).toFixed(0)}k`, maxTicksLimit:4, font:{size:9}} }
+        scales:{
+          x:{grid:{display:false}, ticks:{maxTicksLimit:6,font:{size:9}}},
+          y:{position:'right', ticks:{callback:v=>`R$${(v/1000).toFixed(0)}k`,maxTicksLimit:5,font:{size:9}}}
         }
       }
     });
-  }, 100);
+  }, 150);
 }
-
-async function _publicarBtResultado(estrategia, dadosStr){
-  let dados;
-  try{ dados = typeof dadosStr === 'string' ? JSON.parse(dadosStr.replace(/&quot;/g,'"')) : dadosStr; }
-  catch(e){ dados = {}; }
-
-  const nomeEst = {
-    'buy_hold':'Buy & Hold','medias_moveis':'Médias Móveis',
-    'rsi':'RSI / IFR','janus_score':'Janus Score','personalizada':'Personalizada'
-  };
-  const ticker = dados.ticker || dados.tickers?.join('+') || '';
-  const sugestao = `${nomeEst[estrategia]||estrategia}${ticker?' — '+ticker:''}`;
-  const nome = prompt('Nome para publicar na comunidade:', sugestao);
-  if(!nome) return;
-  const descricao = prompt('Descrição (opcional — ex: "Funciona bem em tendência de alta"):') || '';
-
-  const m  = dados.metricas  || {};
-  const bm = dados.benchmarks || {};
-
-  const r = await fetch('/api/backtesting/estrategias', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
-      nome, descricao,
-      tipo: estrategia,
-      regras: dados.regras || {estrategia, parametros: dados.parametros||{}},
-      publica: true,
-      retorno_medio: m.retorno_pct || null,
-      sharpe_medio:  m.sharpe      || null,
-    })
-  });
-  const d = await r.json();
-  if(d.ok){
-    alert(`✅ "${nome}" publicada na comunidade!`);
-    carregarComunidade();
-  } else {
-    alert('❌ Erro ao publicar. Tente novamente.');
-  }
-}
-
-async function publicarSimulacao(btId, estrategia, ticker){
-  const nomeEst = {
-    'buy_hold':'Buy & Hold','medias_moveis':'Médias Móveis',
-    'rsi':'RSI / IFR','janus_score':'Janus Score','personalizada':'Personalizada'
-  };
-  const sugestao = `${nomeEst[estrategia]||estrategia}${ticker?' — '+ticker:''}`;
-  const nome = prompt('Nome para publicar na comunidade:', sugestao);
-  if(!nome) return;
-  const descricao = prompt('Descrição (opcional):') || '';
-  const r = await fetch('/api/backtesting/estrategias', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({nome, descricao, tipo: estrategia, regras:{estrategia}, publica:true})
-  });
-  const d = await r.json();
-  if(d.ok){ alert(`✅ "${nome}" publicada!`); carregarComunidade(); }
-  else alert('❌ Erro ao publicar.');
-}
-
 async function _gerarAjiaBacktest(){
   const btn = document.getElementById('btn-ajia-bt');
   const el  = document.getElementById('bt-ajia-resultado');
