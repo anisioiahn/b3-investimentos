@@ -925,6 +925,10 @@ def api_bt_ajia():
         'rsi':'RSI/IFR','janus_score':'Janus Score','personalizada':'Personalizada'
     }
 
+    alpha    = benchmarks.get('alpha_ibov') or 0
+    ret_cdi  = (benchmarks.get('cdi') or {}).get('retorno_pct') or 0
+    ret_pct  = metricas.get('retorno_pct') or 0
+
     prompt = f"""Você é a AJIA, analista especializada em investimentos na B3.
 Analise o resultado deste backtest de forma objetiva e didática em português.
 
@@ -932,16 +936,16 @@ ESTRATÉGIA: {nomes_est.get(estrategia, estrategia)} em {ticker}
 PERÍODO: {d.get('data_inicio')} até {d.get('data_fim')} ({d.get('n_dias', 0)} dias úteis)
 
 MÉTRICAS:
-- Retorno total: {metricas.get('retorno_pct', 0)}%
-- Retorno anualizado: {metricas.get('retorno_anualizado', 0)}%
-- vs IBOVESPA: {benchmarks.get('alpha_ibov', 0):+.1f}%
-- vs CDI: {metricas.get('retorno_pct', 0) - (benchmarks.get('cdi', {}).get('retorno_pct', 0) or 0):.1f}%
-- Drawdown máximo: {metricas.get('drawdown_max', 0)}%
-- Sharpe Ratio: {metricas.get('sharpe', 0)}
-- Sortino Ratio: {metricas.get('sortino', 0)}
-- Taxa de acerto: {metricas.get('taxa_acerto', 0)}%
-- Profit Factor: {metricas.get('profit_factor', 0)}
-- Operações: {metricas.get('n_operacoes', 0)}
+- Retorno total: {ret_pct:.1f}%
+- Retorno anualizado: {metricas.get('retorno_anualizado') or 0:.1f}%
+- vs IBOVESPA: {alpha:+.1f}%
+- vs CDI: {ret_pct - ret_cdi:.1f}%
+- Drawdown máximo: {metricas.get('drawdown_max') or 0:.1f}%
+- Sharpe Ratio: {metricas.get('sharpe') or 0:.2f}
+- Sortino Ratio: {metricas.get('sortino') or 0:.2f}
+- Taxa de acerto: {metricas.get('taxa_acerto') or 0:.1f}%
+- Profit Factor: {metricas.get('profit_factor') or 0:.2f}
+- Operações: {metricas.get('n_operacoes') or 0}
 
 JANUS SCORE: {janus_score.get('score', 0)}/100 ({janus_score.get('classe', '')})
 SELOS: {', '.join([s['nome'] for s in selos]) if selos else 'Nenhum'}
