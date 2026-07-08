@@ -3734,10 +3734,15 @@ async function confirmarAvaliacao(eid){
     body: JSON.stringify({estrelas: _estrelaSelecionada})
   });
   const d = await r.json();
-  document.querySelector('div[style*="position:fixed"][style*="z-index:1000"]')?.remove();
+  // Fecha modal de avaliação
+  document.querySelectorAll('div[style*="position:fixed"]').forEach(m=>m.remove());
   _estrelaSelecionada = 0;
-  if(d.ok){ alert('✅ Avaliação registrada!'); carregarComunidade(); }
-  else alert('❌ Erro ao avaliar');
+  if(d.ok){ 
+    alert('✅ Avaliação registrada!'); 
+    carregarComunidade(); 
+  } else {
+    alert('❌ Erro ao avaliar');
+  }
 }
 
 async function abrirDetalhesComunidade(eid, el){
@@ -3766,7 +3771,7 @@ async function abrirDetalhesComunidade(eid, el){
 
       <!-- Comentários -->
       <div style="font-size:13px;font-weight:700;margin-bottom:.75rem">💬 Comentários (${comentarios.length})</div>
-      <div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem;max-height:250px;overflow-y:auto">
+      <div id="comentarios-lista-${eid}" style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem;max-height:250px;overflow-y:auto">
         ${comentarios.length ? comentarios.map(c=>`
           <div style="background:var(--bg);border-radius:10px;padding:.75rem">
             <div style="display:flex;justify-content:space-between;margin-bottom:4px">
@@ -3796,18 +3801,40 @@ async function enviarComentario(eid){
   const ta = document.getElementById(`novo-comentario-${eid}`);
   const comentario = ta?.value?.trim();
   if(!comentario){ alert('Escreva um comentário'); return; }
+
+  const btn = ta?.nextElementSibling;
+  if(btn){ btn.disabled=true; btn.textContent='Enviando...'; }
+
   const r = await fetch(`/api/backtesting/estrategias/${eid}/comentar`,{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({comentario})
   });
   const d = await r.json();
+
   if(d.ok){
     if(ta) ta.value = '';
-    // Recarrega o modal
-    document.querySelector('div[style*="position:fixed"][style*="z-index:1000"]')?.remove();
-    const nomeCached = document.querySelector(`[onclick*="abrirDetalhesComunidade(${eid}"]`)?.closest('.card')?.querySelector('.nome')?.textContent || '';
-    await abrirDetalhesComunidade(eid, nomeCached || 'Estratégia');
-  } else alert('❌ Erro ao comentar');
+    if(btn){ btn.disabled=false; btn.textContent='Enviar comentário'; }
+
+    // Recarrega só a lista de comentários dentro do modal (sem fechar)
+    const listaEl = document.getElementById(`comentarios-lista-${eid}`);
+    if(listaEl){
+      const det = await fetch(`/api/backtesting/estrategias/${eid}/detalhes`);
+      const dados = await det.json();
+      const comentarios = dados.comentarios || [];
+      listaEl.innerHTML = comentarios.map(c=>`
+        <div style="background:var(--bg);border-radius:10px;padding:.75rem">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:12px;font-weight:700">${c.nome_usuario}</span>
+            <span style="font-size:10px;color:var(--text3)">${new Date(c.created_at).toLocaleDateString('pt-BR')}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text)">${c.comentario}</div>
+        </div>`).join('') || '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Nenhum comentário ainda</div>';
+    }
+    carregarComunidade();
+  } else {
+    if(btn){ btn.disabled=false; btn.textContent='Enviar comentário'; }
+    alert('❌ Erro ao comentar');
+  }
 }
 
 function toggleMenuSec(){
