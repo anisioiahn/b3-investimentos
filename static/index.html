@@ -957,8 +957,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
                   <input type="radio" name="bt-estrategia" value="janus_score" style="accent-color:var(--green)">
                   <div><div style="font-weight:600;font-size:13px">🎯 Janus Score</div><div style="font-size:11px;color:var(--text3)">Score&gt;80 compra, &lt;60 vende</div></div>
                 </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;border-radius:8px;border:1px solid var(--green);background:rgba(22,163,74,0.04)" onclick="selecionarBtEstrategia('personalizada',this)">
+                  <input type="radio" name="bt-estrategia" value="personalizada" style="accent-color:var(--green)">
+                  <div><div style="font-weight:600;font-size:13px">⚡ Personalizada</div><div style="font-size:11px;color:var(--text3)">Monte suas próprias regras SE/ENTÃO</div></div>
+                </label>
               </div>
-              <!-- Parâmetros dinâmicos -->
+
+              <!-- Parâmetros MM -->
               <div id="bt-params-mm" style="display:none;margin-top:10px;padding:10px;background:var(--bg);border-radius:8px">
                 <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">Parâmetros</div>
                 <div style="display:flex;gap:8px;align-items:center;font-size:12px">
@@ -966,6 +971,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
                   <label>MM Lenta: <input type="number" id="bt-mm-lenta" value="21" min="5" max="200" style="width:50px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)"></label>
                 </div>
               </div>
+
+              <!-- Parâmetros RSI -->
               <div id="bt-params-rsi" style="display:none;margin-top:10px;padding:10px;background:var(--bg);border-radius:8px">
                 <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">Parâmetros</div>
                 <div style="display:flex;gap:8px;align-items:center;font-size:12px">
@@ -973,14 +980,57 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
                   <label>Venda RSI&gt; <input type="number" id="bt-rsi-venda" value="70" min="50" max="90" style="width:50px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)"></label>
                 </div>
               </div>
+
+              <!-- Estratégia Personalizada -->
+              <div id="bt-params-personalizada" style="display:none;margin-top:10px">
+                <div style="padding:10px;background:var(--bg);border-radius:8px">
+                  <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:8px">🟢 Condições de COMPRA</div>
+                  <div id="bt-regras-compra" style="display:flex;flex-direction:column;gap:6px"></div>
+                  <div style="display:flex;gap:6px;margin-top:6px">
+                    <button onclick="adicionarRegra('compra')" class="btn" style="font-size:11px;padding:4px 10px">+ Condição</button>
+                    <select id="bt-op-compra" style="font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)">
+                      <option value="E">E (todas)</option>
+                      <option value="OU">OU (qualquer)</option>
+                    </select>
+                  </div>
+                </div>
+                <div style="padding:10px;background:var(--bg);border-radius:8px;margin-top:8px">
+                  <div style="font-size:11px;font-weight:700;color:#e53935;margin-bottom:8px">🔴 Condições de VENDA</div>
+                  <div id="bt-regras-venda" style="display:flex;flex-direction:column;gap:6px"></div>
+                  <div style="display:flex;gap:6px;margin-top:6px">
+                    <button onclick="adicionarRegra('venda')" class="btn" style="font-size:11px;padding:4px 10px">+ Condição</button>
+                    <select id="bt-op-venda" style="font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)">
+                      <option value="E">E (todas)</option>
+                      <option value="OU">OU (qualquer)</option>
+                    </select>
+                  </div>
+                </div>
+                <div style="padding:10px;background:var(--bg);border-radius:8px;margin-top:8px">
+                  <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">🛡️ Proteção (opcional)</div>
+                  <div style="display:flex;gap:8px;font-size:12px">
+                    <label>Stop Loss %: <input type="number" id="bt-stop-loss" placeholder="Ex: -10" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)"></label>
+                    <label>Stop Gain %: <input type="number" id="bt-stop-gain" placeholder="Ex: 30" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)"></label>
+                  </div>
+                </div>
+                <div style="display:flex;gap:6px;margin-top:8px">
+                  <button onclick="salvarEstrategiaPersonalizada()" class="btn" style="font-size:11px;padding:5px 12px;border-color:var(--green);color:var(--green)">💾 Salvar estratégia</button>
+                  <button onclick="publicarEstrategiaPersonalizada()" class="btn" style="font-size:11px;padding:5px 12px">🌐 Publicar</button>
+                </div>
+              </div>
             </div>
 
-            <!-- Ativo -->
+            <!-- Ativos (múltiplos) -->
             <div class="cockpit-card">
-              <div class="cockpit-card-title">2️⃣ Ativo</div>
-              <input type="text" id="bt-ticker" placeholder="Ex: BBAS3, VALE3, PETR4..." maxlength="10"
-                style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--card);color:var(--text);box-sizing:border-box;text-transform:uppercase"
-                oninput="this.value=this.value.toUpperCase()">
+              <div class="cockpit-card-title">2️⃣ Ativos</div>
+              <div id="bt-tickers-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+              <div style="display:flex;gap:6px">
+                <input type="text" id="bt-ticker-input" placeholder="Ex: BBAS3" maxlength="10"
+                  style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);text-transform:uppercase"
+                  oninput="this.value=this.value.toUpperCase()"
+                  onkeydown="if(event.key==='Enter')adicionarBtTicker()">
+                <button onclick="adicionarBtTicker()" class="btn" style="padding:8px 12px;font-size:13px">+ Add</button>
+              </div>
+              <div style="font-size:10px;color:var(--text3);margin-top:4px">Pressione Enter ou clique + para adicionar. Múltiplos ativos = carteira.</div>
             </div>
 
             <!-- Período -->
@@ -1029,9 +1079,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
         <!-- Histórico de simulações -->
         <div style="margin-top:2rem">
-          <div style="font-size:14px;font-weight:700;margin-bottom:.75rem">📋 Histórico de Simulações</div>
+          <div style="font-size:14px;font-weight:700;margin-bottom:.75rem">📋 Minhas Simulações</div>
           <div id="bt-historico">
             <div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Nenhuma simulação executada ainda</div>
+          </div>
+        </div>
+
+        <!-- Comunidade -->
+        <div style="margin-top:2rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+            <div style="font-size:14px;font-weight:700">🌐 Estratégias da Comunidade</div>
+            <div style="display:flex;gap:4px">
+              <button onclick="filtrarComunidade('retorno')" class="range-btn active" id="btn-com-retorno" style="font-size:10px;padding:3px 8px">Mais rentáveis</button>
+              <button onclick="filtrarComunidade('sharpe')" class="range-btn" id="btn-com-sharpe" style="font-size:10px;padding:3px 8px">Melhor Sharpe</button>
+              <button onclick="filtrarComunidade('usos')" class="range-btn" id="btn-com-usos" style="font-size:10px;padding:3px 8px">Mais usadas</button>
+            </div>
+          </div>
+          <div id="bt-comunidade">
+            <div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Carregando estratégias da comunidade...</div>
           </div>
         </div>
       </div>
@@ -2990,13 +3055,42 @@ function fecharOnePage(){
   if(modal) modal.style.display = 'none';
 }
 
-// ── BACKTESTING ───────────────────────────────────────────────
+// ── BACKTESTING v2 ────────────────────────────────────────────
 let _btEstrategia = 'buy_hold';
 let _btChartInstance = null;
+let _btTickers = [];
+let _btRegras = { compra: [], venda: [] };
+
+const BT_INDICADORES = [
+  {val:'preco',  label:'Preço'},
+  {val:'mm9',    label:'MM 9'},
+  {val:'mm21',   label:'MM 21'},
+  {val:'mm50',   label:'MM 50'},
+  {val:'mm200',  label:'MM 200'},
+  {val:'rsi',    label:'RSI'},
+  {val:'macd',   label:'MACD'},
+  {val:'bb_sup', label:'Bollinger Superior'},
+  {val:'bb_inf', label:'Bollinger Inferior'},
+];
+const BT_OPERADORES = [
+  {val:'cruza_acima',  label:'cruza acima de'},
+  {val:'cruza_abaixo', label:'cruza abaixo de'},
+  {val:'maior',        label:'maior que'},
+  {val:'menor',        label:'menor que'},
+  {val:'maior_igual',  label:'≥'},
+  {val:'menor_igual',  label:'≤'},
+];
+const BT_VALORES = [
+  {val:'mm9',  label:'MM 9'},
+  {val:'mm21', label:'MM 21'},
+  {val:'mm50', label:'MM 50'},
+  {val:'mm200',label:'MM 200'},
+  {val:'rsi',  label:'RSI'},
+  {val:'__num',label:'Valor numérico'},
+];
 
 function selecionarBtEstrategia(tipo, label){
   _btEstrategia = tipo;
-  // Destaca label selecionado
   document.querySelectorAll('#bt-estrategias label').forEach(l=>{
     l.style.borderColor = 'var(--border)';
     l.style.background  = 'none';
@@ -3005,55 +3099,159 @@ function selecionarBtEstrategia(tipo, label){
     label.style.borderColor = 'var(--green)';
     label.style.background  = 'rgba(22,163,74,0.06)';
   }
-  // Mostra/esconde parâmetros
-  document.getElementById('bt-params-mm').style.display  = tipo === 'medias_moveis' ? 'block' : 'none';
-  document.getElementById('bt-params-rsi').style.display = tipo === 'rsi'           ? 'block' : 'none';
+  document.getElementById('bt-params-mm').style.display          = tipo==='medias_moveis'  ? 'block':'none';
+  document.getElementById('bt-params-rsi').style.display         = tipo==='rsi'            ? 'block':'none';
+  document.getElementById('bt-params-personalizada').style.display= tipo==='personalizada' ? 'block':'none';
+}
+
+// ── Múltiplos ativos ─────────────
+function adicionarBtTicker(){
+  const input = document.getElementById('bt-ticker-input');
+  const t = input?.value?.trim().toUpperCase();
+  if(!t || _btTickers.includes(t)) return;
+  _btTickers.push(t);
+  input.value = '';
+  _renderBtTickers();
+}
+
+function removerBtTicker(t){
+  _btTickers = _btTickers.filter(x=>x!==t);
+  _renderBtTickers();
+}
+
+function _renderBtTickers(){
+  const el = document.getElementById('bt-tickers-lista');
+  if(!el) return;
+  el.innerHTML = _btTickers.map(t=>`
+    <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:20px;font-size:12px;font-weight:600">
+      ${t}
+      <span onclick="removerBtTicker('${t}')" style="cursor:pointer;color:var(--text3);font-size:14px;line-height:1">✕</span>
+    </span>`).join('');
+}
+
+// ── Regras personalizadas ─────────
+function adicionarRegra(tipo){
+  const id = Date.now();
+  const container = document.getElementById(`bt-regras-${tipo}`);
+  if(!container) return;
+  const div = document.createElement('div');
+  div.id = `regra-${id}`;
+  div.style.cssText = 'display:flex;gap:4px;align-items:center;flex-wrap:wrap';
+
+  const optInd  = BT_INDICADORES.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
+  const optOp   = BT_OPERADORES.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
+  const optVal  = BT_VALORES.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
+
+  div.innerHTML = `
+    <select class="bt-regra-ind" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--card);color:var(--text)">${optInd}</select>
+    <select class="bt-regra-op"  style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--card);color:var(--text)">${optOp}</select>
+    <select class="bt-regra-val" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--card);color:var(--text)" onchange="toggleValorNumerico(this,'num-${id}')">${optVal}</select>
+    <input type="number" id="num-${id}" placeholder="valor" style="display:none;width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--card);color:var(--text)">
+    <span onclick="document.getElementById('regra-${id}').remove()" style="cursor:pointer;color:#e53935;font-size:16px;padding:0 4px">✕</span>`;
+  container.appendChild(div);
+}
+
+function toggleValorNumerico(sel, numId){
+  const numEl = document.getElementById(numId);
+  if(numEl) numEl.style.display = sel.value === '__num' ? 'inline-block' : 'none';
+}
+
+function coletarRegras(tipo){
+  const container = document.getElementById(`bt-regras-${tipo}`);
+  if(!container) return [];
+  const regras = [];
+  container.querySelectorAll('[id^="regra-"]').forEach(div=>{
+    const ind = div.querySelector('.bt-regra-ind')?.value;
+    const op  = div.querySelector('.bt-regra-op')?.value;
+    const valSel = div.querySelector('.bt-regra-val')?.value;
+    const numEl  = div.querySelector('input[type="number"]');
+    const val = valSel === '__num' ? parseFloat(numEl?.value || 0) : valSel;
+    if(ind && op && val !== undefined) regras.push({indicador:ind, operador:op, valor:val});
+  });
+  return regras;
+}
+
+async function salvarEstrategiaPersonalizada(publica=false){
+  const nome = prompt('Nome da estratégia:');
+  if(!nome) return;
+  const regras = {
+    compra: { condicoes: coletarRegras('compra'), operador: document.getElementById('bt-op-compra')?.value || 'E' },
+    venda:  { condicoes: coletarRegras('venda'),  operador: document.getElementById('bt-op-venda')?.value  || 'E' },
+    stop_loss: parseFloat(document.getElementById('bt-stop-loss')?.value || '') || null,
+    stop_gain: parseFloat(document.getElementById('bt-stop-gain')?.value || '') || null,
+  };
+  const r = await fetch('/api/backtesting/estrategias', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({nome, regras, tipo:'personalizada', publica})
+  });
+  const d = await r.json();
+  if(d.ok) alert(`✅ Estratégia "${nome}" salva!${publica?' Publicada para a comunidade.':''}`);
+}
+
+function publicarEstrategiaPersonalizada(){
+  salvarEstrategiaPersonalizada(true);
 }
 
 async function executarBacktest(){
-  const ticker = document.getElementById('bt-ticker')?.value?.trim().toUpperCase();
-  const inicio = document.getElementById('bt-data-inicio')?.value;
-  const fim    = document.getElementById('bt-data-fim')?.value;
-  const capital= parseFloat(document.getElementById('bt-capital')?.value || '10000');
+  const tickers = _btTickers.length > 0 ? _btTickers : null;
+  const tickerSimples = document.getElementById('bt-ticker-input')?.value?.trim().toUpperCase();
 
-  if(!ticker){ alert('Informe o ticker do ativo'); return; }
+  if(!tickers && !tickerSimples){ alert('Adicione pelo menos um ativo'); return; }
+
+  const inicio  = document.getElementById('bt-data-inicio')?.value;
+  const fim     = document.getElementById('bt-data-fim')?.value;
+  const capital = parseFloat(document.getElementById('bt-capital')?.value || '10000');
+
   if(!inicio || !fim){ alert('Informe o período'); return; }
-  if(inicio >= fim){ alert('A data de início deve ser anterior à data fim'); return; }
+  if(inicio >= fim){ alert('Data de início deve ser anterior à data fim'); return; }
 
   const params = {
-    ticker, estrategia: _btEstrategia,
+    estrategia: _btEstrategia,
     data_inicio: inicio, data_fim: fim,
     capital_inicial: capital,
     parametros: {}
   };
 
   if(_btEstrategia === 'medias_moveis'){
-    params.parametros.mm_rapida = parseInt(document.getElementById('bt-mm-rapida')?.value || '9');
-    params.parametros.mm_lenta  = parseInt(document.getElementById('bt-mm-lenta')?.value  || '21');
+    params.parametros.mm_rapida = parseInt(document.getElementById('bt-mm-rapida')?.value||'9');
+    params.parametros.mm_lenta  = parseInt(document.getElementById('bt-mm-lenta')?.value||'21');
   } else if(_btEstrategia === 'rsi'){
-    params.parametros.rsi_compra = parseInt(document.getElementById('bt-rsi-compra')?.value || '30');
-    params.parametros.rsi_venda  = parseInt(document.getElementById('bt-rsi-venda')?.value  || '70');
+    params.parametros.rsi_compra = parseInt(document.getElementById('bt-rsi-compra')?.value||'30');
+    params.parametros.rsi_venda  = parseInt(document.getElementById('bt-rsi-venda')?.value||'70');
+  } else if(_btEstrategia === 'personalizada'){
+    params.regras = {
+      compra: { condicoes: coletarRegras('compra'), operador: document.getElementById('bt-op-compra')?.value||'E' },
+      venda:  { condicoes: coletarRegras('venda'),  operador: document.getElementById('bt-op-venda')?.value||'E' },
+      stop_loss: parseFloat(document.getElementById('bt-stop-loss')?.value||'')||null,
+      stop_gain: parseFloat(document.getElementById('bt-stop-gain')?.value||'')||null,
+    };
   }
 
   // Loading
   const resEl = document.getElementById('bt-resultado');
   resEl.innerHTML = `<div style="text-align:center;padding:4rem 2rem;color:var(--text3)">
-    <div style="font-size:32px;animation:spin 1s linear infinite;display:inline-block">⚙️</div>
-    <div style="font-size:14px;margin-top:1rem">Simulando ${ticker}...</div>
-    <div style="font-size:12px;margin-top:.5rem">Isso pode levar alguns segundos</div>
+    <div style="font-size:32px">⚙️</div>
+    <div style="font-size:14px;margin-top:1rem">Simulando...</div>
   </div>`;
 
   try{
-    const r = await fetch('/api/backtesting/executar', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(params)
+    let url, body;
+    const listaTickers = tickers || (tickerSimples ? [tickerSimples] : []);
+
+    if(listaTickers.length > 1){
+      url = '/api/backtesting/multiplos';
+      body = {...params, tickers: listaTickers};
+    } else {
+      url = '/api/backtesting/executar';
+      body = {...params, ticker: listaTickers[0]};
+    }
+
+    const r = await fetch(url, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
     });
     const d = await r.json();
-    if(d.erro){
-      resEl.innerHTML = `<div style="text-align:center;padding:2rem;color:#e53935">❌ ${d.erro}</div>`;
-      return;
-    }
+    if(d.erro){ resEl.innerHTML = `<div style="text-align:center;padding:2rem;color:#e53935">❌ ${d.erro}</div>`; return; }
     _renderBtResultado(d);
     carregarBtHistorico();
   }catch(e){
@@ -3213,6 +3411,54 @@ async function carregarBtHistorico(){
   }catch(e){}
 }
 
+let _comunidadeOrdem = 'retorno';
+async function filtrarComunidade(ordem){
+  _comunidadeOrdem = ordem;
+  ['retorno','sharpe','usos'].forEach(o=>{
+    const btn = document.getElementById(`btn-com-${o}`);
+    if(btn) btn.classList.toggle('active', o===ordem);
+  });
+  await carregarComunidade();
+}
+
+async function carregarComunidade(){
+  const el = document.getElementById('bt-comunidade');
+  if(!el) return;
+  try{
+    const r = await fetch('/api/backtesting/estrategias/publicas');
+    const lista = await r.json();
+    if(!lista?.length){
+      el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1.5rem">Nenhuma estratégia publicada ainda.<br>Seja o primeiro!</div>';
+      return;
+    }
+    // Ordena conforme filtro
+    const ordenado = [...lista].sort((a,b)=>{
+      if(_comunidadeOrdem==='sharpe') return (b.sharpe_medio||0)-(a.sharpe_medio||0);
+      if(_comunidadeOrdem==='usos')   return (b.usos||0)-(a.usos||0);
+      return (b.retorno_medio||0)-(a.retorno_medio||0);
+    });
+    el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem">
+      ${ordenado.slice(0,9).map(e=>`
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem">
+          <div style="font-size:13px;font-weight:700;margin-bottom:4px">${e.nome}</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">por ${e.autor||'Anônimo'} · ${e.usos||0} usos</div>
+          <div style="display:flex;gap:10px;font-size:12px">
+            ${e.retorno_medio!=null?`<div><div style="color:var(--text3);font-size:10px">Retorno médio</div><div style="font-weight:700;color:${e.retorno_medio>=0?'#16a34a':'#e53935'}">${e.retorno_medio>=0?'+':''}${e.retorno_medio?.toFixed(1)}%</div></div>`:''}
+            ${e.sharpe_medio!=null?`<div><div style="color:var(--text3);font-size:10px">Sharpe</div><div style="font-weight:700">${e.sharpe_medio?.toFixed(2)}</div></div>`:''}
+          </div>
+          ${e.descricao?`<div style="font-size:11px;color:var(--text2);margin-top:6px">${e.descricao}</div>`:''}
+          <button onclick="usarEstrategiaComunidade(${e.id})" class="btn" style="width:100%;margin-top:8px;font-size:11px;padding:5px">Usar esta estratégia</button>
+        </div>`).join('')}
+    </div>`;
+  }catch(e){
+    if(el) el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Erro ao carregar</div>';
+  }
+}
+
+async function usarEstrategiaComunidade(id){
+  alert('Em breve: carregar estratégia da comunidade e pré-preencher o formulário!');
+}
+
 function toggleMenuSec(){
   const m = document.getElementById('menu-sec');
   const o = document.getElementById('menu-sec-overlay');
@@ -3238,6 +3484,7 @@ function goPage(p,el){
     const dtFim = document.getElementById('bt-data-fim');
     if(dtFim && !dtFim.value) dtFim.value = hoje;
     carregarBtHistorico();
+    carregarComunidade();
   }
   if(p==='params'){ renderFontes(); carregarEstrategia(); }
   if(p==='carteira'){ renderCarteira(); carregarCarteira(); }
