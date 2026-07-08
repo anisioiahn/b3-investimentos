@@ -1023,14 +1023,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
             <div class="cockpit-card">
               <div class="cockpit-card-title">2️⃣ Ativos</div>
               <div id="bt-tickers-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-              <div style="display:flex;gap:6px">
-                <input type="text" id="bt-ticker-input" placeholder="Ex: BBAS3" maxlength="10"
-                  style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);text-transform:uppercase"
-                  oninput="this.value=this.value.toUpperCase()"
-                  onkeydown="if(event.key==='Enter')adicionarBtTicker()">
-                <button onclick="adicionarBtTicker()" class="btn" style="padding:8px 12px;font-size:13px">+ Add</button>
+              <div style="position:relative">
+                <div style="display:flex;gap:6px">
+                  <div style="flex:1;position:relative">
+                    <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px">🔍</span>
+                    <input type="text" id="bt-ticker-input" placeholder="Buscar ativo..."
+                      style="width:100%;padding:8px 12px 8px 32px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);box-sizing:border-box;text-transform:uppercase"
+                      oninput="this.value=this.value.toUpperCase();buscarBtTicker(this.value)"
+                      onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarBtTicker()}"
+                      autocomplete="off">
+                    <!-- Dropdown de busca -->
+                    <div id="bt-ticker-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:500;max-height:250px;overflow-y:auto"></div>
+                  </div>
+                  <button onclick="adicionarBtTicker()" class="btn" style="padding:8px 12px;font-size:13px;flex-shrink:0">+ Add</button>
+                </div>
               </div>
-              <div style="font-size:10px;color:var(--text3);margin-top:4px">Pressione Enter ou clique + para adicionar. Múltiplos ativos = carteira.</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:4px">Pesquise e selecione. Múltiplos ativos = carteira simulada.</div>
             </div>
 
             <!-- Período -->
@@ -3105,14 +3113,68 @@ function selecionarBtEstrategia(tipo, label){
 }
 
 // ── Múltiplos ativos ─────────────
-function adicionarBtTicker(){
+function adicionarBtTicker(ticker){
   const input = document.getElementById('bt-ticker-input');
-  const t = input?.value?.trim().toUpperCase();
-  if(!t || _btTickers.includes(t)) return;
-  _btTickers.push(t);
-  input.value = '';
-  _renderBtTickers();
+  const t = (ticker || input?.value?.trim()).toUpperCase();
+  const dd = document.getElementById('bt-ticker-dropdown');
+  if(!t) return;
+  if(!_btTickers.includes(t)) {
+    _btTickers.push(t);
+    _renderBtTickers();
+  }
+  if(input) input.value = '';
+  if(dd) dd.style.display = 'none';
 }
+
+let _btBuscaTimer = null;
+function buscarBtTicker(q){
+  const dd = document.getElementById('bt-ticker-dropdown');
+  if(!dd) return;
+  if(!q || q.length < 1){ dd.style.display='none'; return; }
+  clearTimeout(_btBuscaTimer);
+  _btBuscaTimer = setTimeout(()=>{
+    // Filtra dos dados em memória (setores)
+    const resultados = [];
+    const setores = Object.values(DADOS.setores||{});
+    const qLow = q.toLowerCase();
+    setores.forEach(s=>{
+      (s.empresas||[]).forEach(e=>{
+        if(!e.ticker) return;
+        if(e.ticker.toLowerCase().startsWith(qLow) ||
+           (e.nome||'').toLowerCase().includes(qLow)){
+          if(!resultados.find(r=>r.ticker===e.ticker)){
+            resultados.push({ticker:e.ticker, nome:e.nome||'', preco:e.preco, cor:e.cor||'#1e3a5f'});
+          }
+        }
+      });
+    });
+
+    if(!resultados.length){ dd.style.display='none'; return; }
+    dd.style.display = 'block';
+    dd.innerHTML = resultados.slice(0,8).map(r=>`
+      <div onclick="adicionarBtTicker('${r.ticker}')"
+        style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
+        onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+        <div style="width:32px;height:32px;border-radius:8px;background:${r.cor};overflow:hidden;flex-shrink:0">
+          <img src="https://icons.brapi.dev/icons/${r.ticker}.svg" style="width:100%;height:100%;object-fit:cover"
+            onerror="this.style.display='none';this.parentElement.innerHTML='<span style=font-size:9px;color:#fff;display:flex;align-items:center;justify-content:center;height:100%>${r.ticker.substring(0,4)}</span>'">
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700">${r.ticker}</div>
+          <div style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
+        </div>
+        ${r.preco ? `<div style="font-size:12px;font-weight:600">R$ ${r.preco.toFixed(2)}</div>` : ''}
+      </div>`).join('');
+  }, 200);
+}
+
+// Fecha dropdown ao clicar fora
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#bt-ticker-input') && !e.target.closest('#bt-ticker-dropdown')){
+    const dd = document.getElementById('bt-ticker-dropdown');
+    if(dd) dd.style.display = 'none';
+  }
+});
 
 function removerBtTicker(t){
   _btTickers = _btTickers.filter(x=>x!==t);
