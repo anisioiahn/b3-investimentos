@@ -1729,13 +1729,17 @@ if _db_ok:
                 except: pass
         conn_startup.close()
         print("[STARTUP] ✅ Tabelas verificadas", flush=True)
-        # Garante yfinance instalado
-        try:
-            import yfinance
-        except ImportError:
-            import subprocess, sys
-            subprocess.run([sys.executable, "-m", "pip", "install", "yfinance", "--break-system-packages", "-q"])
-            print("[STARTUP] ✅ yfinance instalado", flush=True)
+        # Garante yfinance instalado (em background para não travar o startup)
+        def _instalar_yfinance():
+            try:
+                import yfinance
+            except ImportError:
+                import subprocess, sys
+                subprocess.run([sys.executable, "-m", "pip", "install", "yfinance",
+                               "--break-system-packages", "-q"],
+                               timeout=120)
+                print("[STARTUP] ✅ yfinance instalado", flush=True)
+        threading.Thread(target=_instalar_yfinance, daemon=True).start()
         # Carga inicial do histórico se banco estiver vazio
         def _carga_inicial():
             try:
