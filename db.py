@@ -1412,24 +1412,30 @@ def db_init_backtesting_social_tables(conn):
         cur.execute("""
             CREATE TABLE IF NOT EXISTS backtesting_avaliacoes (
                 id SERIAL PRIMARY KEY,
-                estrategia_id INTEGER REFERENCES backtesting_estrategias(id) ON DELETE CASCADE,
+                estrategia_id INTEGER,
                 usuario_id INTEGER,
                 estrelas INTEGER CHECK (estrelas BETWEEN 1 AND 5),
                 created_at TEXT,
                 UNIQUE(estrategia_id, usuario_id)
-            );
+            )
+        """)
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS backtesting_comentarios (
                 id SERIAL PRIMARY KEY,
-                estrategia_id INTEGER REFERENCES backtesting_estrategias(id) ON DELETE CASCADE,
+                estrategia_id INTEGER,
                 usuario_id INTEGER,
                 nome_usuario TEXT,
                 comentario TEXT NOT NULL,
                 created_at TEXT
-            );
+            )
+        """)
+        cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_bt_aval_estrategia
-                ON backtesting_avaliacoes(estrategia_id);
+                ON backtesting_avaliacoes(estrategia_id)
+        """)
+        cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_bt_coment_estrategia
-                ON backtesting_comentarios(estrategia_id, created_at DESC);
+                ON backtesting_comentarios(estrategia_id, created_at DESC)
         """)
     conn.commit()
 
