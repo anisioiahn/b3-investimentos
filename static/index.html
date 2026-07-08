@@ -3734,12 +3734,12 @@ async function confirmarAvaliacao(eid){
     body: JSON.stringify({estrelas: _estrelaSelecionada})
   });
   const d = await r.json();
-  // Fecha modal de avaliação
-  document.querySelectorAll('div[style*="position:fixed"]').forEach(m=>m.remove());
   _estrelaSelecionada = 0;
-  if(d.ok){ 
-    alert('✅ Avaliação registrada!'); 
-    carregarComunidade(); 
+  // Fecha TODOS os modais
+  document.querySelectorAll('div[style*="position:fixed"]').forEach(m=>m.remove());
+  if(d.ok){
+    carregarComunidade();
+    alert('✅ Avaliação registrada!');
   } else {
     alert('❌ Erro ao avaliar');
   }
@@ -3814,23 +3814,10 @@ async function enviarComentario(eid){
   if(d.ok){
     if(ta) ta.value = '';
     if(btn){ btn.disabled=false; btn.textContent='Enviar comentário'; }
-
-    // Recarrega só a lista de comentários dentro do modal (sem fechar)
-    const listaEl = document.getElementById(`comentarios-lista-${eid}`);
-    if(listaEl){
-      const det = await fetch(`/api/backtesting/estrategias/${eid}/detalhes`);
-      const dados = await det.json();
-      const comentarios = dados.comentarios || [];
-      listaEl.innerHTML = comentarios.map(c=>`
-        <div style="background:var(--bg);border-radius:10px;padding:.75rem">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <span style="font-size:12px;font-weight:700">${c.nome_usuario}</span>
-            <span style="font-size:10px;color:var(--text3)">${new Date(c.created_at).toLocaleDateString('pt-BR')}</span>
-          </div>
-          <div style="font-size:12px;color:var(--text)">${c.comentario}</div>
-        </div>`).join('') || '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Nenhum comentário ainda</div>';
-    }
+    // Fecha TODOS os modais e volta para o backtesting
+    document.querySelectorAll('div[style*="position:fixed"]').forEach(m=>m.remove());
     carregarComunidade();
+    alert('✅ Comentário enviado!');
   } else {
     if(btn){ btn.disabled=false; btn.textContent='Enviar comentário'; }
     alert('❌ Erro ao comentar');
