@@ -3689,6 +3689,7 @@ async function carregarComunidade(){
 async function avaliarEstrategia(eid){
   // Modal de estrelas
   const modal = document.createElement('div');
+  modal.id = 'modal-avaliar';
   modal.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center';
   modal.innerHTML = `
     <div style="background:var(--card);border-radius:16px;padding:2rem;text-align:center;min-width:280px;box-shadow:0 16px 48px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
@@ -3735,14 +3736,10 @@ async function confirmarAvaliacao(eid){
   });
   const d = await r.json();
   _estrelaSelecionada = 0;
-  // Fecha TODOS os modais
-  document.querySelectorAll('div[style*="position:fixed"]').forEach(m=>m.remove());
-  if(d.ok){
-    carregarComunidade();
-    alert('✅ Avaliação registrada!');
-  } else {
-    alert('❌ Erro ao avaliar');
-  }
+  document.getElementById('modal-avaliar')?.remove();
+  document.getElementById('modal-detalhes')?.remove();
+  if(d.ok){ carregarComunidade(); alert('✅ Avaliação registrada!'); }
+  else alert('❌ Erro ao avaliar');
 }
 
 async function abrirDetalhesComunidade(eid, el){
@@ -3753,6 +3750,7 @@ async function abrirDetalhesComunidade(eid, el){
   const estrelas = d.estrelas || {};
 
   const modal = document.createElement('div');
+  modal.id = 'modal-detalhes';
   modal.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:1rem';
   modal.innerHTML = `
     <div style="background:var(--card);border-radius:16px;width:100%;max-width:540px;max-height:80vh;overflow-y:auto;padding:1.5rem;box-shadow:0 16px 48px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
@@ -3814,8 +3812,8 @@ async function enviarComentario(eid){
   if(d.ok){
     if(ta) ta.value = '';
     if(btn){ btn.disabled=false; btn.textContent='Enviar comentário'; }
-    // Fecha TODOS os modais e volta para o backtesting
-    document.querySelectorAll('div[style*="position:fixed"]').forEach(m=>m.remove());
+    document.getElementById('modal-detalhes')?.remove();
+    document.getElementById('modal-avaliar')?.remove();
     carregarComunidade();
     alert('✅ Comentário enviado!');
   } else {
