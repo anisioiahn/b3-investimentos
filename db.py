@@ -1247,3 +1247,87 @@ def db_total_historico(ticker=None):
         conn.close()
         return total
     except: return 0
+
+# ── BACKTESTING ───────────────────────────────────────────────
+def db_init_backtesting_tables(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS backtesting_resultados (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER,
+                ticker TEXT,
+                estrategia TEXT,
+                parametros JSONB,
+                data_inicio DATE,
+                data_fim DATE,
+                capital_inicial NUMERIC,
+                capital_final NUMERIC,
+                retorno_pct NUMERIC,
+                retorno_ibov NUMERIC,
+                retorno_cdi NUMERIC,
+                alpha NUMERIC,
+                drawdown_max NUMERIC,
+                sharpe NUMERIC,
+                n_operacoes INTEGER,
+                resultado_json JSONB,
+                created_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_bt_usuario
+                ON backtesting_resultados(usuario_id, created_at DESC);
+        """)
+    conn.commit()
+
+def db_salvar_backtest(uid, resultado, parametros):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    m   = resultado.get('metricas', {})
+    bm  = resultado.get('benchmarks', {})
+    try:
+        conn = get_conn()
+        import json
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO backtesting_resultados
+                    (usuario_id, ticker, estrategia, parametros,
+                     data_inicio, data_fim, capital_inicial, capital_final,
+                     retorno_pct, retorno_ibov, retorno_cdi, alpha,
+                     drawdown_max, sharpe, n_operacoes,
+                     resultado_json, created_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (
+                uid, resultado.get('ticker'), resultado.get('estrategia'),
+                json.dumps(parametros),
+                resultado.get('data_inicio'), resultado.get('data_fim'),
+                m.get('capital_inicial'), m.get('capital_final'),
+                m.get('retorno_pct'), bm.get('ibovespa',{}).get('retorno_pct'),
+                bm.get('cdi',{}).get('retorno_pct'), bm.get('alpha_ibov'),
+                m.get('drawdown_max'), m.get('sharpe'), m.get('n_operacoes'),
+                json.dumps(resultado), now
+            ))
+            row = cur.fetchone()
+        conn.commit(); conn.close()
+        return row[0] if row else None
+    except Exception as e:
+        print(f"[DB] Erro salvar backtest: {e}", flush=True)
+        return None
+
+def db_listar_backtests(uid, limit=10):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, ticker, estrategia, data_inicio, data_fim,
+                       capital_inicial, capital_final, retorno_pct,
+                       retorno_ibov, alpha, drawdown_max, sharpe,
+                       n_operacoes, created_at
+                FROM backtesting_resultados
+                WHERE usuario_id=%s
+                ORDER BY created_at DESC LIMIT %s
+            """, (uid, limit))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro listar backtests: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
