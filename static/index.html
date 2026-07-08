@@ -3357,7 +3357,14 @@ function _renderBtResultado(d){
           <div style="font-size:12px;color:var(--text3)">${d.data_inicio} → ${d.data_fim} · ${d.n_dias} dias úteis</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="_publicarBtResultado('${d.estrategia}',${JSON.stringify(d).replace(/'/g,"\\'")})" class="btn"
+          <button onclick="_publicarBtResultado('${d.estrategia}',${JSON.stringify({
+            ticker: d.ticker||null,
+            tickers: d.tickers||null,
+            metricas: d.metricas,
+            benchmarks: d.benchmarks,
+            regras: d.regras||null,
+            parametros: d.parametros||null
+          }).replace(/"/g,'&quot;')})" class="btn"
             style="font-size:12px;padding:6px 12px;border-color:#f59e0b;color:#f59e0b">
             🌐 Publicar na Comunidade
           </button>
@@ -3470,28 +3477,34 @@ function _renderBtResultado(d){
   }, 100);
 }
 
-async function _publicarBtResultado(estrategia, resultado){
+async function _publicarBtResultado(estrategia, dadosStr){
+  let dados;
+  try{ dados = typeof dadosStr === 'string' ? JSON.parse(dadosStr.replace(/&quot;/g,'"')) : dadosStr; }
+  catch(e){ dados = {}; }
+
   const nomeEst = {
     'buy_hold':'Buy & Hold','medias_moveis':'Médias Móveis',
     'rsi':'RSI / IFR','janus_score':'Janus Score','personalizada':'Personalizada'
   };
-  const ticker = resultado.ticker || resultado.tickers?.join('+') || '';
-  const sugestao = `${nomeEst[estrategia]||estrategia} — ${ticker}`;
-  const nome = prompt('Nome para a estratégia na comunidade:', sugestao);
+  const ticker = dados.ticker || dados.tickers?.join('+') || '';
+  const sugestao = `${nomeEst[estrategia]||estrategia}${ticker?' — '+ticker:''}`;
+  const nome = prompt('Nome para publicar na comunidade:', sugestao);
   if(!nome) return;
-  const descricao = prompt('Descrição (opcional):') || '';
-  const m  = resultado.metricas || {};
-  const bm = resultado.benchmarks || {};
+  const descricao = prompt('Descrição (opcional — ex: "Funciona bem em tendência de alta"):') || '';
+
+  const m  = dados.metricas  || {};
+  const bm = dados.benchmarks || {};
+
   const r = await fetch('/api/backtesting/estrategias', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
       nome, descricao,
       tipo: estrategia,
-      regras: resultado.regras || {estrategia, parametros: resultado.parametros},
+      regras: dados.regras || {estrategia, parametros: dados.parametros||{}},
       publica: true,
-      retorno_medio: m.retorno_pct,
-      sharpe_medio: m.sharpe,
+      retorno_medio: m.retorno_pct || null,
+      sharpe_medio:  m.sharpe      || null,
     })
   });
   const d = await r.json();
@@ -3499,8 +3512,26 @@ async function _publicarBtResultado(estrategia, resultado){
     alert(`✅ "${nome}" publicada na comunidade!`);
     carregarComunidade();
   } else {
-    alert('❌ Erro ao publicar');
+    alert('❌ Erro ao publicar. Tente novamente.');
   }
+}
+
+async function publicarSimulacao(btId, estrategia, ticker){
+  const nomeEst = {
+    'buy_hold':'Buy & Hold','medias_moveis':'Médias Móveis',
+    'rsi':'RSI / IFR','janus_score':'Janus Score','personalizada':'Personalizada'
+  };
+  const sugestao = `${nomeEst[estrategia]||estrategia}${ticker?' — '+ticker:''}`;
+  const nome = prompt('Nome para publicar na comunidade:', sugestao);
+  if(!nome) return;
+  const descricao = prompt('Descrição (opcional):') || '';
+  const r = await fetch('/api/backtesting/estrategias', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({nome, descricao, tipo: estrategia, regras:{estrategia}, publica:true})
+  });
+  const d = await r.json();
+  if(d.ok){ alert(`✅ "${nome}" publicada!`); carregarComunidade(); }
+  else alert('❌ Erro ao publicar.');
 }
 
 async function _aplicarBtAlerta(ticker, estrategia){
@@ -3570,8 +3601,14 @@ async function carregarBtHistorico(){
               <td style="padding:8px 8px;text-align:right;color:${corAlpha}">${fmtPct(b.alpha)}</td>
               <td style="padding:8px 8px;text-align:right">${b.sharpe!=null&&!isNaN(b.sharpe)?parseFloat(b.sharpe).toFixed(2):'—'}</td>
               <td style="padding:8px 8px;text-align:right;color:#e53935">${b.drawdown_max!=null&&!isNaN(b.drawdown_max)?parseFloat(b.drawdown_max).toFixed(1)+'%':'—'}</td>
-              <td style="padding:8px 8px;text-align:center">
+              <td style="padding:8px 8px;text-align:center;white-space:nowrap">
+                <button onclick="publicarSimulacao(${b.id},'${b.estrategia}','${ticker}')"
+                  title="Publicar na comunidade"
+                  style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3);margin-right:4px"
+                  onmouseover="this.style.borderColor='#f59e0b';this.style.color='#f59e0b'"
+                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">🌐</button>
                 <button onclick="excluirBtSimulacao(${b.id})"
+                  title="Excluir"
                   style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3)"
                   onmouseover="this.style.borderColor='#e53935';this.style.color='#e53935'"
                   onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">✕</button>
@@ -3621,25 +3658,155 @@ async function carregarComunidade(){
       return (b.retorno_medio||0)-(a.retorno_medio||0);
     });
     el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem">
-      ${ordenado.slice(0,9).map(e=>`
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem">
-          <div style="font-size:13px;font-weight:700;margin-bottom:4px">${e.nome}</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">por ${e.autor||'Anônimo'} · ${e.usos||0} usos</div>
-          <div style="display:flex;gap:10px;font-size:12px">
-            ${e.retorno_medio!=null?`<div><div style="color:var(--text3);font-size:10px">Retorno médio</div><div style="font-weight:700;color:${e.retorno_medio>=0?'#16a34a':'#e53935'}">${e.retorno_medio>=0?'+':''}${e.retorno_medio?.toFixed(1)}%</div></div>`:''}
-            ${e.sharpe_medio!=null?`<div><div style="color:var(--text3);font-size:10px">Sharpe</div><div style="font-weight:700">${e.sharpe_medio?.toFixed(2)}</div></div>`:''}
+      ${ordenado.slice(0,9).map(e=>{
+        const estrelas = parseFloat(e.media_estrelas||0);
+        const starsHtml = [1,2,3,4,5].map(s=>
+          `<span style="color:${s<=Math.round(estrelas)?'#f59e0b':'var(--border)';font-size:14px">★</span>`
+        ).join('');
+        return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem">
+          <div style="font-size:13px;font-weight:700;margin-bottom:2px">${e.nome}</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">por ${e.autor||'Anônimo'} · ${e.usos||0} usos</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div>${starsHtml}</div>
+            <span style="font-size:11px;color:var(--text3)">${estrelas>0?estrelas.toFixed(1)+' ('+e.total_avaliacoes+')':'Sem avaliações'}</span>
           </div>
-          ${e.descricao?`<div style="font-size:11px;color:var(--text2);margin-top:6px">${e.descricao}</div>`:''}
-          <button onclick="usarEstrategiaComunidade(${e.id})" class="btn" style="width:100%;margin-top:8px;font-size:11px;padding:5px">Usar esta estratégia</button>
-        </div>`).join('')}
+          <div style="display:flex;gap:10px;font-size:12px;margin-bottom:8px">
+            ${e.retorno_medio!=null?`<div><div style="color:var(--text3);font-size:10px">Retorno médio</div><div style="font-weight:700;color:${e.retorno_medio>=0?'#16a34a':'#e53935'}">${e.retorno_medio>=0?'+':''}${parseFloat(e.retorno_medio).toFixed(1)}%</div></div>`:''}
+          </div>
+          ${e.descricao?`<div style="font-size:11px;color:var(--text2);margin-bottom:8px;border-left:2px solid var(--border);padding-left:6px">${e.descricao}</div>`:''}
+          <div style="display:flex;gap:4px">
+            <button onclick="abrirDetalhesComunidade(${e.id},'${(e.nome||'').replace(/'/g,'\\'')}')" class="btn" style="flex:1;font-size:11px;padding:5px">💬 Ver (${e.total_comentarios||0})</button>
+            <button onclick="avaliarEstrategia(${e.id})" class="btn" style="font-size:11px;padding:5px">⭐ Avaliar</button>
+          </div>
+        </div>`;
+      }).join('')}
     </div>`;
   }catch(e){
     if(el) el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Erro ao carregar</div>';
   }
 }
 
-async function usarEstrategiaComunidade(id){
-  alert('Em breve: carregar estratégia da comunidade e pré-preencher o formulário!');
+async function avaliarEstrategia(eid){
+  // Modal de estrelas
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:2rem;text-align:center;min-width:280px;box-shadow:0 16px 48px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
+      <div style="font-size:16px;font-weight:700;margin-bottom:1rem">⭐ Avaliar estratégia</div>
+      <div style="display:flex;justify-content:center;gap:8px;margin-bottom:1.5rem" id="star-container">
+        ${[1,2,3,4,5].map(s=>`
+          <span data-star="${s}" onclick="selecionarEstrela(${s})"
+            style="font-size:36px;cursor:pointer;color:var(--border);transition:color .15s"
+            onmouseover="destacarEstrelas(${s})" onmouseout="resetEstrelas()">★</span>`).join('')}
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:1rem" id="star-label">Selecione uma avaliação</div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button onclick="this.closest('div[style*=fixed]').remove()" class="btn" style="padding:8px 16px">Cancelar</button>
+        <button onclick="confirmarAvaliacao(${eid})" class="btn" style="padding:8px 16px;background:var(--green);color:#fff;border-color:var(--green)">Confirmar</button>
+      </div>
+    </div>`;
+  modal.onclick = ()=>modal.remove();
+  document.body.appendChild(modal);
+}
+
+let _estrelaSelecionada = 0;
+const _starLabels = ['','Péssima','Ruim','Regular','Boa','Excelente'];
+
+function destacarEstrelas(n){
+  document.querySelectorAll('#star-container span').forEach(s=>{
+    s.style.color = parseInt(s.dataset.star) <= n ? '#f59e0b' : 'var(--border)';
+  });
+  const lbl = document.getElementById('star-label');
+  if(lbl) lbl.textContent = _starLabels[n] || '';
+}
+function resetEstrelas(){
+  destacarEstrelas(_estrelaSelecionada);
+}
+function selecionarEstrela(n){
+  _estrelaSelecionada = n;
+  destacarEstrelas(n);
+}
+
+async function confirmarAvaliacao(eid){
+  if(!_estrelaSelecionada){ alert('Selecione uma avaliação'); return; }
+  const r = await fetch(`/api/backtesting/estrategias/${eid}/avaliar`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({estrelas: _estrelaSelecionada})
+  });
+  const d = await r.json();
+  document.querySelector('div[style*="position:fixed"][style*="z-index:1000"]')?.remove();
+  _estrelaSelecionada = 0;
+  if(d.ok){ alert('✅ Avaliação registrada!'); carregarComunidade(); }
+  else alert('❌ Erro ao avaliar');
+}
+
+async function abrirDetalhesComunidade(eid, nome){
+  const r = await fetch(`/api/backtesting/estrategias/${eid}/detalhes`);
+  const d = await r.json();
+  const comentarios = d.comentarios || [];
+  const estrelas = d.estrelas || {};
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;width:100%;max-width:540px;max-height:80vh;overflow-y:auto;padding:1.5rem;box-shadow:0 16px 48px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <div style="font-size:15px;font-weight:700">${nome}</div>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text3)">✕</button>
+      </div>
+
+      <!-- Estrelas -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
+        <div>${[1,2,3,4,5].map(s=>`<span style="color:${s<=Math.round(estrelas.media||0)?'#f59e0b':'var(--border)';font-size:18px">★</span>`).join('')}</div>
+        <span style="font-size:13px;font-weight:700">${estrelas.media||0}</span>
+        <span style="font-size:12px;color:var(--text3)">(${estrelas.total||0} avaliações)</span>
+        ${estrelas.minha_avaliacao?`<span style="font-size:11px;color:var(--green);margin-left:auto">Sua avaliação: ${'★'.repeat(estrelas.minha_avaliacao)}</span>`:''}
+      </div>
+
+      <!-- Comentários -->
+      <div style="font-size:13px;font-weight:700;margin-bottom:.75rem">💬 Comentários (${comentarios.length})</div>
+      <div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem;max-height:250px;overflow-y:auto">
+        ${comentarios.length ? comentarios.map(c=>`
+          <div style="background:var(--bg);border-radius:10px;padding:.75rem">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span style="font-size:12px;font-weight:700">${c.nome_usuario}</span>
+              <span style="font-size:10px;color:var(--text3)">${new Date(c.created_at).toLocaleDateString('pt-BR')}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text)">${c.comentario}</div>
+          </div>`).join('')
+          : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Seja o primeiro a comentar!</div>'}
+      </div>
+
+      <!-- Novo comentário -->
+      <div style="border-top:1px solid var(--border);padding-top:1rem">
+        <textarea id="novo-comentario-${eid}" placeholder="Escreva seu comentário sobre esta estratégia..."
+          style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;min-height:70px;background:var(--card);color:var(--text);font-family:inherit;box-sizing:border-box"></textarea>
+        <button onclick="enviarComentario(${eid})" class="btn"
+          style="width:100%;margin-top:6px;padding:8px;background:var(--green);color:#fff;border-color:var(--green);font-size:13px">
+          Enviar comentário
+        </button>
+      </div>
+    </div>`;
+  modal.onclick = ()=>modal.remove();
+  document.body.appendChild(modal);
+}
+
+async function enviarComentario(eid){
+  const ta = document.getElementById(`novo-comentario-${eid}`);
+  const comentario = ta?.value?.trim();
+  if(!comentario){ alert('Escreva um comentário'); return; }
+  const r = await fetch(`/api/backtesting/estrategias/${eid}/comentar`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({comentario})
+  });
+  const d = await r.json();
+  if(d.ok){
+    if(ta) ta.value = '';
+    // Recarrega o modal
+    document.querySelector('div[style*="position:fixed"][style*="z-index:1000"]')?.remove();
+    const nomeCached = document.querySelector(`[onclick*="abrirDetalhesComunidade(${eid}"]`)?.closest('.card')?.querySelector('.nome')?.textContent || '';
+    await abrirDetalhesComunidade(eid, nomeCached || 'Estratégia');
+  } else alert('❌ Erro ao comentar');
 }
 
 function toggleMenuSec(){
