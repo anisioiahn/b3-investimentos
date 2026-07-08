@@ -3070,15 +3070,15 @@ let _btTickers = [];
 let _btRegras = { compra: [], venda: [] };
 
 const BT_INDICADORES = [
-  {val:'preco',  label:'Preço'},
-  {val:'mm9',    label:'MM 9'},
-  {val:'mm21',   label:'MM 21'},
-  {val:'mm50',   label:'MM 50'},
-  {val:'mm200',  label:'MM 200'},
-  {val:'rsi',    label:'RSI'},
-  {val:'macd',   label:'MACD'},
-  {val:'bb_sup', label:'Bollinger Superior'},
-  {val:'bb_inf', label:'Bollinger Inferior'},
+  {val:'preco',  label:'Preço',              hint:'Preço de fechamento do ativo no dia'},
+  {val:'mm9',    label:'MM 9',               hint:'Média Móvel de 9 dias — tendência de curto prazo'},
+  {val:'mm21',   label:'MM 21',              hint:'Média Móvel de 21 dias — tendência de médio prazo'},
+  {val:'mm50',   label:'MM 50',              hint:'Média Móvel de 50 dias — tendência intermediária'},
+  {val:'mm200',  label:'MM 200',             hint:'Média Móvel de 200 dias — tendência de longo prazo'},
+  {val:'rsi',    label:'RSI',                hint:'Índice de Força Relativa (0-100). Abaixo de 30 = sobrevendido, acima de 70 = sobrecomprado'},
+  {val:'macd',   label:'MACD',               hint:'Diferença entre EMA12 e EMA26. Positivo = tendência de alta'},
+  {val:'bb_sup', label:'Bollinger Superior', hint:'Banda superior de Bollinger. Preço acima = sobrecomprado'},
+  {val:'bb_inf', label:'Bollinger Inferior', hint:'Banda inferior de Bollinger. Preço abaixo = sobrevendido'},
 ];
 const BT_OPERADORES = [
   {val:'cruza_acima',  label:'cruza acima de'},
@@ -3198,19 +3198,34 @@ function adicionarRegra(tipo){
   if(!container) return;
   const div = document.createElement('div');
   div.id = `regra-${id}`;
-  div.style.cssText = 'display:flex;gap:4px;align-items:center;flex-wrap:wrap';
+  div.style.cssText = 'display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:6px;background:var(--card);border:1px solid var(--border);border-radius:8px';
 
-  const optInd  = BT_INDICADORES.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
-  const optOp   = BT_OPERADORES.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
-  const optVal  = BT_VALORES.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
+  const optInd = BT_INDICADORES.map(o=>`<option value="${o.val}" title="${o.hint}">${o.label}</option>`).join('');
+  const optOp  = BT_OPERADORES.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
+  const optVal = BT_VALORES.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
+
+  const selectStyle = 'padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg);color:var(--text);cursor:pointer';
 
   div.innerHTML = `
-    <select class="bt-regra-ind" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--card);color:var(--text)">${optInd}</select>
-    <select class="bt-regra-op"  style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--card);color:var(--text)">${optOp}</select>
-    <select class="bt-regra-val" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--card);color:var(--text)" onchange="toggleValorNumerico(this,'num-${id}')">${optVal}</select>
-    <input type="number" id="num-${id}" placeholder="valor" style="display:none;width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--card);color:var(--text)">
-    <span onclick="document.getElementById('regra-${id}').remove()" style="cursor:pointer;color:#e53935;font-size:16px;padding:0 4px">✕</span>`;
+    <div style="position:relative;display:flex;align-items:center;gap:4px;flex:1;flex-wrap:wrap">
+      <select class="bt-regra-ind" style="${selectStyle}" onchange="mostrarHintIndicador(this,'hint-${id}')">
+        ${optInd}
+      </select>
+      <select class="bt-regra-op" style="${selectStyle}">${optOp}</select>
+      <select class="bt-regra-val" style="${selectStyle}" onchange="toggleValorNumerico(this,'num-${id}')">
+        ${optVal}
+      </select>
+      <input type="number" id="num-${id}" placeholder="valor" style="display:none;width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg);color:var(--text)">
+      <span onclick="document.getElementById('regra-${id}').remove()" style="cursor:pointer;color:#e53935;font-size:16px;padding:0 4px;line-height:1">✕</span>
+    </div>
+    <div id="hint-${id}" style="width:100%;font-size:10px;color:var(--text3);padding:2px 4px;font-style:italic">${BT_INDICADORES[0].hint}</div>`;
   container.appendChild(div);
+}
+
+function mostrarHintIndicador(sel, hintId){
+  const ind = BT_INDICADORES.find(i=>i.val===sel.value);
+  const el  = document.getElementById(hintId);
+  if(el && ind) el.textContent = ind.hint;
 }
 
 function toggleValorNumerico(sel, numId){
