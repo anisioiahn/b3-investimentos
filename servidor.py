@@ -871,6 +871,84 @@ def api_historico(ticker):
     _cache_historico[cache_key] = {"data": resp, "ts": agora_ts}
     return jsonify(resp)
 
+# ── BACKTESTING ───────────────────────────────────────────────
+_bt_rodando = {}  # uid → True/False
+
+@app.route("/api/backtesting/executar", methods=["POST"])
+@requer_auth
+def api_bt_executar():
+    u = uid()
+    if _bt_rodando.get(u):
+        return jsonify({"erro": "Já existe uma simulação em andamento"}), 409
+    params = request.json or {}
+    resultado_container = {}
+
+    def _rodar():
+        _bt_rodando[u] = True
+        try:
+            from backtesting_engine import executar_backtest
+            resultado = executar_backtest(params)
+            resultado_container['resultado'] = resultado
+            if 'erro' not in resultado:
+                db.db_salvar_backtest(u, resultado, params)
+        except Exception as e:
+            print(f"[BT] Erro: {e}", flush=True)
+            resultado_container['resultado'] = {'erro': str(e)}
+        finally:
+            _bt_rodando[u] = False
+
+    t = threading.Thread(target=_rodar, daemon=True)
+    t.start()
+    t.join(timeout=60)  # aguarda até 60s — backtests rápidos respondem direto
+
+    resultado = resultado_container.get('resultado')
+    if not resultado:
+        return jsonify({"erro": "Timeout — simulação muito longa"}), 504
+    if 'erro' in resultado:
+        return jsonify(resultado), 400
+    return jsonify(resultado)
+
+@app.route("/api/backtesting/historico")
+@requer_auth
+def api_bt_historico():
+    return jsonify(db.db_listar_backtests(uid()))
+
+@app.route("/api/backtesting/aplicar-alerta", methods=["POST"])
+@requer_auth
+def api_bt_aplicar_alerta():
+    """Converte uma estratégia de backtest em alertas ativos."""
+    d = request.json or {}
+    ticker    = d.get('ticker', '').upper()
+    estrategia= d.get('estrategia', '')
+    params_bt = d.get('parametros', {})
+
+    # Cria alertas baseados na estratégia
+    alertas_criados = []
+    try:
+        conn = db.get_conn()
+        if estrategia == 'medias_moveis':
+            mm_r = params_bt.get('mm_rapida', 9)
+            mm_l = params_bt.get('mm_lenta', 21)
+            msg_compra = f"MM{mm_r} cruzou acima da MM{mm_l} — Sinal de COMPRA"
+            msg_venda  = f"MM{mm_r} cruzou abaixo da MM{mm_l} — Sinal de VENDA"
+            alertas_criados = [
+                {'ticker': ticker, 'tipo': 'ESTRATEGIA', 'mensagem': msg_compra},
+                {'ticker': ticker, 'tipo': 'ESTRATEGIA', 'mensagem': msg_venda},
+            ]
+        elif estrategia == 'rsi':
+            rc = params_bt.get('rsi_compra', 30)
+            rv = params_bt.get('rsi_venda', 70)
+            alertas_criados = [
+                {'ticker': ticker, 'tipo': 'ESTRATEGIA', 'mensagem': f"RSI abaixo de {rc} — Sinal de COMPRA"},
+                {'ticker': ticker, 'tipo': 'ESTRATEGIA', 'mensagem': f"RSI acima de {rv} — Sinal de VENDA"},
+            ]
+        conn.close()
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+    return jsonify({"ok": True, "alertas": alertas_criados,
+                    "mensagem": f"Estratégia aplicada para {ticker}"})
+
 @app.route("/api/teste-brapi/<ticker>")
 @requer_auth
 def api_teste_brapi(ticker):
@@ -1525,6 +1603,7 @@ if _db_ok:
         db.db_init_agenda_tables(conn_startup)
         db.db_init_estrategia_table(conn_startup)
         db.db_init_historico_table(conn_startup)
+        db.db_init_backtesting_tables(conn_startup)
         conn_startup.close()
         print("[STARTUP] ✅ Todas as tabelas verificadas", flush=True)
         # Garante yfinance instalado
