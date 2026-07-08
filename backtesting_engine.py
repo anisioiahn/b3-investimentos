@@ -456,6 +456,12 @@ def executar_backtest(params):
         sv = int(extra.get('score_venda', 60))
         operacoes, patrimonio, datas = simular_janus_score(df, capital_ini, sc, sv)
 
+    elif estrategia == 'personalizada':
+        regras = params.get('regras', {})
+        if not regras.get('compra') and not regras.get('venda'):
+            return {'erro': 'Estratégia personalizada sem regras definidas'}
+        operacoes, patrimonio, datas = simular_personalizada(df, capital_ini, regras)
+
     else:
         return {'erro': f'Estratégia desconhecida: {estrategia}'}
 
@@ -503,4 +509,294 @@ def executar_backtest(params):
         },
         'operacoes':   operacoes,
         'n_dias':      len(df),
+    }
+
+# ── ESTRATÉGIA PERSONALIZADA ──────────────────────────────────
+
+def avaliar_condicao(row, row_ant, indicadores, condicao):
+    """
+    Avalia uma condição individual.
+    condicao = {
+        'indicador': 'mm9' | 'mm21' | 'rsi' | 'macd' | 'preco' | 'janus_score',
+        'operador':  'cruza_acima' | 'cruza_abaixo' | 'maior' | 'menor' | 'igual',
+        'valor':     'mm21' | 'mm50' | 30 | 70 | ...
+    }
+    """
+    ind  = condicao.get('indicador', '')
+    op   = condicao.get('operador', '')
+    val  = condicao.get('valor', 0)
+
+    def get_val(nome, r):
+        """Pega valor de um indicador no row."""
+        mapa = {
+            'preco': 'close', 'mm9': 'mm9', 'mm21': 'mm21',
+            'mm50': 'mm50', 'mm200': 'mm200', 'rsi': 'rsi',
+            'macd': 'macd', 'macd_signal': 'macd_signal',
+            'bb_sup': 'bb_sup', 'bb_inf': 'bb_inf',
+        }
+        col = mapa.get(nome, nome)
+        v = r.get(col)
+        return float(v) if v is not None and not (isinstance(v, float) and np.isnan(v)) else None
+
+    v_atual = get_val(ind, row)
+    if v_atual is None: return False
+
+    # Valor de comparação — pode ser número ou outro indicador
+    if isinstance(val, str):
+        v_comp = get_val(val, row)
+        v_comp_ant = get_val(val, row_ant) if row_ant else None
+    else:
+        v_comp = float(val)
+        v_comp_ant = float(val)
+
+    if v_comp is None: return False
+
+    v_ant = get_val(ind, row_ant) if row_ant else None
+
+    # Operadores
+    if op == 'maior':        return v_atual > v_comp
+    if op == 'menor':        return v_atual < v_comp
+    if op == 'igual':        return abs(v_atual - v_comp) < 0.01
+    if op == 'maior_igual':  return v_atual >= v_comp
+    if op == 'menor_igual':  return v_atual <= v_comp
+    if op == 'cruza_acima':
+        return v_ant is not None and v_comp_ant is not None and v_ant <= v_comp_ant and v_atual > v_comp
+    if op == 'cruza_abaixo':
+        return v_ant is not None and v_comp_ant is not None and v_ant >= v_comp_ant and v_atual < v_comp
+
+    return False
+
+def avaliar_grupo_condicoes(row, row_ant, indicadores, condicoes, operador_logico='E'):
+    """Avalia um grupo de condições com AND ou OR."""
+    if not condicoes: return False
+    resultados = [avaliar_condicao(row, row_ant, indicadores, c) for c in condicoes]
+    if operador_logico == 'OU':
+        return any(resultados)
+    return all(resultados)  # E (padrão)
+
+def simular_personalizada(df, capital_inicial, regras):
+    """
+    Simula estratégia com regras personalizadas.
+    regras = {
+        'compra': {
+            'condicoes': [...],
+            'operador': 'E' | 'OU'
+        },
+        'venda': {
+            'condicoes': [...],
+            'operador': 'E' | 'OU'
+        },
+        'stop_loss': -10,    # opcional, % de perda máxima
+        'stop_gain': 30,     # opcional, % de ganho alvo
+    }
+    """
+    df = calcular_indicadores(df)
+    df_dict = df.reset_index().to_dict('records')
+
+    capital    = capital_inicial
+    posicao    = 0.0
+    em_posicao = False
+    preco_entrada = 0.0
+    data_entrada  = None
+    operacoes  = []
+    patrimonio = []
+    datas      = []
+
+    regras_compra = regras.get('compra', {})
+    regras_venda  = regras.get('venda',  {})
+    stop_loss     = regras.get('stop_loss')
+    stop_gain     = regras.get('stop_gain')
+
+    for i, row in enumerate(df_dict):
+        row_ant = df_dict[i-1] if i > 0 else None
+        preco   = float(row.get('close', 0))
+        if not preco: continue
+        data_str = str(row.get('data', ''))[:10]
+
+        # Verifica stop loss/gain se em posição
+        if em_posicao and preco_entrada > 0:
+            var_pct = (preco - preco_entrada) / preco_entrada * 100
+            if stop_loss and var_pct <= stop_loss:
+                capital = posicao * preco
+                operacoes.append({
+                    'tipo': 'VENDA', 'data': data_str, 'motivo': 'STOP_LOSS',
+                    'preco': round(preco, 2), 'quantidade': round(posicao, 4),
+                    'valor': round(capital, 2),
+                    'resultado_pct': round(var_pct, 2),
+                })
+                posicao = 0.0; em_posicao = False
+            elif stop_gain and var_pct >= stop_gain:
+                capital = posicao * preco
+                operacoes.append({
+                    'tipo': 'VENDA', 'data': data_str, 'motivo': 'STOP_GAIN',
+                    'preco': round(preco, 2), 'quantidade': round(posicao, 4),
+                    'valor': round(capital, 2),
+                    'resultado_pct': round(var_pct, 2),
+                })
+                posicao = 0.0; em_posicao = False
+
+        # Sinal de compra
+        if not em_posicao:
+            conds = regras_compra.get('condicoes', [])
+            op_log = regras_compra.get('operador', 'E')
+            if conds and avaliar_grupo_condicoes(row, row_ant, df, conds, op_log):
+                posicao       = capital / preco
+                preco_entrada = preco
+                data_entrada  = data_str
+                em_posicao    = True
+                operacoes.append({
+                    'tipo': 'COMPRA', 'data': data_str,
+                    'preco': round(preco, 2), 'quantidade': round(posicao, 4),
+                    'valor': round(capital, 2),
+                })
+
+        # Sinal de venda
+        elif em_posicao:
+            conds = regras_venda.get('condicoes', [])
+            op_log = regras_venda.get('operador', 'E')
+            if conds and avaliar_grupo_condicoes(row, row_ant, df, conds, op_log):
+                capital = posicao * preco
+                var_pct = (preco - preco_entrada) / preco_entrada * 100
+                operacoes.append({
+                    'tipo': 'VENDA', 'data': data_str,
+                    'preco': round(preco, 2), 'quantidade': round(posicao, 4),
+                    'valor': round(capital, 2),
+                    'resultado_pct': round(var_pct, 2),
+                })
+                posicao = 0.0; em_posicao = False
+
+        pat = posicao * preco if em_posicao else capital
+        patrimonio.append(pat)
+        datas.append(data_str)
+
+    # Fecha posição aberta no final
+    if em_posicao and df_dict:
+        preco_final = float(df_dict[-1].get('close', 0))
+        if preco_final:
+            capital = posicao * preco_final
+            var_pct = (preco_final - preco_entrada) / preco_entrada * 100
+            operacoes.append({
+                'tipo': 'VENDA', 'data': datas[-1] if datas else '',
+                'preco': round(preco_final, 2), 'quantidade': round(posicao, 4),
+                'valor': round(capital, 2), 'resultado_pct': round(var_pct, 2),
+            })
+
+    return operacoes, patrimonio, datas
+
+# ── MÚLTIPLOS ATIVOS ──────────────────────────────────────────
+
+def executar_backtest_multiplos(params):
+    """
+    Executa backtest em múltiplos ativos com alocação configurável.
+    params = {
+        'tickers': ['BBAS3', 'VALE3', 'PETR4'],
+        'alocacao': {'BBAS3': 33, 'VALE3': 33, 'PETR4': 34},  # % por ativo
+        'estrategia': 'buy_hold' | 'medias_moveis' | 'rsi' | 'personalizada',
+        'data_inicio': '2021-01-01',
+        'data_fim': '2026-07-07',
+        'capital_inicial': 10000,
+        'parametros': {},
+        'regras': {},  # para estratégia personalizada
+    }
+    """
+    tickers     = params.get('tickers', [])
+    alocacao    = params.get('alocacao', {})
+    estrategia  = params.get('estrategia', 'buy_hold')
+    data_inicio = datetime.strptime(params.get('data_inicio', '2021-01-01'), '%Y-%m-%d').date()
+    data_fim    = datetime.strptime(params.get('data_fim', str(date.today())), '%Y-%m-%d').date()
+    capital_ini = float(params.get('capital_inicial', 10000))
+    extra       = params.get('parametros', {})
+    regras      = params.get('regras', {})
+
+    if not tickers:
+        return {'erro': 'Nenhum ativo selecionado'}
+
+    # Alocação igualitária se não configurada
+    if not alocacao:
+        pct = 100 / len(tickers)
+        alocacao = {t: pct for t in tickers}
+
+    resultados_individuais = {}
+    patrimonio_consolidado = None
+    datas_ref = None
+    total_operacoes = []
+
+    for ticker in tickers:
+        pct    = alocacao.get(ticker, 100 / len(tickers))
+        cap_t  = capital_ini * pct / 100
+
+        # Roda estratégia individual
+        params_t = {**params, 'ticker': ticker, 'capital_inicial': cap_t}
+        resultado = executar_backtest(params_t)
+
+        if 'erro' in resultado:
+            print(f"[BT] {ticker}: {resultado['erro']}", flush=True)
+            continue
+
+        resultados_individuais[ticker] = resultado
+
+        # Consolida curva de patrimônio
+        curva = resultado.get('curva_patrimonio', {})
+        valores = curva.get('valores', [])
+        datas   = curva.get('datas',   [])
+
+        if patrimonio_consolidado is None:
+            patrimonio_consolidado = valores.copy()
+            datas_ref = datas
+        else:
+            # Soma alinhando por data
+            for i, (d, v) in enumerate(zip(datas, valores)):
+                if i < len(patrimonio_consolidado):
+                    patrimonio_consolidado[i] += v
+                else:
+                    patrimonio_consolidado.append(v)
+
+        # Adiciona operações com ticker identificado
+        for op in resultado.get('operacoes', []):
+            op['ticker'] = ticker
+            total_operacoes.append(op)
+
+    if not resultados_individuais:
+        return {'erro': 'Nenhum ativo retornou dados para o período'}
+
+    # Métricas consolidadas
+    metricas = calcular_metricas(
+        patrimonio_consolidado or [], total_operacoes, capital_ini
+    )
+
+    # Benchmark IBOVESPA
+    df_ibov = carregar_ibovespa(data_inicio, data_fim)
+    patrimonio_ibov = calcular_benchmark_ibov(df_ibov, capital_ini, datas_ref or [])
+    retorno_ibov = None
+    if patrimonio_ibov:
+        retorno_ibov = round((patrimonio_ibov[-1] - capital_ini) / capital_ini * 100, 2)
+
+    retorno_cdi = round(calcular_cdi_periodo(data_inicio, data_fim), 2)
+    alpha = round(metricas.get('retorno_pct', 0) - retorno_ibov, 2) if retorno_ibov else None
+
+    return {
+        'tickers':     tickers,
+        'estrategia':  estrategia,
+        'data_inicio': str(data_inicio),
+        'data_fim':    str(data_fim),
+        'metricas':    metricas,
+        'benchmarks': {
+            'ibovespa': {'retorno_pct': retorno_ibov, 'patrimonio': patrimonio_ibov},
+            'cdi':      {'retorno_pct': retorno_cdi},
+            'alpha_ibov': alpha,
+        },
+        'curva_patrimonio': {
+            'datas':   datas_ref or [],
+            'valores': [round(v, 2) for v in (patrimonio_consolidado or [])],
+        },
+        'individuais': {
+            t: {
+                'retorno_pct': r.get('metricas', {}).get('retorno_pct'),
+                'capital_final': r.get('metricas', {}).get('capital_final'),
+                'n_operacoes': r.get('metricas', {}).get('n_operacoes'),
+            }
+            for t, r in resultados_individuais.items()
+        },
+        'operacoes': sorted(total_operacoes, key=lambda x: x.get('data', '')),
+        'n_dias': len(datas_ref or []),
     }
