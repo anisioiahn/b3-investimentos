@@ -1371,7 +1371,7 @@ def db_init_backtesting_v2_tables(conn):
         """)
     conn.commit()
 
-def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False):
+def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False, retorno_medio=None, sharpe_medio=None):
     import json
     from datetime import datetime, timezone, timedelta
     now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
@@ -1380,9 +1380,11 @@ def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False):
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO backtesting_estrategias
-                    (usuario_id, nome, descricao, tipo, regras, publica, created_at, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-            """, (uid, nome, descricao, tipo, json.dumps(regras), publica, now, now))
+                    (usuario_id, nome, descricao, tipo, regras, publica,
+                     retorno_medio, sharpe_medio, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+            """, (uid, nome, descricao, tipo, json.dumps(regras), publica,
+                  retorno_medio, sharpe_medio, now, now))
             row = cur.fetchone()
         conn.commit(); conn.close()
         return row[0] if row else None
