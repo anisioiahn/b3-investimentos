@@ -1430,3 +1430,149 @@ def db_incrementar_uso_estrategia(estrategia_id, retorno_pct, sharpe):
             """, (retorno_pct, retorno_pct, sharpe, sharpe, estrategia_id))
         conn.commit(); conn.close()
     except: pass
+
+# ── BACKTESTING — AVALIAÇÕES E COMENTÁRIOS ────────────────────
+def db_init_backtesting_social_tables(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS backtesting_avaliacoes (
+                id SERIAL PRIMARY KEY,
+                estrategia_id INTEGER REFERENCES backtesting_estrategias(id) ON DELETE CASCADE,
+                usuario_id INTEGER,
+                estrelas INTEGER CHECK (estrelas BETWEEN 1 AND 5),
+                created_at TEXT,
+                UNIQUE(estrategia_id, usuario_id)
+            );
+            CREATE TABLE IF NOT EXISTS backtesting_comentarios (
+                id SERIAL PRIMARY KEY,
+                estrategia_id INTEGER REFERENCES backtesting_estrategias(id) ON DELETE CASCADE,
+                usuario_id INTEGER,
+                nome_usuario TEXT,
+                comentario TEXT NOT NULL,
+                created_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_bt_aval_estrategia
+                ON backtesting_avaliacoes(estrategia_id);
+            CREATE INDEX IF NOT EXISTS idx_bt_coment_estrategia
+                ON backtesting_comentarios(estrategia_id, created_at DESC);
+        """)
+    conn.commit()
+
+def db_avaliar_estrategia(estrategia_id, usuario_id, estrelas):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO backtesting_avaliacoes (estrategia_id, usuario_id, estrelas, created_at)
+                VALUES (%s,%s,%s,%s)
+                ON CONFLICT (estrategia_id, usuario_id)
+                DO UPDATE SET estrelas=%s, created_at=%s
+            """, (estrategia_id, usuario_id, estrelas, now, estrelas, now))
+            # Atualiza média na tabela de estratégias
+            cur.execute("""
+                UPDATE backtesting_estrategias SET
+                    sharpe_medio = (
+                        SELECT AVG(estrelas) FROM backtesting_avaliacoes
+                        WHERE estrategia_id=%s
+                    )
+                WHERE id=%s
+            """, (estrategia_id, estrategia_id))
+        conn.commit(); conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erro avaliar: {e}", flush=True)
+        return False
+
+def db_comentar_estrategia(estrategia_id, usuario_id, nome_usuario, comentario):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO backtesting_comentarios
+                    (estrategia_id, usuario_id, nome_usuario, comentario, created_at)
+                VALUES (%s,%s,%s,%s,%s) RETURNING id
+            """, (estrategia_id, usuario_id, nome_usuario, comentario, now))
+            row = cur.fetchone()
+        conn.commit(); conn.close()
+        return row[0] if row else None
+    except Exception as e:
+        print(f"[DB] Erro comentar: {e}", flush=True)
+        return None
+
+def db_listar_comentarios(estrategia_id, limit=20):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, nome_usuario, comentario, created_at
+                FROM backtesting_comentarios
+                WHERE estrategia_id=%s
+                ORDER BY created_at DESC LIMIT %s
+            """, (estrategia_id, limit))
+            rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[DB] Erro listar comentários: {e}", flush=True)
+        return []
+
+def db_media_estrelas(estrategia_id, usuario_id=None):
+    """Retorna média de estrelas e a avaliação do usuário se uid fornecido."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT AVG(estrelas)::NUMERIC(3,1), COUNT(*)
+                FROM backtesting_avaliacoes WHERE estrategia_id=%s
+            """, (estrategia_id,))
+            row = cur.fetchone()
+            media = float(row[0]) if row[0] else 0
+            total = int(row[1]) if row[1] else 0
+            minha = None
+            if usuario_id:
+                cur.execute("""
+                    SELECT estrelas FROM backtesting_avaliacoes
+                    WHERE estrategia_id=%s AND usuario_id=%s
+                """, (estrategia_id, usuario_id))
+                r = cur.fetchone()
+                minha = r[0] if r else None
+        conn.close()
+        return {'media': media, 'total': total, 'minha_avaliacao': minha}
+    except Exception as e:
+        print(f"[DB] Erro média estrelas: {e}", flush=True)
+        return {'media': 0, 'total': 0, 'minha_avaliacao': None}
+
+def db_listar_estrategias_bt(uid=None, publicas=False, limit=20):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            if publicas:
+                cur.execute("""
+                    SELECT e.*, u.nome as autor,
+                        COALESCE(AVG(a.estrelas),0)::NUMERIC(3,1) as media_estrelas,
+                        COUNT(DISTINCT a.id) as total_avaliacoes,
+                        COUNT(DISTINCT c.id) as total_comentarios
+                    FROM backtesting_estrategias e
+                    JOIN usuarios u ON u.id = e.usuario_id
+                    LEFT JOIN backtesting_avaliacoes a ON a.estrategia_id = e.id
+                    LEFT JOIN backtesting_comentarios c ON c.estrategia_id = e.id
+                    WHERE e.publica = TRUE
+                    GROUP BY e.id, u.nome
+                    ORDER BY media_estrelas DESC, e.usos DESC
+                    LIMIT %s
+                """, (limit,))
+            else:
+                cur.execute("""
+                    SELECT * FROM backtesting_estrategias
+                    WHERE usuario_id=%s ORDER BY created_at DESC LIMIT %s
+                """, (uid, limit))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro listar estratégias BT: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
