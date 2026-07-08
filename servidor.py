@@ -1709,16 +1709,26 @@ if _db_ok:
     # Inicializa tabelas de snapshot e dividendos
     try:
         conn_startup = db.get_conn()
-        db.db_init_snapshot_tables(conn_startup)
-        db.db_init_dividend_tables(conn_startup)
-        db.db_init_agenda_tables(conn_startup)
-        db.db_init_estrategia_table(conn_startup)
-        db.db_init_historico_table(conn_startup)
-        db.db_init_backtesting_tables(conn_startup)
-        db.db_init_backtesting_v2_tables(conn_startup)
-        db.db_init_backtesting_social_tables(conn_startup)
+        inits = [
+            db.db_init_snapshot_tables,
+            db.db_init_dividend_tables,
+            db.db_init_agenda_tables,
+            db.db_init_estrategia_table,
+            db.db_init_historico_table,
+            db.db_init_backtesting_tables,
+            db.db_init_backtesting_v2_tables,
+            db.db_init_backtesting_social_tables,
+        ]
+        for fn in inits:
+            try:
+                fn(conn_startup)
+                print(f"[STARTUP] ✅ {fn.__name__}", flush=True)
+            except Exception as e:
+                print(f"[STARTUP] ⚠️ {fn.__name__}: {e}", flush=True)
+                try: conn_startup.rollback()
+                except: pass
         conn_startup.close()
-        print("[STARTUP] ✅ Todas as tabelas verificadas", flush=True)
+        print("[STARTUP] ✅ Tabelas verificadas", flush=True)
         # Garante yfinance instalado
         try:
             import yfinance
