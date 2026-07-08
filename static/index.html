@@ -3353,13 +3353,19 @@ function _renderBtResultado(d){
     <div class="cockpit-card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
         <div>
-          <div style="font-size:16px;font-weight:700">${d.ticker} — ${nomeEst}</div>
+          <div style="font-size:16px;font-weight:700">${d.ticker || d.tickers?.join(' + ')} — ${nomeEst}</div>
           <div style="font-size:12px;color:var(--text3)">${d.data_inicio} → ${d.data_fim} · ${d.n_dias} dias úteis</div>
         </div>
-        <button onclick="_aplicarBtAlerta('${d.ticker}','${d.estrategia}')" class="btn"
-          style="font-size:12px;padding:6px 12px;border-color:var(--green);color:var(--green)">
-          🔔 Aplicar como Alerta
-        </button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="_publicarBtResultado('${d.estrategia}',${JSON.stringify(d).replace(/'/g,"\\'")})" class="btn"
+            style="font-size:12px;padding:6px 12px;border-color:#f59e0b;color:#f59e0b">
+            🌐 Publicar na Comunidade
+          </button>
+          <button onclick="_aplicarBtAlerta('${d.ticker||d.tickers?.[0]}','${d.estrategia}')" class="btn"
+            style="font-size:12px;padding:6px 12px;border-color:var(--green);color:var(--green)">
+            🔔 Aplicar como Alerta
+          </button>
+        </div>
       </div>
 
       <!-- Métricas principais -->
@@ -3462,6 +3468,39 @@ function _renderBtResultado(d){
       }
     });
   }, 100);
+}
+
+async function _publicarBtResultado(estrategia, resultado){
+  const nomeEst = {
+    'buy_hold':'Buy & Hold','medias_moveis':'Médias Móveis',
+    'rsi':'RSI / IFR','janus_score':'Janus Score','personalizada':'Personalizada'
+  };
+  const ticker = resultado.ticker || resultado.tickers?.join('+') || '';
+  const sugestao = `${nomeEst[estrategia]||estrategia} — ${ticker}`;
+  const nome = prompt('Nome para a estratégia na comunidade:', sugestao);
+  if(!nome) return;
+  const descricao = prompt('Descrição (opcional):') || '';
+  const m  = resultado.metricas || {};
+  const bm = resultado.benchmarks || {};
+  const r = await fetch('/api/backtesting/estrategias', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      nome, descricao,
+      tipo: estrategia,
+      regras: resultado.regras || {estrategia, parametros: resultado.parametros},
+      publica: true,
+      retorno_medio: m.retorno_pct,
+      sharpe_medio: m.sharpe,
+    })
+  });
+  const d = await r.json();
+  if(d.ok){
+    alert(`✅ "${nome}" publicada na comunidade!`);
+    carregarComunidade();
+  } else {
+    alert('❌ Erro ao publicar');
+  }
 }
 
 async function _aplicarBtAlerta(ticker, estrategia){
