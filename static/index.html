@@ -3675,7 +3675,7 @@ async function carregarComunidade(){
           </div>
           ${e.descricao?`<div style="font-size:11px;color:var(--text2);margin-bottom:8px;border-left:2px solid var(--border);padding-left:6px">${e.descricao}</div>`:''}
           <div style="display:flex;gap:4px">
-            <button onclick="abrirDetalhesComunidade(${e.id},'${(e.nome||'').replace(/'/g,'\\'')}')" class="btn" style="flex:1;font-size:11px;padding:5px">💬 Ver (${e.total_comentarios||0})</button>
+            <button onclick="abrirDetalhesComunidade(${e.id},this)" data-nome="${(e.nome||'').replace(/"/g,'&quot;')}" class="btn" style="flex:1;font-size:11px;padding:5px">💬 Ver (${e.total_comentarios||0})</button>
             <button onclick="avaliarEstrategia(${e.id})" class="btn" style="font-size:11px;padding:5px">⭐ Avaliar</button>
           </div>
         </div>`;
@@ -3740,7 +3740,8 @@ async function confirmarAvaliacao(eid){
   else alert('❌ Erro ao avaliar');
 }
 
-async function abrirDetalhesComunidade(eid, nome){
+async function abrirDetalhesComunidade(eid, el){
+  const nome = (typeof el === 'string') ? el : (el?.dataset?.nome || 'Estratégia');
   const r = await fetch(`/api/backtesting/estrategias/${eid}/detalhes`);
   const d = await r.json();
   const comentarios = d.comentarios || [];
