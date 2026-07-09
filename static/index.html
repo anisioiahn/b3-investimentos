@@ -3758,7 +3758,7 @@ async function publicarSimulacao(btId, estrategia, ticker){
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       nome, descricao, tipo: estrategia,
-      regras:        resultado.regras || {estrategia, parametros: resultado.parametros||{}},
+      regras:        resultado.regras || {estrategia: estrategia, parametros: resultado.parametros||{}},
       publica:       true,
       retorno_medio: m.retorno_pct     || null,
       sharpe_medio:  m.sharpe          || null,
@@ -3771,11 +3771,14 @@ async function publicarSimulacao(btId, estrategia, ticker){
     })
   });
   const d = await p.json();
+  console.log('[BT] Publicar resultado:', d);
   if(d.ok){
     await carregarBtHistorico();
     await carregarComunidade();
     alert(`✅ "${nome}" publicada!`);
-  } else alert('❌ Erro ao publicar');
+  } else {
+    alert(`❌ Erro ao publicar: ${d.erro||'Tente novamente'}`);
+  }
 }
 
 async function carregarVersoes(eid){
