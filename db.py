@@ -1326,18 +1326,24 @@ def db_salvar_backtest(uid, resultado, parametros):
         print(f"[DB] Erro salvar backtest: {e}", flush=True)
         return None
 
-def db_listar_backtests(uid, limit=10):
+def db_listar_backtests(uid, limit=20):
     try:
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT id, ticker, estrategia, data_inicio, data_fim,
-                       capital_inicial, capital_final, retorno_pct,
-                       retorno_ibov, alpha, drawdown_max, sharpe,
-                       n_operacoes, created_at
-                FROM backtesting_resultados
-                WHERE usuario_id=%s
-                ORDER BY created_at DESC LIMIT %s
+                SELECT r.id, r.ticker, r.estrategia, r.data_inicio, r.data_fim,
+                       r.capital_inicial, r.capital_final, r.retorno_pct,
+                       r.retorno_ibov, r.alpha, r.drawdown_max, r.sharpe,
+                       r.n_operacoes, r.created_at,
+                       e.id as estrategia_id, e.nome as estrategia_nome, e.publica
+                FROM backtesting_resultados r
+                LEFT JOIN backtesting_estrategias e
+                    ON e.usuario_id = r.usuario_id
+                    AND e.tipo = r.estrategia
+                    AND e.created_at >= r.created_at
+                    AND e.publica = TRUE
+                WHERE r.usuario_id=%s
+                ORDER BY r.created_at DESC LIMIT %s
             """, (uid, limit))
             return [dict(r) for r in cur.fetchall()]
     except Exception as e:
