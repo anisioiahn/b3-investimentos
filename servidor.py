@@ -1155,8 +1155,27 @@ def api_bt_excluir(bt_id):
     try:
         conn = db.get_conn()
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM backtesting_resultados WHERE id=%s AND usuario_id=%s",
-                       (bt_id, uid()))
+            # Busca dados da simulação antes de excluir
+            cur.execute("""
+                SELECT estrategia FROM backtesting_resultados
+                WHERE id=%s AND usuario_id=%s
+            """, (bt_id, uid()))
+            row = cur.fetchone()
+            if row:
+                # Exclui a simulação
+                cur.execute("""
+                    DELETE FROM backtesting_resultados
+                    WHERE id=%s AND usuario_id=%s
+                """, (bt_id, uid()))
+                # Remove da comunidade se estava publicada
+                cur.execute("""
+                    DELETE FROM backtesting_estrategias
+                    WHERE usuario_id=%s AND tipo=%s AND publica=TRUE
+                    AND created_at = (
+                        SELECT MAX(created_at) FROM backtesting_estrategias
+                        WHERE usuario_id=%s AND tipo=%s AND publica=TRUE
+                    )
+                """, (uid(), row[0], uid(), row[0]))
         conn.commit(); conn.close()
         return jsonify({"ok": True})
     except Exception as e:
