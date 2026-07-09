@@ -1053,6 +1053,40 @@ def api_bt_detalhes(eid):
     estrelas    = db.db_media_estrelas(eid, uid())
     return jsonify({"comentarios": comentarios, "estrelas": estrelas})
 
+@app.route("/api/admin/migrate", methods=["POST"])
+@requer_admin
+def api_admin_migrate():
+    """Cria colunas faltantes no banco."""
+    resultados = []
+    try:
+        conn = db.get_conn()
+        colunas = [
+            ("backtesting_estrategias", "ranking_score", "NUMERIC DEFAULT 0"),
+            ("backtesting_estrategias", "versao", "TEXT DEFAULT 'v1.0'"),
+            ("backtesting_estrategias", "versao_anterior_id", "INTEGER"),
+            ("backtesting_estrategias", "notas_versao", "TEXT"),
+            ("backtesting_estrategias", "fork_de", "INTEGER"),
+            ("backtesting_estrategias", "fork_de_versao", "TEXT"),
+            ("backtesting_estrategias", "fork_de_nome", "TEXT"),
+            ("backtesting_estrategias", "forks", "INTEGER DEFAULT 0"),
+            ("backtesting_estrategias", "simulacao_params", "JSONB"),
+            ("backtesting_resultados", "publicada", "BOOLEAN DEFAULT FALSE"),
+            ("backtesting_resultados", "estrategia_id", "INTEGER"),
+        ]
+        for tabela, coluna, tipo in colunas:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS {coluna} {tipo}")
+                conn.commit()
+                resultados.append(f"✅ {tabela}.{coluna}")
+            except Exception as e:
+                conn.rollback()
+                resultados.append(f"⚠️ {tabela}.{coluna}: {e}")
+        conn.close()
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+    return jsonify({"ok": True, "resultados": resultados})
+
 @app.route("/api/backtesting/debug-publicas")
 @requer_auth
 def api_bt_debug_publicas():
