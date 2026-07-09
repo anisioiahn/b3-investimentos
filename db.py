@@ -1414,7 +1414,9 @@ def db_init_backtesting_v2_tables(conn):
         ]:
             try:
                 cur.execute(f"ALTER TABLE backtesting_estrategias {col}")
-            except: pass
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
     conn.commit()
 
 def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False, retorno_medio=None, sharpe_medio=None, simulacao_params=None):
@@ -1581,19 +1583,19 @@ def db_listar_estrategias_bt(uid=None, publicas=False, limit=20, ordem='ranking'
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             if publicas:
                 order = {
-                    'ranking': 'e.ranking_score DESC',
+                    'ranking': 'COALESCE(e.ranking_score, e.usos) DESC',
                     'retorno': 'e.retorno_medio DESC NULLS LAST',
                     'sharpe':  'e.sharpe_medio DESC NULLS LAST',
                     'usos':    'e.usos DESC',
                     'recentes':'e.created_at DESC',
-                }.get(ordem, 'e.ranking_score DESC')
+                }.get(ordem, 'COALESCE(e.ranking_score, e.usos) DESC')
                 cur.execute(f"""
-                    SELECT e.*, u.nome as autor,
+                    SELECT e.*, COALESCE(u.nome, 'Usuário') as autor,
                         COALESCE(AVG(a.estrelas),0)::NUMERIC(3,1) as media_estrelas,
                         COUNT(DISTINCT a.id) as total_avaliacoes,
                         COUNT(DISTINCT c.id) as total_comentarios
                     FROM backtesting_estrategias e
-                    JOIN usuarios u ON u.id = e.usuario_id
+                    LEFT JOIN usuarios u ON u.id = e.usuario_id
                     LEFT JOIN backtesting_avaliacoes a ON a.estrategia_id = e.id
                     LEFT JOIN backtesting_comentarios c ON c.estrategia_id = e.id
                     WHERE e.publica = TRUE
