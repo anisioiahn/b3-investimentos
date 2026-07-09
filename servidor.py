@@ -1857,16 +1857,36 @@ def api_admin_config_post():
         db.db_set_config(chave, valor)
     return jsonify({"ok":True})
 
+@app.route("/api/ping", methods=["POST"])
+@requer_auth
+def api_ping():
+    """Frontend chama a cada 2 minutos para registrar presença."""
+    pagina    = (request.json or {}).get('pagina', '')
+    ua        = request.headers.get('User-Agent', '')[:200]
+    db.db_registrar_presenca(uid(), pagina, ua)
+    return jsonify({"ok": True})
+
+@app.route("/api/admin/online")
+@requer_admin
+def api_admin_online():
+    """Retorna usuários online agora (ping nos últimos 5 min)."""
+    return jsonify(db.db_usuarios_online(minutos=5))
+
 @app.route("/api/admin/stats")
 @requer_admin
 def api_admin_stats():
     usuarios = db.db_listar_usuarios()
+    online   = db.db_usuarios_online(minutos=5)
+    historico= db.db_historico_acessos_diario()
     return jsonify({
         "total_usuarios": len(usuarios),
-        "verificados": sum(1 for u in usuarios if u.get('email_verificado')),
-        "plano_free": sum(1 for u in usuarios if u.get('plano')=='free'),
-        "plano_pro": sum(1 for u in usuarios if u.get('plano')=='pro'),
-        "ativos": sum(1 for u in usuarios if u.get('ativo')),
+        "verificados":    sum(1 for u in usuarios if u.get('email_verificado')),
+        "plano_free":     sum(1 for u in usuarios if u.get('plano')=='free'),
+        "plano_pro":      sum(1 for u in usuarios if u.get('plano')=='pro'),
+        "ativos":         sum(1 for u in usuarios if u.get('ativo')),
+        "online_agora":   len(online),
+        "online_lista":   online,
+        "historico_acessos": historico,
     })
 
 def gerar_recomendacao(ticker, nome, noticias):
@@ -1908,6 +1928,7 @@ if _db_ok:
             db.db_init_backtesting_tables,
             db.db_init_backtesting_v2_tables,
             db.db_init_backtesting_social_tables,
+            db.db_init_presenca_table,
         ]
         for fn in inits:
             try:
