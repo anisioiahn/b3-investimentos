@@ -1419,7 +1419,10 @@ def db_init_backtesting_v2_tables(conn):
                 conn.rollback()
     conn.commit()
 
-def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False, retorno_medio=None, sharpe_medio=None, simulacao_params=None):
+def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False,
+                            retorno_medio=None, sharpe_medio=None,
+                            simulacao_params=None,
+                            fork_de=None, fork_de_nome=None, fork_de_versao=None):
     import json
     from datetime import datetime, timezone, timedelta
     now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
@@ -1429,12 +1432,16 @@ def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False, r
             cur.execute("""
                 INSERT INTO backtesting_estrategias
                     (usuario_id, nome, descricao, tipo, regras, simulacao_params,
-                     publica, retorno_medio, sharpe_medio, created_at, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                     publica, retorno_medio, sharpe_medio,
+                     fork_de, fork_de_nome, fork_de_versao,
+                     created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
             """, (uid, nome, descricao, tipo,
                   json.dumps(regras),
                   json.dumps(simulacao_params) if simulacao_params else None,
-                  publica, retorno_medio, sharpe_medio, now, now))
+                  publica, retorno_medio, sharpe_medio,
+                  fork_de, fork_de_nome, fork_de_versao,
+                  now, now))
             row = cur.fetchone()
         conn.commit(); conn.close()
         return row[0] if row else None
