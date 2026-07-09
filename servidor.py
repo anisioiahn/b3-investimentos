@@ -1860,23 +1860,39 @@ def api_admin_config_post():
 @app.route("/api/ping", methods=["POST"])
 @requer_auth
 def api_ping():
-    """Frontend chama a cada 2 minutos para registrar presença."""
-    pagina    = (request.json or {}).get('pagina', '')
-    ua        = request.headers.get('User-Agent', '')[:200]
+    """Frontend chama a cada 30s para registrar presença."""
+    pagina = (request.json or {}).get('pagina', '')
+    ua     = request.headers.get('User-Agent', '')[:200]
     db.db_registrar_presenca(uid(), pagina, ua)
     return jsonify({"ok": True})
+
+@app.route("/api/ping-offline", methods=["POST"])
+@requer_auth
+def api_ping_offline():
+    """Chamado quando usuário fecha/minimiza aba — remove da lista online."""
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE usuarios_presenca
+                SET ultimo_acesso = '2000-01-01T00:00:00'
+                WHERE usuario_id = %s
+            """, (uid(),))
+        conn.commit(); conn.close()
+    except: pass
+    return '', 204
 
 @app.route("/api/admin/online")
 @requer_admin
 def api_admin_online():
-    """Retorna usuários online agora (ping nos últimos 5 min)."""
-    return jsonify(db.db_usuarios_online(minutos=5))
+    """Retorna usuários online agora (ping nos últimos 2 min)."""
+    return jsonify(db.db_usuarios_online(minutos=2))
 
 @app.route("/api/admin/stats")
 @requer_admin
 def api_admin_stats():
     usuarios = db.db_listar_usuarios()
-    online   = db.db_usuarios_online(minutos=5)
+    online   = db.db_usuarios_online(minutos=2)
     historico= db.db_historico_acessos_diario()
     return jsonify({
         "total_usuarios": len(usuarios),
