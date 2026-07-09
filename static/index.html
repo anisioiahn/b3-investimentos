@@ -635,6 +635,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="tab" onclick="goPage('dividendos',this)">💰 Dividendos</div>
     <div class="tab" onclick="goPage('setores',this)">📊 Setores</div>
     <div class="tab" onclick="goPage('backtesting',this)">🔬 Backtesting</div>
+    <div class="tab" onclick="goPage('builder',this)">🏗️ Builder</div>
     <div class="tab" onclick="goPage('empresas',this)" id="tab-empresas" style="display:none">🏢 <span id="tab-sname">Empresas</span></div>
     <div class="tab tab-ativo" id="tab-busca" style="display:none" onclick="goPage('busca',this)">
       <div class="tab-ativo-logo" id="tab-busca-logo"></div>
@@ -950,6 +951,134 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     </div>
 
     <div class="page" id="page-alertas"><div id="altbox"></div></div>
+    <!-- PÁGINA BUILDER -->
+    <div class="page" id="page-builder">
+      <div style="max-width:1000px;margin:0 auto">
+        <div style="margin-bottom:1.5rem">
+          <div style="font-size:20px;font-weight:700">🏗️ Janus Builder</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:2px">Construa carteiras inteligentes com base na metodologia Janus</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:300px 1fr;gap:1.5rem;align-items:start">
+
+          <!-- Painel de critérios -->
+          <div style="display:flex;flex-direction:column;gap:1rem">
+
+            <!-- Tipo de ativo -->
+            <div class="cockpit-card">
+              <div class="cockpit-card-title">1️⃣ Tipo de Ativo</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px"><input type="checkbox" class="builder-tipo" value="ACAO" checked style="accent-color:var(--green)"> ACAO</label>
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px"><input type="checkbox" class="builder-tipo" value="FII" checked style="accent-color:var(--green)"> FII</label>
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px"><input type="checkbox" class="builder-tipo" value="ETF" style="accent-color:var(--green)"> ETF</label>
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px"><input type="checkbox" class="builder-tipo" value="BDR" style="accent-color:var(--green)"> BDR</label>
+              </div>
+            </div>
+
+            <!-- Janus Score -->
+            <div class="cockpit-card">
+              <div class="cockpit-card-title">2️⃣ Janus Score</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">Mínimo</label>
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+                    <input type="range" id="builder-score-min" min="0" max="100" value="60" step="5"
+                      oninput="document.getElementById('builder-score-min-val').textContent=this.value"
+                      style="flex:1">
+                    <span id="builder-score-min-val" style="font-size:12px;font-weight:700;min-width:28px">60</span>
+                  </div>
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">Máximo</label>
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+                    <input type="range" id="builder-score-max" min="0" max="100" value="100" step="5"
+                      oninput="document.getElementById('builder-score-max-val').textContent=this.value"
+                      style="flex:1">
+                    <span id="builder-score-max-val" style="font-size:12px;font-weight:700;min-width:28px">100</span>
+                  </div>
+                </div>
+              </div>
+              <div style="font-size:10px;color:var(--text3);margin-top:6px">Apenas ativos com Janus Score entre os valores definidos</div>
+            </div>
+
+            <!-- Dividendos -->
+            <div class="cockpit-card">
+              <div class="cockpit-card-title">3️⃣ Dividend Yield</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">DY mínimo (%)</label>
+                  <input type="number" id="builder-dy-min" value="0" min="0" max="50" step="0.5"
+                    style="width:100%;padding:7px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);margin-top:4px">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">DY máximo (%)</label>
+                  <input type="number" id="builder-dy-max" value="100" min="0" max="100" step="0.5"
+                    style="width:100%;padding:7px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);margin-top:4px">
+                </div>
+              </div>
+            </div>
+
+            <!-- Setores -->
+            <div class="cockpit-card">
+              <div class="cockpit-card-title">4️⃣ Setores</div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Deixe vazio para todos os setores</div>
+              <div id="builder-setores-lista" style="display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto">
+                <div style="font-size:12px;color:var(--text3)">Carregando setores...</div>
+              </div>
+            </div>
+
+            <!-- Configuração da carteira -->
+            <div class="cockpit-card">
+              <div class="cockpit-card-title">5️⃣ Configuração</div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">Máximo de ativos</label>
+                  <input type="number" id="builder-max-ativos" value="15" min="3" max="50"
+                    style="width:100%;padding:7px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);margin-top:4px">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">Capital disponível (R$)</label>
+                  <input type="number" id="builder-capital" value="10000" min="0"
+                    style="width:100%;padding:7px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);margin-top:4px">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">Distribuição dos pesos</label>
+                  <select id="builder-peso-tipo" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);margin-top:4px">
+                    <option value="igual">Igual por ativo</option>
+                    <option value="score">Proporcional ao Janus Score</option>
+                    <option value="dy">Proporcional ao Dividend Yield</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">Ordenar por</label>
+                  <select id="builder-ordem" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);margin-top:4px">
+                    <option value="score">Janus Score</option>
+                    <option value="dy">Dividend Yield</option>
+                    <option value="nome">Ticker</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botão executar -->
+            <button onclick="executarBuilder()"
+              style="padding:14px;border:none;border-radius:12px;background:var(--green);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+              🏗️ Construir Carteira
+            </button>
+          </div>
+
+          <!-- Resultado -->
+          <div id="builder-resultado">
+            <div style="text-align:center;padding:4rem 2rem;color:var(--text3)">
+              <div style="font-size:48px;margin-bottom:1rem">🏗️</div>
+              <div style="font-size:16px;font-weight:600;margin-bottom:.5rem">Configure os critérios e construa sua carteira</div>
+              <div style="font-size:13px">O Builder irá filtrar e classificar os melhores ativos segundo a metodologia Janus</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- PÁGINA BACKTESTING -->
     <div class="page" id="page-backtesting">
       <div style="max-width:900px;margin:0 auto">
@@ -4382,6 +4511,162 @@ document.addEventListener('visibilitychange', ()=>{
   }
 });
 
+// ── JANUS BUILDER ────────────────────────────────────────────
+let _builderResultado = null;
+
+async function iniciarBuilder(){
+  // Carrega setores disponíveis
+  try{
+    const r = await fetch('/api/builder/setores');
+    const setores = await r.json();
+    const el = document.getElementById('builder-setores-lista');
+    if(el && setores.length){
+      el.innerHTML = setores.map(s=>`
+        <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;padding:3px 0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" class="builder-setor" value="${s.setor}" style="accent-color:var(--green)">
+            <span>${s.setor}</span>
+          </div>
+          <span style="font-size:10px;color:var(--text3)">${s.total}</span>
+        </label>`).join('');
+    }
+  }catch(e){}
+}
+
+async function executarBuilder(){
+  const tipos = [...document.querySelectorAll('.builder-tipo:checked')].map(c=>c.value);
+  if(!tipos.length){ alert('Selecione pelo menos um tipo de ativo'); return; }
+
+  const setoresSelecionados = [...document.querySelectorAll('.builder-setor:checked')].map(c=>c.value);
+
+  const params = {
+    tipos,
+    score_min:   parseInt(document.getElementById('builder-score-min')?.value || '60'),
+    score_max:   parseInt(document.getElementById('builder-score-max')?.value || '100'),
+    dy_min:      parseFloat(document.getElementById('builder-dy-min')?.value || '0'),
+    dy_max:      parseFloat(document.getElementById('builder-dy-max')?.value || '100'),
+    setores:     setoresSelecionados,
+    max_ativos:  parseInt(document.getElementById('builder-max-ativos')?.value || '15'),
+    capital:     parseFloat(document.getElementById('builder-capital')?.value || '10000'),
+    peso_tipo:   document.getElementById('builder-peso-tipo')?.value || 'igual',
+    ordem:       document.getElementById('builder-ordem')?.value || 'score',
+  };
+
+  const resEl = document.getElementById('builder-resultado');
+  resEl.innerHTML = `<div style="text-align:center;padding:4rem;color:var(--text3)">
+    <div style="font-size:32px">⚙️</div>
+    <div style="margin-top:1rem;font-size:14px">Construindo carteira...</div>
+  </div>`;
+
+  try{
+    const r = await fetch('/api/builder/executar', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(params)
+    });
+    const d = await r.json();
+    if(d.erro){ resEl.innerHTML=`<div style="color:#e53935;padding:2rem;text-align:center">❌ ${d.erro}</div>`; return; }
+    _builderResultado = d;
+    _renderBuilderResultado(d);
+  }catch(e){
+    resEl.innerHTML=`<div style="color:#e53935;padding:2rem;text-align:center">❌ Erro de conexão</div>`;
+  }
+}
+
+function _renderBuilderResultado(d){
+  const resEl = document.getElementById('builder-resultado');
+  const candidatos = d.candidatos || [];
+  const capital = d.criterios?.capital || 0;
+
+  if(!candidatos.length){
+    resEl.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--text3)">
+      <div style="font-size:32px">🔍</div>
+      <div style="font-size:14px;margin-top:1rem">Nenhum ativo encontrado com estes critérios</div>
+      <div style="font-size:12px;margin-top:.5rem">Tente ampliar os filtros</div>
+    </div>`;
+    return;
+  }
+
+  resEl.innerHTML = `
+    <div class="cockpit-card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
+        <div>
+          <div style="font-size:15px;font-weight:700">${candidatos.length} candidatos encontrados</div>
+          <div style="font-size:12px;color:var(--text3)">Referência: ${d.reference_date} · Score mín: ${d.criterios?.score_min} · Score máx: ${d.criterios?.score_max}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="enviarBuilderParaCarteira()" class="btn" style="font-size:12px;padding:6px 12px;border-color:var(--green);color:var(--green)">
+            ➕ Adicionar à Carteira
+          </button>
+          <button onclick="enviarBuilderParaBacktest()" class="btn" style="font-size:12px;padding:6px 12px">
+            🔬 Testar no Backtesting
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabela de candidatos -->
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="color:var(--text3);font-size:10px;border-bottom:2px solid var(--border)">
+              <th style="padding:6px 8px;text-align:left">Ativo</th>
+              <th style="padding:6px 8px;text-align:left">Empresa</th>
+              <th style="padding:6px 8px;text-align:left">Setor</th>
+              <th style="padding:6px 8px;text-align:center">Janus Score</th>
+              <th style="padding:6px 8px;text-align:right">DY 12m</th>
+              ${capital>0?'<th style="padding:6px 8px;text-align:right">Peso</th><th style="padding:6px 8px;text-align:right">Valor</th>':''}
+            </tr>
+          </thead>
+          <tbody>
+            ${candidatos.map(c=>{
+              const score = parseFloat(c.score||0);
+              const corScore = score>=80?'#16a34a':score>=60?'#f59e0b':'#e53935';
+              const dy = parseFloat(c.dy_12m||0);
+              return `<tr style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+                <td style="padding:8px">
+                  <div style="font-weight:700">${c.ticker}</div>
+                  <div style="font-size:10px;color:var(--text3)">${c.asset_type}</div>
+                </td>
+                <td style="padding:8px;color:var(--text2);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome||'—'}</td>
+                <td style="padding:8px;color:var(--text3);font-size:11px">${c.setor||'—'}</td>
+                <td style="padding:8px;text-align:center">
+                  <div style="display:inline-flex;align-items:center;gap:4px">
+                    <div style="width:32px;height:32px;border-radius:50%;border:2px solid ${corScore};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${corScore}">${score.toFixed(0)}</div>
+                  </div>
+                </td>
+                <td style="padding:8px;text-align:right;color:${dy>=6?'#16a34a':dy>=3?'#f59e0b':'var(--text2)'};font-weight:${dy>=3?'700':'400'}">
+                  ${dy>0?dy.toFixed(1)+'%':'—'}
+                </td>
+                ${capital>0?`
+                  <td style="padding:8px;text-align:right">${c.peso_pct||0}%</td>
+                  <td style="padding:8px;text-align:right;font-weight:600">R$ ${(c.valor_sugerido||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                `:''}
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function enviarBuilderParaBacktest(){
+  if(!_builderResultado?.candidatos?.length) return;
+  const tickers = _builderResultado.candidatos.slice(0,10).map(c=>c.ticker);
+  // Adiciona tickers na lista do backtesting
+  _btTickers = tickers;
+  _renderBtTickers();
+  goPage('backtesting', document.querySelector('.tab[onclick*="backtesting"]'));
+  // Toast
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:12px 24px;border-radius:24px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+  toast.textContent = `🔬 ${tickers.length} ativos carregados no Backtesting!`;
+  document.body.appendChild(toast);
+  setTimeout(()=>toast.remove(), 3000);
+}
+
+function enviarBuilderParaCarteira(){
+  alert('Em breve: adicionar ativos do Builder diretamente à sua Carteira Janus!');
+}
+
 function toggleMenuSec(){
   const m = document.getElementById('menu-sec');
   const o = document.getElementById('menu-sec-overlay');
@@ -4409,6 +4694,7 @@ function goPage(p,el){
     carregarBtHistorico();
     carregarComunidade();
   }
+  if(p==='builder'){ iniciarBuilder(); }
   if(p==='params'){ renderFontes(); carregarEstrategia(); }
   enviarPing(); // atualiza página no ping
   if(p==='carteira'){ renderCarteira(); carregarCarteira(); }
