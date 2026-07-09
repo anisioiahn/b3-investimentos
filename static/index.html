@@ -3675,7 +3675,7 @@ async function carregarComunidade(){
             ${rankScore}
           </div>
           ${isFork ? `<div style="font-size:10px;color:#f59e0b;margin-bottom:2px">🍴 Fork de "${e.fork_de_nome||'estratégia original'}"</div>` : ''}
-          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">por ${e.autor||'Anônimo'} · ${e.usos||0} usos · ${e.forks||0} forks</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">por ${e.autor||'Anônimo'} · ${e.usos||0} usos · ${e.total_forks||0} forks</div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <div>${starsHtml}</div>
             <span style="font-size:11px;color:var(--text3)">${estrelas>0?estrelas.toFixed(1)+' ('+e.total_avaliacoes+')':'Sem avaliações'}</span>
@@ -4069,8 +4069,7 @@ async function abrirDetalhesComunidade(eid, el){
           ${est.retorno_medio!=null?`<div style="text-align:center"><div style="font-size:10px;color:var(--text3)">Retorno</div><div style="font-size:14px;font-weight:700;color:${est.retorno_medio>=0?'#16a34a':'#e53935'}">${est.retorno_medio>=0?'+':''}${parseFloat(est.retorno_medio).toFixed(1)}%</div></div>`:''}
           ${est.sharpe_medio!=null?`<div style="text-align:center"><div style="font-size:10px;color:var(--text3)">Sharpe</div><div style="font-size:14px;font-weight:700">${parseFloat(est.sharpe_medio).toFixed(2)}</div></div>`:''}
           <div style="text-align:center"><div style="font-size:10px;color:var(--text3)">Usos</div><div style="font-size:14px;font-weight:700">${est.usos||0}</div></div>
-          <div style="text-align:center"><div style="font-size:10px;color:var(--text3)">Forks</div><div style="font-size:14px;font-weight:700">${forks.length}</div></div>
-          <div style="display:flex;align-items:center;gap:4px">${starsHtml}<span style="font-size:12px;color:var(--text3)">${estrelas.total||0}</span></div>
+          <div style="text-align:center"><div style="font-size:10px;color:var(--text3)">Forks</div><div style="font-size:14px;font-weight:700">${forks.length}</div></div>          <div style="display:flex;align-items:center;gap:4px">${starsHtml}<span style="font-size:12px;color:var(--text3)">${estrelas.total||0}</span></div>
         </div>
 
         <!-- Botões de ação -->
@@ -4084,8 +4083,7 @@ async function abrirDetalhesComunidade(eid, el){
       <!-- Abas -->
       <div style="display:flex;border-bottom:1px solid var(--border);padding:0 1.5rem">
         ${['visao','versoes','forks','comentarios'].map((aba,i)=>{
-          const labels = ['📊 Visão Geral',`📋 Versões (${versoes.length})`,`🍴 Forks (${forks.length})`,`💬 Discuss. (${comentarios.length})`];
-          return `<button onclick="trocarAbaEstrategia('${aba}',${eid},this)"
+          const labels = ['📊 Visão Geral',`📋 Versões (${versoes.length})`,`🍴 Forks (${forks.length})`,`💬 Discuss. (${comentarios.length})`];          return `<button onclick="trocarAbaEstrategia('${aba}',${eid},this)"
             id="aba-btn-${aba}-${eid}"
             style="padding:10px 12px;font-size:12px;font-weight:600;background:none;border:none;cursor:pointer;border-bottom:2px solid ${i===0?'var(--green)':'transparent'};color:${i===0?'var(--green)':'var(--text3)'};font-family:inherit;white-space:nowrap">
             ${labels[i]}
