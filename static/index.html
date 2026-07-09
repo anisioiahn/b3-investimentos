@@ -511,7 +511,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .ji-score-clicavel{cursor:pointer;transition:transform .15s}
 .ji-score-clicavel:hover{transform:scale(1.08)}
 
-/* Modal "Sobre o Janus Index" — conteúdo didático */
+/* Modal "Sobre o Janus Score" — conteúdo didático */
 .ji-sobre-body{padding:1.5rem;overflow-y:auto}
 .ji-sobre-hero{text-align:center;padding:1rem 0 1.5rem;border-bottom:1px solid var(--border);margin-bottom:1.5rem}
 .ji-sobre-hero-icon{font-size:42px;margin-bottom:10px}
@@ -631,7 +631,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="tab active" onclick="goPage('cockpit',this)">🚀 Cockpit</div>
     <div class="tab" onclick="goPage('carteira',this)">💼 Carteira</div>
     <div class="tab" onclick="goPage('alertas',this)">🔔 Alertas <span class="tab-badge" id="alt-cnt" style="display:none">0</span></div>
-    <div class="tab" onclick="goPage('janus',this)">🎯 Janus Index</div>
+    <div class="tab" onclick="goPage('janus',this)">🎯 Janus Score</div>
     <div class="tab" onclick="goPage('dividendos',this)">💰 Dividendos</div>
     <div class="tab" onclick="goPage('setores',this)">📊 Setores</div>
     <div class="tab" onclick="goPage('backtesting',this)">🔬 Backtesting</div>
@@ -674,7 +674,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <span style="color:var(--text3)" id="desk-att-cotacao">—</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:11px">
-          <span style="color:var(--text2)">🎯 Janus Index</span>
+          <span style="color:var(--text2)">🎯 Janus Score</span>
           <span style="color:var(--text3)" id="desk-att-janus">—</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:11px">
@@ -1404,14 +1404,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 <div class="ji-modal-overlay" id="ji-modal-sobre" onclick="fecharModalSobre(event)">
   <div class="ji-modal" onclick="event.stopPropagation()" style="max-width:640px;max-height:85vh">
     <div class="ji-modal-header">
-      <div class="ji-modal-title">🎯 Sobre o Janus Index</div>
+      <div class="ji-modal-title">🎯 Sobre o Janus Score</div>
       <button class="modal-close" onclick="fecharModalSobre()">✕</button>
     </div>
     <div class="ji-sobre-body">
       <div class="ji-sobre-hero">
         <div class="ji-sobre-hero-icon">🎯</div>
         <div class="ji-sobre-hero-title">Inteligência fundamentalista para todos os ativos da B3</div>
-        <div class="ji-sobre-hero-sub">O Janus Index transforma dados financeiros complexos em uma nota de 0 a 100, totalmente explicável e reproduzível.</div>
+        <div class="ji-sobre-hero-sub">O Janus Score transforma dados financeiros complexos em uma nota de 0 a 100, totalmente explicável e reproduzível.</div>
       </div>
 
       <div class="ji-sobre-section">
@@ -1467,7 +1467,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div class="ji-sobre-disclaimer">
         <div class="ji-sobre-disclaimer-icon">⚠️</div>
         <div>
-          <strong>O Janus Index não prevê o futuro.</strong> Ele organiza e interpreta dados financeiros históricos para ajudar você a entender melhor os fundamentos de uma empresa. Não é uma recomendação de compra ou venda, e desempenho passado não garante resultados futuros. Use como mais uma ferramenta no seu processo de decisão — sempre faça sua própria análise.
+          <strong>O Janus Score não prevê o futuro.</strong> Ele organiza e interpreta dados financeiros históricos para ajudar você a entender melhor os fundamentos de uma empresa. Não é uma recomendação de compra ou venda, e desempenho passado não garante resultados futuros. Use como mais uma ferramenta no seu processo de decisão — sempre faça sua própria análise.
         </div>
       </div>
     </div>
@@ -2847,7 +2847,7 @@ function abrirSetorPorNome(nome){
 function _renderCockpitOportunidades(){
   const el = document.getElementById('cockpit-oportunidades');
   if(!_janusRanking?.length){
-    el.innerHTML = '<div class="cockpit-empty">Execute o Janus Index para ver oportunidades</div>'; return;
+    el.innerHTML = '<div class="cockpit-empty">Execute o Janus Score para ver oportunidades</div>'; return;
   }
   const top5 = _janusRanking
     .filter(i=>i.score!=null)
@@ -5457,7 +5457,7 @@ function renderAlerts(){
     esqHtml = `<div class="alts-empty" style="padding:2rem">
       <div style="font-size:32px;margin-bottom:8px">🔔</div>
       <div style="font-size:14px;font-weight:600;margin-bottom:4px">Nenhum alerta configurado</div>
-      <div style="font-size:12px;color:var(--text2)">Configure alertas nos Setores, Janus Index ou Carteira</div>
+      <div style="font-size:12px;color:var(--text2)">Configure alertas nos Setores, Janus Score ou Carteira</div>
     </div>`;
   } else {
     esqHtml = _alertasServidor.map(a=>{
@@ -6876,7 +6876,7 @@ async function atualizarJanusIndex(){
 
   const mostrarGauge = (prog) => {
     if(gauge)      gauge.classList.add('ativo');
-    if(gaugeTitle) gaugeTitle.textContent = '🎯 Janus Index — Atualizando';
+    if(gaugeTitle) gaugeTitle.textContent = '🎯 Janus Score — Atualizando';
     if(gaugeBar)   gaugeBar.style.width   = `${prog.pct || 0}%`;
     if(gaugePct)   gaugePct.textContent   = `${prog.pct || 0}%`;
     if(gaugeSetor) gaugeSetor.textContent  = prog.ticker_atual || 'Iniciando coleta...';
@@ -7004,7 +7004,7 @@ function renderJanusTabela(){
     el.innerHTML = `<div class="ji-empty">
       <div class="ji-empty-icon">🎯</div>
       <div style="font-size:15px;font-weight:600;margin-bottom:6px">Nenhum dado disponível ainda</div>
-      <div style="font-size:13px">Clique em "Atualizar agora" para gerar o primeiro ranking do Janus Index</div>
+      <div style="font-size:13px">Clique em "Atualizar agora" para gerar o primeiro ranking do Janus Score</div>
     </div>`;
     return;
   }
@@ -7182,7 +7182,7 @@ function fecharModalSugestao(e){
   }
 }
 
-// ── Modal "Sobre o Janus Index" ─────────────────────────────────
+// ── Modal "Sobre o Janus Score" ─────────────────────────────────
 function abrirModalSobre(){
   document.getElementById('ji-modal-sobre').classList.add('open');
 }
@@ -7565,7 +7565,7 @@ const _pollDados=setInterval(async()=>{
           <span style="color:var(--text3)" id="mob-att-cotacao">—</span>
         </div>
         <div style="display:flex;justify-content:space-between">
-          <span style="color:var(--text2)">🎯 Janus Index</span>
+          <span style="color:var(--text2)">🎯 Janus Score</span>
           <span style="color:var(--text3)" id="mob-att-janus">—</span>
         </div>
         <div style="display:flex;justify-content:space-between">
