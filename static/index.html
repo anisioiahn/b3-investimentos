@@ -3804,7 +3804,13 @@ async function usarEstrategiaComunidade(eid, tipo){
   // Busca dados completos da estratégia
   const r = await fetch(`/api/backtesting/estrategias/${eid}`);
   const e = await r.json();
-  if(e.erro){ alert('❌ Erro ao carregar estratégia'); return; }
+
+  // Estratégia foi removida ou não existe mais
+  if(!r.ok || e.erro){
+    alert('⚠️ Esta estratégia não está mais disponível na comunidade.\n\nA lista será atualizada.');
+    await carregarComunidade();
+    return;
+  }
 
   const regras          = e.regras          || {};
   const simParams       = e.simulacao_params || {};
@@ -3947,6 +3953,13 @@ async function confirmarAvaliacao(eid){
 async function abrirDetalhesComunidade(eid, el){
   const nome = (typeof el === 'string') ? el : (el?.dataset?.nome || 'Estratégia');
   const r = await fetch(`/api/backtesting/estrategias/${eid}/detalhes`);
+
+  if(!r.ok){
+    alert('⚠️ Esta estratégia não está mais disponível.');
+    await carregarComunidade();
+    return;
+  }
+
   const d = await r.json();
   const comentarios = d.comentarios || [];
   const estrelas = d.estrelas || {};
