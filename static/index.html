@@ -4040,7 +4040,6 @@ async function enviarComentario(eid){
 
 // ── PRESENÇA ─────────────────────────────────────────────────
 function enviarPing(){
-  if(!document.cookie.includes('janus_token')) return;
   fetch('/api/ping', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
