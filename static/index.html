@@ -4001,75 +4001,163 @@ async function confirmarAvaliacao(eid){
 
 async function abrirDetalhesComunidade(eid, el){
   const nome = (typeof el === 'string') ? el : (el?.dataset?.nome || 'Estratégia');
-  const r = await fetch(`/api/backtesting/estrategias/${eid}/detalhes`);
 
-  if(!r.ok){
+  // Busca dados em paralelo
+  const [rDet, rEst, rForks, rVersoes] = await Promise.all([
+    fetch(`/api/backtesting/estrategias/${eid}/detalhes`),
+    fetch(`/api/backtesting/estrategias/${eid}`),
+    fetch(`/api/backtesting/estrategias/${eid}/forks`),
+    fetch(`/api/backtesting/estrategias/${eid}/versoes`),
+  ]);
+
+  if(!rDet.ok || !rEst.ok){
     alert('⚠️ Esta estratégia não está mais disponível.');
     await carregarComunidade();
     return;
   }
 
-  const d = await r.json();
-  const comentarios = d.comentarios || [];
-  const estrelas = d.estrelas || {};
+  const det     = await rDet.json();
+  const est     = await rEst.json();
+  const forks   = await rForks.json();
+  const versoes = await rVersoes.json();
+  const comentarios = det.comentarios || [];
+  const estrelas    = det.estrelas    || {};
+
+  const nomeEst = {'buy_hold':'Buy & Hold','medias_moveis':'Médias Móveis','rsi':'RSI/IFR','janus_score':'Janus Score','personalizada':'Personalizada'};
+  const starsHtml = [1,2,3,4,5].map(s=>`<span style="color:${s<=Math.round(estrelas.media||0)?'#f59e0b':'var(--border)'};font-size:16px">★</span>`).join('');
 
   const modal = document.createElement('div');
   modal.id = 'modal-detalhes';
   modal.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:1rem';
   modal.innerHTML = `
-    <div style="background:var(--card);border-radius:16px;width:100%;max-width:540px;max-height:80vh;overflow-y:auto;padding:1.5rem;box-shadow:0 16px 48px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-        <div style="font-size:15px;font-weight:700">${nome}</div>
-        <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text3)">✕</button>
-      </div>
+    <div style="background:var(--card);border-radius:16px;width:100%;max-width:640px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,.3)" onclick="event.stopPropagation()">
 
-      <!-- Estrelas -->
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
-        <div>${[1,2,3,4,5].map(s=>`<span style="color:${s<=Math.round(estrelas.media||0)?'#f59e0b':'var(--border)'};font-size:18px">★</span>`).join('')}</div>
-        <span style="font-size:13px;font-weight:700">${estrelas.media||0}</span>
-        <span style="font-size:12px;color:var(--text3)">(${estrelas.total||0} avaliações)</span>
-        ${estrelas.minha_avaliacao?`<span style="font-size:11px;color:var(--green);margin-left:auto">Sua avaliação: ${'★'.repeat(estrelas.minha_avaliacao)}</span>`:''}
-      </div>
-
-      <!-- Versões -->
-      <div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <div style="font-size:12px;font-weight:700;color:var(--text2)">📋 Histórico de versões</div>
-          <button onclick="carregarVersoes(${eid})" style="font-size:10px;color:var(--text3);background:none;border:none;cursor:pointer;text-decoration:underline">Carregar</button>
+      <!-- Header -->
+      <div style="padding:1.25rem 1.5rem;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem">
+          <div style="flex:1">
+            <div style="font-size:16px;font-weight:700">${est.nome} <span style="font-size:12px;color:var(--text3);font-weight:400">${est.versao||'v1.0'}</span></div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">
+              por ${est.autor||'Anônimo'} · ${nomeEst[est.tipo]||est.tipo}
+              ${est.fork_de ? `<span style="color:#f59e0b"> · 🍴 Fork de "${est.fork_de_nome||'original'}"</span>` : ''}
+            </div>
+          </div>
+          <button onclick="document.getElementById('modal-detalhes').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text3);padding:0 0 0 12px">✕</button>
         </div>
-        <div id="versoes-lista-${eid}" style="font-size:11px;color:var(--text3)">Clique em carregar para ver o histórico</div>
+
+        <!-- Métricas rápidas -->
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem">
+          ${est.retorno_medio!=null?`<div style="text-align:center"><div style="font-size:10px;color:var(--text3)">Retorno</div><div style="font-size:14px;font-weight:700;color:${est.retorno_medio>=0?'#16a34a':'#e53935'}">${est.retorno_medio>=0?'+':''}${parseFloat(est.retorno_medio).toFixed(1)}%</div></div>`:''}
+          ${est.sharpe_medio!=null?`<div style="text-align:center"><div style="font-size:10px;color:var(--text3)">Sharpe</div><div style="font-size:14px;font-weight:700">${parseFloat(est.sharpe_medio).toFixed(2)}</div></div>`:''}
+          <div style="text-align:center"><div style="font-size:10px;color:var(--text3)">Usos</div><div style="font-size:14px;font-weight:700">${est.usos||0}</div></div>
+          <div style="text-align:center"><div style="font-size:10px;color:var(--text3)">Forks</div><div style="font-size:14px;font-weight:700">${forks.length}</div></div>
+          <div style="display:flex;align-items:center;gap:4px">${starsHtml}<span style="font-size:12px;color:var(--text3)">${estrelas.total||0}</span></div>
+        </div>
+
+        <!-- Botões de ação -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="usarEstrategiaComunidade(${eid},'${est.tipo||'buy_hold'}')" class="btn" style="font-size:12px;padding:6px 12px;background:var(--green);color:#fff;border-color:var(--green)">▶ Usar</button>
+          <button onclick="forkEstrategia(${eid},'${(est.nome||'').replace(/'/g,"\'")}','${est.versao||'v1.0'}')" class="btn" style="font-size:12px;padding:6px 12px">🍴 Fork</button>
+          <button onclick="avaliarEstrategia(${eid})" class="btn" style="font-size:12px;padding:6px 12px">⭐ Avaliar</button>
+        </div>
       </div>
 
-      <!-- Novo comentário PRIMEIRO -->
-      <div style="margin-bottom:1rem">
-        <textarea id="novo-comentario-${eid}" placeholder="Escreva seu comentário sobre esta estratégia..."
-          style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;min-height:70px;background:var(--card);color:var(--text);font-family:inherit;box-sizing:border-box"></textarea>
-        <button onclick="enviarComentario(${eid})" class="btn"
-          style="width:100%;margin-top:6px;padding:8px;background:var(--green);color:#fff;border-color:var(--green);font-size:13px">
-          Enviar comentário
-        </button>
+      <!-- Abas -->
+      <div style="display:flex;border-bottom:1px solid var(--border);padding:0 1.5rem">
+        ${['visao','versoes','forks','comentarios'].map((aba,i)=>{
+          const labels = ['📊 Visão Geral',`📋 Versões (${versoes.length})`,`🍴 Forks (${forks.length})`,`💬 Discuss. (${comentarios.length})`];
+          return `<button onclick="trocarAbaEstrategia('${aba}',${eid},this)"
+            id="aba-btn-${aba}-${eid}"
+            style="padding:10px 12px;font-size:12px;font-weight:600;background:none;border:none;cursor:pointer;border-bottom:2px solid ${i===0?'var(--green)':'transparent'};color:${i===0?'var(--green)':'var(--text3)'};font-family:inherit;white-space:nowrap">
+            ${labels[i]}
+          </button>`;
+        }).join('')}
       </div>
 
-      <!-- Comentários existentes -->
-      <div style="border-top:1px solid var(--border);padding-top:1rem">
-        <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:.75rem">💬 Comentários (${comentarios.length})</div>
-        <div id="comentarios-lista-${eid}" style="display:flex;flex-direction:column;gap:.75rem;max-height:220px;overflow-y:auto">
-          ${comentarios.length ? comentarios.map(c=>`
-            <div style="background:var(--bg);border-radius:10px;padding:.75rem">
-              <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                <span style="font-size:12px;font-weight:700">${c.nome_usuario}</span>
-                <span style="font-size:10px;color:var(--text3)">${new Date(c.created_at).toLocaleDateString('pt-BR')}</span>
+      <!-- Conteúdo das abas -->
+      <div style="flex:1;overflow-y:auto;padding:1.25rem 1.5rem">
+
+        <!-- Visão Geral -->
+        <div id="aba-visao-${eid}">
+          ${est.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:1rem;padding:10px;background:var(--bg);border-radius:8px;border-left:3px solid var(--green)">${est.descricao}</div>` : ''}
+          <div style="font-size:12px;color:var(--text3);margin-bottom:.5rem">Criada em ${new Date(est.created_at).toLocaleDateString('pt-BR')}</div>
+          ${est.simulacao_params?.data_inicio ? `
+          <div style="background:var(--bg);border-radius:10px;padding:12px;font-size:12px">
+            <div style="font-weight:700;margin-bottom:6px;color:var(--text2)">Parâmetros da simulação original</div>
+            <div style="color:var(--text3)">Ativo: <span style="color:var(--text);font-weight:600">${est.simulacao_params.ticker||est.simulacao_params.tickers?.join(', ')||'—'}</span></div>
+            <div style="color:var(--text3)">Período: <span style="color:var(--text);font-weight:600">${est.simulacao_params.data_inicio} → ${est.simulacao_params.data_fim}</span></div>
+            <div style="color:var(--text3)">Capital: <span style="color:var(--text);font-weight:600">R$ ${(est.simulacao_params.capital_inicial||0).toLocaleString('pt-BR')}</span></div>
+          </div>` : ''}
+        </div>
+
+        <!-- Versões -->
+        <div id="aba-versoes-${eid}" style="display:none">
+          ${versoes.length ? versoes.map(v=>`
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg);border-radius:10px;margin-bottom:8px">
+              <span style="font-size:13px;font-weight:700;color:var(--green);min-width:40px">${v.versao}</span>
+              <div style="flex:1">
+                <div style="font-size:12px">${v.notas_versao||'Sem notas desta versão'}</div>
+                <div style="font-size:10px;color:var(--text3)">${new Date(v.created_at).toLocaleDateString('pt-BR')}</div>
               </div>
-              <div style="font-size:12px;color:var(--text)">${c.comentario}</div>
+              ${v.retorno_medio!=null?`<span style="font-size:12px;font-weight:700;color:${v.retorno_medio>=0?'#16a34a':'#e53935'}">${v.retorno_medio>=0?'+':''}${parseFloat(v.retorno_medio).toFixed(1)}%</span>`:''}
+              <button onclick="usarEstrategiaComunidade(${v.id},'${est.tipo}')" class="btn" style="font-size:10px;padding:3px 8px">▶ Usar</button>
             </div>`).join('')
-            : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Nenhum comentário ainda. Seja o primeiro!</div>'}
+          : '<div style="text-align:center;padding:2rem;color:var(--text3)">Apenas a versão atual disponível</div>'}
         </div>
+
+        <!-- Forks -->
+        <div id="aba-forks-${eid}" style="display:none">
+          ${forks.length ? forks.map(f=>`
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg);border-radius:10px;margin-bottom:8px">
+              <div style="flex:1">
+                <div style="font-size:12px;font-weight:700">${f.nome}</div>
+                <div style="font-size:11px;color:var(--text3)">por ${f.autor} · ${new Date(f.created_at).toLocaleDateString('pt-BR')}</div>
+              </div>
+              ${f.retorno_medio!=null?`<span style="font-size:12px;font-weight:700;color:${f.retorno_medio>=0?'#16a34a':'#e53935'}">${f.retorno_medio>=0?'+':''}${parseFloat(f.retorno_medio).toFixed(1)}%</span>`:''}
+              <div style="font-size:11px">${[1,2,3,4,5].map(s=>`<span style="color:${s<=Math.round(f.media_estrelas||0)?'#f59e0b':'var(--border)'}">★</span>`).join('')}</div>
+              <button onclick="document.getElementById('modal-detalhes').remove();abrirDetalhesComunidade(${f.id},null)" class="btn" style="font-size:10px;padding:3px 8px">Ver</button>
+            </div>`).join('')
+          : '<div style="text-align:center;padding:2rem;color:var(--text3)">Nenhum fork público ainda<br><span style="font-size:11px">Seja o primeiro a fazer um fork!</span></div>'}
+        </div>
+
+        <!-- Comentários -->
+        <div id="aba-comentarios-${eid}" style="display:none">
+          <textarea id="novo-comentario-${eid}" placeholder="Escreva seu comentário..."
+            style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;min-height:65px;background:var(--card);color:var(--text);font-family:inherit;box-sizing:border-box;margin-bottom:6px"></textarea>
+          <button onclick="enviarComentario(${eid})" class="btn"
+            style="width:100%;padding:8px;background:var(--green);color:#fff;border-color:var(--green);font-size:13px;margin-bottom:1rem">
+            Enviar comentário
+          </button>
+          <div id="comentarios-lista-${eid}" style="display:flex;flex-direction:column;gap:.75rem">
+            ${comentarios.length ? comentarios.map(c=>`
+              <div style="background:var(--bg);border-radius:10px;padding:.75rem">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                  <span style="font-size:12px;font-weight:700">${c.nome_usuario}</span>
+                  <span style="font-size:10px;color:var(--text3)">${new Date(c.created_at).toLocaleDateString('pt-BR')}</span>
+                </div>
+                <div style="font-size:12px">${c.comentario}</div>
+              </div>`).join('')
+            : '<div style="text-align:center;padding:1.5rem;color:var(--text3)">Nenhum comentário ainda. Seja o primeiro!</div>'}
+          </div>
+        </div>
+
       </div>
     </div>`;
   modal.onclick = ()=>modal.remove();
   document.body.appendChild(modal);
 }
 
+function trocarAbaEstrategia(aba, eid, btn){
+  ['visao','versoes','forks','comentarios'].forEach(a=>{
+    const el = document.getElementById(`aba-${a}-${eid}`);
+    const b  = document.getElementById(`aba-btn-${a}-${eid}`);
+    if(el) el.style.display = a===aba ? 'block' : 'none';
+    if(b){
+      b.style.borderBottomColor = a===aba ? 'var(--green)' : 'transparent';
+      b.style.color = a===aba ? 'var(--green)' : 'var(--text3)';
+    }
+  });
+}
 async function enviarComentario(eid){
   const ta = document.getElementById(`novo-comentario-${eid}`);
   const comentario = ta?.value?.trim();
