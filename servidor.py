@@ -1087,6 +1087,9 @@ def api_bt_estrategias_post():
         safe(d.get('retorno_medio')), safe(d.get('sharpe_medio')),
         simulacao_params
     )
+    # Marca a simulação de origem como publicada
+    if eid and d.get('bt_id'):
+        db.db_marcar_publicada(d['bt_id'], uid(), eid, True)
     return jsonify({"ok": bool(eid), "id": eid})
 
 @app.route("/api/backtesting/estrategias/publicas")
@@ -1150,6 +1153,12 @@ def api_bt_excluir_estrategia(eid):
             cur.execute("""
                 DELETE FROM backtesting_estrategias
                 WHERE id=%s AND usuario_id=%s
+            """, (eid, uid()))
+            # Desmarca simulação vinculada
+            cur.execute("""
+                UPDATE backtesting_resultados
+                SET publicada=FALSE, estrategia_id=NULL
+                WHERE estrategia_id=%s AND usuario_id=%s
             """, (eid, uid()))
         conn.commit(); conn.close()
         return jsonify({"ok": True})
