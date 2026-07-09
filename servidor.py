@@ -1226,12 +1226,9 @@ def api_builder_executar():
             ref_date = ref_row['ultima']
 
             # Monta filtros dinâmicos
-            conditions = [
-                "r.janus_score >= %s",
-                "r.janus_score <= %s",
-                "a.status = 'ATIVO'",
-            ]
-            params = [score_min, score_max]
+            usar_ranking = score_min > 0 or score_max < 100
+            conditions = ["a.status = 'ATIVO'"]
+            params = []
 
             if tipos:
                 placeholders = ','.join(['%s'] * len(tipos))
@@ -1248,35 +1245,61 @@ def api_builder_executar():
                 conditions.append(f"(c.sector NOT IN ({placeholders}) OR c.sector IS NULL)")
                 params.extend(setores_exc)
 
-            # Ordem
+            if usar_ranking:
+                conditions.append("COALESCE(r.janus_score,0) >= %s")
+                conditions.append("COALESCE(r.janus_score,0) <= %s")
+                params.extend([score_min, score_max])
+
+            if dy_min > 0:
+                conditions.append("COALESCE(dd.dividend_yield_12m, 0) >= %s")
+                params.append(dy_min)
+            if dy_max < 100:
+                conditions.append("COALESCE(dd.dividend_yield_12m, 0) <= %s")
+                params.append(dy_max)
+
             order_map = {
-                'score': 'r.janus_score DESC',
+                'score': 'COALESCE(r.janus_score, 0) DESC',
                 'dy':    'COALESCE(dd.dividend_yield_12m, 0) DESC',
                 'nome':  'a.ticker ASC',
             }
-            order_sql = order_map.get(ordem, 'r.janus_score DESC')
+            # Se buscando só por DY, ordena por DY por padrão
+            default_order = 'COALESCE(dd.dividend_yield_12m,0) DESC' if dy_min > 0 and not usar_ranking else 'COALESCE(r.janus_score,0) DESC'
+            order_sql = order_map.get(ordem, default_order)
+
+            join_ranking = (
+                f"JOIN ranking_snapshots r ON r.asset_id = a.asset_id AND r.reference_date = '{ref_date}'"
+                if usar_ranking else
+                f"LEFT JOIN ranking_snapshots r ON r.asset_id = a.asset_id AND r.reference_date = '{ref_date}'"
+            )
+
+            # Se buscando só por DY, exige que tenha registro no dividend_profile
+            join_dividend = (
+                "JOIN dividend_profile dd ON dd.ticker = a.ticker"
+                if dy_min > 0 else
+                "LEFT JOIN dividend_profile dd ON dd.ticker = a.ticker"
+            )
 
             where = ' AND '.join(conditions)
             cur.execute(f"""
                 SELECT
                     a.ticker, a.asset_type,
                     c.trading_name as nome, c.sector as setor,
-                    r.janus_score as score,
-                    r.quality_score,
+                    COALESCE(r.janus_score, 0) as score,
+                    COALESCE(r.quality_score, 0) as quality_score,
                     r.general_position as posicao,
                     COALESCE(dd.dividend_yield_12m, 0) as dy_12m,
                     COALESCE(dd.janus_dividend_score, 0) as dividend_score,
                     js.confidence
-                FROM ranking_snapshots r
-                JOIN assets a ON a.asset_id = r.asset_id
+                FROM assets a
                 LEFT JOIN companies c ON c.company_id = a.company_id
-                LEFT JOIN janus_scores js ON js.asset_id = r.asset_id
-                    AND js.reference_date = r.reference_date
-                LEFT JOIN dividend_profile dd ON dd.ticker = a.ticker
-                WHERE r.reference_date = %s AND {where}
+                {join_ranking}
+                LEFT JOIN janus_scores js ON js.asset_id = a.asset_id
+                    AND js.reference_date = '{ref_date}'
+                {join_dividend}
+                WHERE {where}
                 ORDER BY {order_sql}
                 LIMIT %s
-            """, [ref_date] + params + [max_ativos])
+            """, params + [max_ativos])
 
             candidatos = [dict(r) for r in cur.fetchall()]
         conn.close()
