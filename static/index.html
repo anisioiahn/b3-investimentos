@@ -5432,17 +5432,11 @@ async function removerAlerta(ticker, direcao){
 function updateAltCnt(){
   const el = document.getElementById('alt-cnt');
   const disparados = (_disparadosServidor||[]).length;
-  const total      = (_alertasServidor||[]).length;
   if(disparados > 0){
     el.textContent = disparados;
     el.style.display = 'inline';
-    el.style.background = '#e53935'; // vermelho = atenção necessária
+    el.style.background = '#e53935';
     el.title = `${disparados} alerta${disparados>1?'s':''} disparado${disparados>1?'s':''}`;
-  } else if(total > 0){
-    el.textContent = total;
-    el.style.display = 'inline';
-    el.style.background = ''; // cor padrão
-    el.title = `${total} alerta${total>1?'s':''} configurado${total>1?'s':''}`;
   } else {
     el.style.display = 'none';
   }
