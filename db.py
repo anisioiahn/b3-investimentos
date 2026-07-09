@@ -1600,11 +1600,13 @@ def db_listar_estrategias_bt(uid=None, publicas=False, limit=20, ordem='ranking'
                     SELECT e.*, COALESCE(u.nome, 'Usuário') as autor,
                         COALESCE(AVG(a.estrelas),0)::NUMERIC(3,1) as media_estrelas,
                         COUNT(DISTINCT a.id) as total_avaliacoes,
-                        COUNT(DISTINCT c.id) as total_comentarios
+                        COUNT(DISTINCT c.id) as total_comentarios,
+                        COUNT(DISTINCT f.id) as total_forks
                     FROM backtesting_estrategias e
                     LEFT JOIN usuarios u ON u.id = e.usuario_id
                     LEFT JOIN backtesting_avaliacoes a ON a.estrategia_id = e.id
                     LEFT JOIN backtesting_comentarios c ON c.estrategia_id = e.id
+                    LEFT JOIN backtesting_estrategias f ON f.fork_de = e.id AND f.publica = TRUE
                     WHERE e.publica = TRUE
                     GROUP BY e.id, u.nome
                     ORDER BY {order}
