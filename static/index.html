@@ -1097,10 +1097,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <div style="margin-top:2rem">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
             <div style="font-size:14px;font-weight:700">🌐 Estratégias da Comunidade</div>
-            <div style="display:flex;gap:4px">
-              <button onclick="filtrarComunidade('retorno')" class="range-btn active" id="btn-com-retorno" style="font-size:10px;padding:3px 8px">Mais rentáveis</button>
-              <button onclick="filtrarComunidade('sharpe')" class="range-btn" id="btn-com-sharpe" style="font-size:10px;padding:3px 8px">Melhor Sharpe</button>
-              <button onclick="filtrarComunidade('usos')" class="range-btn" id="btn-com-usos" style="font-size:10px;padding:3px 8px">Mais usadas</button>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              <button onclick="filtrarComunidade('ranking')" class="range-btn active" id="btn-com-ranking" style="font-size:10px;padding:3px 8px">🏆 Ranking</button>
+              <button onclick="filtrarComunidade('retorno')" class="range-btn" id="btn-com-retorno" style="font-size:10px;padding:3px 8px">📈 Retorno</button>
+              <button onclick="filtrarComunidade('sharpe')" class="range-btn" id="btn-com-sharpe" style="font-size:10px;padding:3px 8px">📐 Sharpe</button>
+              <button onclick="filtrarComunidade('usos')" class="range-btn" id="btn-com-usos" style="font-size:10px;padding:3px 8px">👥 Usos</button>
+              <button onclick="filtrarComunidade('recentes')" class="range-btn" id="btn-com-recentes" style="font-size:10px;padding:3px 8px">🆕 Recentes</button>
             </div>
           </div>
           <div id="bt-comunidade">
@@ -3638,10 +3640,10 @@ async function excluirBtSimulacao(id, publicada=false){
   }catch(e){}
 }
 
-let _comunidadeOrdem = 'retorno';
+let _comunidadeOrdem = 'ranking';
 async function filtrarComunidade(ordem){
   _comunidadeOrdem = ordem;
-  ['retorno','sharpe','usos'].forEach(o=>{
+  ['ranking','retorno','sharpe','usos','recentes'].forEach(o=>{
     const btn = document.getElementById(`btn-com-${o}`);
     if(btn) btn.classList.toggle('active', o===ordem);
   });
@@ -3652,38 +3654,41 @@ async function carregarComunidade(){
   const el = document.getElementById('bt-comunidade');
   if(!el) return;
   try{
-    const r = await fetch('/api/backtesting/estrategias/publicas');
+    const r = await fetch(`/api/backtesting/estrategias/publicas?ordem=${_comunidadeOrdem}`);
     const lista = await r.json();
     if(!lista?.length){
       el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1.5rem">Nenhuma estratégia publicada ainda.<br>Seja o primeiro!</div>';
       return;
     }
-    // Ordena conforme filtro
-    const ordenado = [...lista].sort((a,b)=>{
-      if(_comunidadeOrdem==='sharpe') return (b.sharpe_medio||0)-(a.sharpe_medio||0);
-      if(_comunidadeOrdem==='usos')   return (b.usos||0)-(a.usos||0);
-      return (b.retorno_medio||0)-(a.retorno_medio||0);
-    });
     el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem">
-      ${ordenado.slice(0,9).map(e=>{
+      ${lista.map(e=>{
         const estrelas = parseFloat(e.media_estrelas||0);
         const starsHtml = [1,2,3,4,5].map(s=>
           `<span style="color:${s<=Math.round(estrelas)?'#f59e0b':'var(--border)'};font-size:14px">★</span>`
         ).join('');
+        const isFork = !!e.fork_de;
+        const rankScore = e.ranking_score ? `<span style="font-size:10px;color:var(--text3);margin-left:6px">Rank ${parseFloat(e.ranking_score).toFixed(0)}</span>` : '';
         return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem">
-          <div style="font-size:13px;font-weight:700;margin-bottom:2px">${e.nome}</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">por ${e.autor||'Anônimo'} · ${e.usos||0} usos</div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:2px">
+            ${e.nome}
+            <span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:4px">${e.versao||'v1.0'}</span>
+            ${rankScore}
+          </div>
+          ${isFork ? `<div style="font-size:10px;color:#f59e0b;margin-bottom:2px">🍴 Fork de "${e.fork_de_nome||'estratégia original'}"</div>` : ''}
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">por ${e.autor||'Anônimo'} · ${e.usos||0} usos · ${e.forks||0} forks</div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <div>${starsHtml}</div>
             <span style="font-size:11px;color:var(--text3)">${estrelas>0?estrelas.toFixed(1)+' ('+e.total_avaliacoes+')':'Sem avaliações'}</span>
           </div>
           <div style="display:flex;gap:10px;font-size:12px;margin-bottom:8px">
             ${e.retorno_medio!=null?`<div><div style="color:var(--text3);font-size:10px">Retorno médio</div><div style="font-weight:700;color:${e.retorno_medio>=0?'#16a34a':'#e53935'}">${e.retorno_medio>=0?'+':''}${parseFloat(e.retorno_medio).toFixed(1)}%</div></div>`:''}
+            ${e.sharpe_medio!=null?`<div><div style="color:var(--text3);font-size:10px">Sharpe</div><div style="font-weight:700">${parseFloat(e.sharpe_medio).toFixed(2)}</div></div>`:''}
           </div>
           ${e.descricao?`<div style="font-size:11px;color:var(--text2);margin-bottom:8px;border-left:2px solid var(--border);padding-left:6px">${e.descricao}</div>`:''}
-          <div style="display:flex;gap:4px">
-            <button onclick="abrirDetalhesComunidade(${e.id},this)" data-nome="${(e.nome||'').replace(/"/g,'&quot;')}" class="btn" style="flex:1;font-size:11px;padding:5px">💬 Ver (${e.total_comentarios||0})</button>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <button onclick="abrirDetalhesComunidade(${e.id},this)" data-nome="${(e.nome||'').replace(/"/g,'&quot;')}" class="btn" style="flex:1;font-size:11px;padding:5px">💬 (${e.total_comentarios||0})</button>
             <button onclick="usarEstrategiaComunidade(${e.id},'${e.tipo||'buy_hold'}')" class="btn" style="font-size:11px;padding:5px;background:var(--green);color:#fff;border-color:var(--green)">▶ Usar</button>
+            <button onclick="forkEstrategia(${e.id},'${(e.nome||'').replace(/'/g,"\\'")}','${e.versao||'v1.0'}')" class="btn" style="font-size:11px;padding:5px" title="Fork — criar minha versão">🍴</button>
             <button onclick="avaliarEstrategia(${e.id})" class="btn" style="font-size:11px;padding:5px">⭐</button>
             ${e.minha ? `<button onclick="excluirDaComunidade(${e.id})" class="btn" title="Remover da comunidade" style="font-size:11px;padding:5px;border-color:#e53935;color:#e53935">🗑️</button>` : ''}
           </div>
@@ -3771,6 +3776,47 @@ async function publicarSimulacao(btId, estrategia, ticker){
     await carregarComunidade();
     alert(`✅ "${nome}" publicada!`);
   } else alert('❌ Erro ao publicar');
+}
+
+async function carregarVersoes(eid){
+  const el = document.getElementById(`versoes-lista-${eid}`);
+  if(!el) return;
+  el.textContent = 'Carregando...';
+  const r = await fetch(`/api/backtesting/estrategias/${eid}/versoes`);
+  const versoes = await r.json();
+  if(!versoes?.length){
+    el.textContent = 'Nenhum histórico de versões';
+    return;
+  }
+  el.innerHTML = versoes.map(v=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:11px;font-weight:700;color:var(--green);min-width:36px">${v.versao}</span>
+      <span style="font-size:11px;color:var(--text2);flex:1">${v.notas_versao||'Sem notas'}</span>
+      ${v.retorno_medio!=null?`<span style="font-size:11px;font-weight:700;color:${v.retorno_medio>=0?'#16a34a':'#e53935'}">${v.retorno_medio>=0?'+':''}${parseFloat(v.retorno_medio).toFixed(1)}%</span>`:''}
+      <span style="font-size:10px;color:var(--text3)">${new Date(v.created_at).toLocaleDateString('pt-BR')}</span>
+    </div>`).join('');
+}
+
+async function forkEstrategia(eid, nomeOriginal, versao){
+  const nome = prompt(`Nome do seu fork:`, `${nomeOriginal} (minha versão)`);
+  if(!nome) return;
+  const descricao = prompt('Descrição do seu fork (opcional):') || '';
+  const r = await fetch(`/api/backtesting/estrategias/${eid}/fork`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({nome, descricao})
+  });
+  const d = await r.json();
+  if(d.ok){
+    // Carrega automaticamente no formulário
+    await usarEstrategiaComunidade(d.id, '');
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:12px 24px;border-radius:24px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+    toast.textContent = `🍴 Fork "${nome}" criado! Ajuste e execute.`;
+    document.body.appendChild(toast);
+    setTimeout(()=>toast.remove(), 4000);
+  } else {
+    alert('❌ Erro ao criar fork');
+  }
 }
 
 async function excluirDaComunidade(eid){
@@ -3980,6 +4026,15 @@ async function abrirDetalhesComunidade(eid, el){
         <span style="font-size:13px;font-weight:700">${estrelas.media||0}</span>
         <span style="font-size:12px;color:var(--text3)">(${estrelas.total||0} avaliações)</span>
         ${estrelas.minha_avaliacao?`<span style="font-size:11px;color:var(--green);margin-left:auto">Sua avaliação: ${'★'.repeat(estrelas.minha_avaliacao)}</span>`:''}
+      </div>
+
+      <!-- Versões -->
+      <div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:12px;font-weight:700;color:var(--text2)">📋 Histórico de versões</div>
+          <button onclick="carregarVersoes(${eid})" style="font-size:10px;color:var(--text3);background:none;border:none;cursor:pointer;text-decoration:underline">Carregar</button>
+        </div>
+        <div id="versoes-lista-${eid}" style="font-size:11px;color:var(--text3)">Clique em carregar para ver o histórico</div>
       </div>
 
       <!-- Novo comentário PRIMEIRO -->
