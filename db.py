@@ -1852,3 +1852,97 @@ def db_calcular_ranking_score(estrategia_id):
     except Exception as e:
         print(f"[DB] Erro ranking: {e}", flush=True)
         return 0
+
+# ── COCKPIT FASE 3 ────────────────────────────────────────────
+def db_init_cockpit_fase3_tables(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS cockpit_ajia_cache (
+                id SERIAL PRIMARY KEY,
+                data DATE NOT NULL UNIQUE,
+                resumo TEXT NOT NULL,
+                created_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS cockpit_mudancas_dia (
+                id SERIAL PRIMARY KEY,
+                data DATE NOT NULL,
+                ticker TEXT NOT NULL,
+                tipo TEXT NOT NULL,
+                descricao TEXT NOT NULL,
+                valor_anterior NUMERIC,
+                valor_atual NUMERIC,
+                icone TEXT DEFAULT '📊'
+            );
+            CREATE INDEX IF NOT EXISTS idx_mudancas_data
+                ON cockpit_mudancas_dia(data DESC);
+        """)
+    conn.commit()
+
+def db_salvar_ajia_cache(resumo):
+    from datetime import date, datetime, timezone, timedelta
+    hoje = date.today()
+    now  = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO cockpit_ajia_cache (data, resumo, created_at)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (data) DO UPDATE SET resumo=%s, created_at=%s
+            """, (hoje, resumo, now, resumo, now))
+        conn.commit(); conn.close()
+    except Exception as e:
+        print(f"[DB] Erro salvar AJIA cache: {e}", flush=True)
+
+def db_buscar_ajia_cache():
+    from datetime import date
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT resumo FROM cockpit_ajia_cache
+                WHERE data = %s
+            """, (date.today(),))
+            row = cur.fetchone()
+        conn.close()
+        return row[0] if row else None
+    except: return None
+
+def db_salvar_mudancas_dia(mudancas):
+    """Salva lista de mudanças do dia."""
+    from datetime import date
+    hoje = date.today()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            # Remove mudanças antigas do dia
+            cur.execute("DELETE FROM cockpit_mudancas_dia WHERE data=%s", (hoje,))
+            if mudancas:
+                import psycopg2.extras
+                psycopg2.extras.execute_values(cur, """
+                    INSERT INTO cockpit_mudancas_dia
+                        (data, ticker, tipo, descricao, valor_anterior, valor_atual, icone)
+                    VALUES %s
+                """, [(hoje, m['ticker'], m['tipo'], m['descricao'],
+                       m.get('valor_anterior'), m.get('valor_atual'), m.get('icone','📊'))
+                      for m in mudancas])
+        conn.commit(); conn.close()
+    except Exception as e:
+        print(f"[DB] Erro mudanças dia: {e}", flush=True)
+
+def db_buscar_mudancas_dia():
+    from datetime import date
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT ticker, tipo, descricao, valor_anterior, valor_atual, icone
+                FROM cockpit_mudancas_dia
+                WHERE data = %s
+                ORDER BY tipo, ticker
+                LIMIT 20
+            """, (date.today(),))
+            return [dict(r) for r in cur.fetchall()]
+    except: return []
+    finally:
+        conn.close()
