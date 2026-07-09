@@ -1588,3 +1588,72 @@ def db_listar_estrategias_bt(uid=None, publicas=False, limit=20):
         return []
     finally:
         conn.close()
+
+# ── PRESENÇA / SESSÕES ATIVAS ─────────────────────────────────
+def db_init_presenca_table(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios_presenca (
+                usuario_id INTEGER PRIMARY KEY,
+                ultimo_acesso TEXT NOT NULL,
+                pagina TEXT,
+                user_agent TEXT
+            )
+        """)
+    conn.commit()
+
+def db_registrar_presenca(usuario_id, pagina=None, user_agent=None):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO usuarios_presenca (usuario_id, ultimo_acesso, pagina, user_agent)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (usuario_id) DO UPDATE SET
+                    ultimo_acesso = %s, pagina = %s, user_agent = %s
+            """, (usuario_id, now, pagina, user_agent,
+                  now, pagina, user_agent))
+        conn.commit(); conn.close()
+    except Exception as e:
+        print(f"[DB] Erro presença: {e}", flush=True)
+
+def db_usuarios_online(minutos=5):
+    """Retorna usuários que fizeram ping nos últimos N minutos."""
+    from datetime import datetime, timezone, timedelta
+    limite = (datetime.now(timezone(timedelta(hours=-3))) - timedelta(minutes=minutos)).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT p.usuario_id, p.ultimo_acesso, p.pagina,
+                       u.nome, u.email
+                FROM usuarios_presenca p
+                JOIN usuarios u ON u.id = p.usuario_id
+                WHERE p.ultimo_acesso >= %s
+                ORDER BY p.ultimo_acesso DESC
+            """, (limite,))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro online: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
+
+def db_historico_acessos_diario():
+    """Retorna contagem de usuários únicos por dia nos últimos 30 dias."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT DATE(ultimo_acesso::timestamp) as dia,
+                       COUNT(DISTINCT usuario_id) as usuarios
+                FROM usuarios_presenca
+                WHERE ultimo_acesso >= NOW() - INTERVAL '30 days'
+                GROUP BY dia ORDER BY dia DESC
+            """)
+            return [dict(r) for r in cur.fetchall()]
+    except: return []
+    finally:
+        conn.close()
