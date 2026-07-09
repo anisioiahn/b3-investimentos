@@ -3685,6 +3685,7 @@ async function carregarComunidade(){
             <button onclick="abrirDetalhesComunidade(${e.id},this)" data-nome="${(e.nome||'').replace(/"/g,'&quot;')}" class="btn" style="flex:1;font-size:11px;padding:5px">💬 Ver (${e.total_comentarios||0})</button>
             <button onclick="usarEstrategiaComunidade(${e.id},'${e.tipo||'buy_hold'}')" class="btn" style="font-size:11px;padding:5px;background:var(--green);color:#fff;border-color:var(--green)">▶ Usar</button>
             <button onclick="avaliarEstrategia(${e.id})" class="btn" style="font-size:11px;padding:5px">⭐</button>
+            ${e.minha ? `<button onclick="excluirDaComunidade(${e.id})" class="btn" title="Remover da comunidade" style="font-size:11px;padding:5px;border-color:#e53935;color:#e53935">🗑️</button>` : ''}
           </div>
         </div>`;
       }).join('')}
@@ -3768,6 +3769,18 @@ async function publicarSimulacao(btId, estrategia, ticker){
   const d = await p.json();
   if(d.ok){ carregarComunidade(); alert(`✅ "${nome}" publicada!`); }
   else alert('❌ Erro ao publicar');
+}
+
+async function excluirDaComunidade(eid){
+  if(!confirm('Remover esta estratégia da comunidade?\n\nEla deixará de aparecer para outros usuários.')) return;
+  const r = await fetch(`/api/backtesting/estrategias/${eid}/excluir`, {method:'DELETE'});
+  const d = await r.json();
+  if(d.ok){
+    carregarComunidade();
+    carregarBtHistorico();
+  } else {
+    alert('❌ Erro ao remover da comunidade');
+  }
 }
 
 async function verResultadoSimulacao(btId){
