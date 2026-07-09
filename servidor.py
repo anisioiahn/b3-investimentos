@@ -1147,9 +1147,21 @@ def api_bt_estrategias_post():
         d.get('descricao',''), d.get('tipo','personalizada'),
         d.get('regras',{}), d.get('publica', False),
         safe(d.get('retorno_medio')), safe(d.get('sharpe_medio')),
-        simulacao_params
+        simulacao_params,
+        d.get('fork_de'), d.get('fork_de_nome'), d.get('fork_de_versao')
     )
-    # Marca a simulação de origem como publicada
+    # Incrementa contador de forks na estratégia mãe
+    if eid and d.get('fork_de'):
+        try:
+            conn = db.get_conn()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE backtesting_estrategias
+                    SET forks = COALESCE(forks,0) + 1
+                    WHERE id = %s
+                """, (d['fork_de'],))
+            conn.commit(); conn.close()
+        except: pass
     if eid and d.get('bt_id'):
         db.db_marcar_publicada(d['bt_id'], uid(), eid, True)
     if eid:
