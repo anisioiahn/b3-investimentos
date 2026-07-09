@@ -1385,19 +1385,37 @@ def db_init_backtesting_v2_tables(conn):
                 usos INTEGER DEFAULT 0,
                 retorno_medio NUMERIC,
                 sharpe_medio NUMERIC,
+                versao TEXT DEFAULT 'v1.0',
+                versao_anterior_id INTEGER,
+                notas_versao TEXT,
+                fork_de INTEGER,
+                fork_de_versao TEXT,
+                fork_de_nome TEXT,
+                forks INTEGER DEFAULT 0,
+                ranking_score NUMERIC DEFAULT 0,
                 created_at TEXT,
                 updated_at TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_bt_est_publica
-                ON backtesting_estrategias(publica, usos DESC);
+                ON backtesting_estrategias(publica, ranking_score DESC);
             CREATE INDEX IF NOT EXISTS idx_bt_est_usuario
                 ON backtesting_estrategias(usuario_id);
         """)
-        # Adiciona coluna se não existir (para bancos já criados)
-        cur.execute("""
-            ALTER TABLE backtesting_estrategias
-            ADD COLUMN IF NOT EXISTS simulacao_params JSONB
-        """)
+        # Colunas para bancos já existentes
+        for col in [
+            "ADD COLUMN IF NOT EXISTS simulacao_params JSONB",
+            "ADD COLUMN IF NOT EXISTS versao TEXT DEFAULT 'v1.0'",
+            "ADD COLUMN IF NOT EXISTS versao_anterior_id INTEGER",
+            "ADD COLUMN IF NOT EXISTS notas_versao TEXT",
+            "ADD COLUMN IF NOT EXISTS fork_de INTEGER",
+            "ADD COLUMN IF NOT EXISTS fork_de_versao TEXT",
+            "ADD COLUMN IF NOT EXISTS fork_de_nome TEXT",
+            "ADD COLUMN IF NOT EXISTS forks INTEGER DEFAULT 0",
+            "ADD COLUMN IF NOT EXISTS ranking_score NUMERIC DEFAULT 0",
+        ]:
+            try:
+                cur.execute(f"ALTER TABLE backtesting_estrategias {col}")
+            except: pass
     conn.commit()
 
 def db_salvar_estrategia_bt(uid, nome, descricao, tipo, regras, publica=False, retorno_medio=None, sharpe_medio=None, simulacao_params=None):
@@ -1558,12 +1576,19 @@ def db_media_estrelas(estrategia_id, usuario_id=None):
         print(f"[DB] Erro média estrelas: {e}", flush=True)
         return {'media': 0, 'total': 0, 'minha_avaliacao': None}
 
-def db_listar_estrategias_bt(uid=None, publicas=False, limit=20):
+def db_listar_estrategias_bt(uid=None, publicas=False, limit=20, ordem='ranking'):
     try:
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             if publicas:
-                cur.execute("""
+                order = {
+                    'ranking': 'e.ranking_score DESC',
+                    'retorno': 'e.retorno_medio DESC NULLS LAST',
+                    'sharpe':  'e.sharpe_medio DESC NULLS LAST',
+                    'usos':    'e.usos DESC',
+                    'recentes':'e.created_at DESC',
+                }.get(ordem, 'e.ranking_score DESC')
+                cur.execute(f"""
                     SELECT e.*, u.nome as autor,
                         COALESCE(AVG(a.estrelas),0)::NUMERIC(3,1) as media_estrelas,
                         COUNT(DISTINCT a.id) as total_avaliacoes,
@@ -1574,7 +1599,7 @@ def db_listar_estrategias_bt(uid=None, publicas=False, limit=20):
                     LEFT JOIN backtesting_comentarios c ON c.estrategia_id = e.id
                     WHERE e.publica = TRUE
                     GROUP BY e.id, u.nome
-                    ORDER BY media_estrelas DESC, e.usos DESC
+                    ORDER BY {order}
                     LIMIT %s
                 """, (limit,))
             else:
@@ -1662,3 +1687,158 @@ def db_historico_acessos_diario():
         return []
     finally:
         conn.close()
+
+# ── BACKTESTING v2.2 — FORK / VERSÃO / RANKING ───────────────
+
+def db_fork_estrategia(uid, estrategia_id, nome, descricao):
+    """Cria um fork de uma estratégia existente."""
+    import json
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Busca original
+            cur.execute("SELECT * FROM backtesting_estrategias WHERE id=%s", (estrategia_id,))
+            orig = cur.fetchone()
+            if not orig: return None
+            orig = dict(orig)
+            # Cria fork
+            cur.execute("""
+                INSERT INTO backtesting_estrategias
+                    (usuario_id, nome, descricao, tipo, regras, simulacao_params,
+                     publica, fork_de, fork_de_versao, fork_de_nome,
+                     versao, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,FALSE,%s,%s,%s,'v1.0',%s,%s)
+                RETURNING id
+            """, (uid, nome, descricao, orig['tipo'],
+                  json.dumps(orig['regras']) if isinstance(orig['regras'], dict) else orig['regras'],
+                  json.dumps(orig['simulacao_params']) if orig.get('simulacao_params') else None,
+                  estrategia_id, orig.get('versao','v1.0'), orig['nome'],
+                  now, now))
+            novo_id = cur.fetchone()['id']
+            # Incrementa forks na original
+            cur.execute("UPDATE backtesting_estrategias SET forks=COALESCE(forks,0)+1 WHERE id=%s",
+                       (estrategia_id,))
+        conn.commit(); conn.close()
+        return novo_id
+    except Exception as e:
+        print(f"[DB] Erro fork: {e}", flush=True)
+        return None
+
+def db_nova_versao_estrategia(uid, estrategia_id, regras, notas_versao, simulacao_params=None):
+    """Cria nova versão de uma estratégia existente."""
+    import json, re
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM backtesting_estrategias
+                WHERE id=%s AND usuario_id=%s
+            """, (estrategia_id, uid))
+            orig = cur.fetchone()
+            if not orig: return None
+            orig = dict(orig)
+
+            # Incrementa versão: v1.0 → v1.1, v1.9 → v2.0
+            versao_atual = orig.get('versao','v1.0')
+            match = re.match(r'v(\d+)\.(\d+)', versao_atual)
+            if match:
+                major, minor = int(match.group(1)), int(match.group(2))
+                nova_versao = f'v{major}.{minor+1}' if minor < 9 else f'v{major+1}.0'
+            else:
+                nova_versao = 'v1.1'
+
+            # Cria nova versão
+            cur.execute("""
+                INSERT INTO backtesting_estrategias
+                    (usuario_id, nome, descricao, tipo, regras, simulacao_params,
+                     publica, versao, versao_anterior_id, notas_versao,
+                     fork_de, fork_de_versao, fork_de_nome,
+                     created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (uid, orig['nome'], orig['descricao'], orig['tipo'],
+                  json.dumps(regras) if isinstance(regras, dict) else regras,
+                  json.dumps(simulacao_params) if simulacao_params else orig.get('simulacao_params'),
+                  orig['publica'], nova_versao, estrategia_id, notas_versao,
+                  orig.get('fork_de'), orig.get('fork_de_versao'), orig.get('fork_de_nome'),
+                  now, now))
+            novo_id = cur.fetchone()['id']
+        conn.commit(); conn.close()
+        return {'id': novo_id, 'versao': nova_versao}
+    except Exception as e:
+        print(f"[DB] Erro nova versão: {e}", flush=True)
+        return None
+
+def db_listar_versoes(estrategia_id):
+    """Lista todas as versões de uma estratégia."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Busca versão atual e todas as anteriores
+            cur.execute("""
+                WITH RECURSIVE versoes AS (
+                    SELECT id, versao, notas_versao, created_at, versao_anterior_id,
+                           retorno_medio, sharpe_medio
+                    FROM backtesting_estrategias WHERE id=%s
+                    UNION ALL
+                    SELECT e.id, e.versao, e.notas_versao, e.created_at, e.versao_anterior_id,
+                           e.retorno_medio, e.sharpe_medio
+                    FROM backtesting_estrategias e
+                    JOIN versoes v ON e.id = v.versao_anterior_id
+                )
+                SELECT * FROM versoes ORDER BY created_at DESC
+            """, (estrategia_id,))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro listar versões: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
+
+def db_calcular_ranking_score(estrategia_id):
+    """Calcula e atualiza o ranking score híbrido (técnico + comunidade)."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT e.retorno_medio, e.sharpe_medio, e.usos, e.forks,
+                       COALESCE(AVG(a.estrelas),0) as media_estrelas,
+                       COUNT(DISTINCT a.id) as total_aval,
+                       COUNT(DISTINCT c.id) as total_coment
+                FROM backtesting_estrategias e
+                LEFT JOIN backtesting_avaliacoes a ON a.estrategia_id = e.id
+                LEFT JOIN backtesting_comentarios c ON c.estrategia_id = e.id
+                WHERE e.id = %s
+                GROUP BY e.id, e.retorno_medio, e.sharpe_medio, e.usos, e.forks
+            """, (estrategia_id,))
+            row = cur.fetchone()
+            if not row: return 0
+
+            # Score técnico (50%)
+            retorno  = min(30, max(0, (row['retorno_medio'] or 0) / 5))
+            sharpe   = min(20, max(0, (row['sharpe_medio']  or 0) * 10))
+            score_tec = retorno + sharpe  # 0-50
+
+            # Score comunidade (50%)
+            estrelas = float(row['media_estrelas'] or 0)
+            sc_aval  = (estrelas / 5) * 20   # 0-20
+            sc_usos  = min(15, (row['usos'] or 0) / 100 * 15)  # 0-15
+            sc_coment= min(10, (row['total_coment'] or 0) / 5 * 10)  # 0-10
+            sc_forks = min(5,  (row['forks'] or 0) / 2 * 5)   # 0-5
+            score_com = sc_aval + sc_usos + sc_coment + sc_forks  # 0-50
+
+            ranking_score = round(score_tec + score_com, 1)
+
+            cur.execute("""
+                UPDATE backtesting_estrategias
+                SET ranking_score=%s WHERE id=%s
+            """, (ranking_score, estrategia_id))
+        conn.commit(); conn.close()
+        return ranking_score
+    except Exception as e:
+        print(f"[DB] Erro ranking: {e}", flush=True)
+        return 0
