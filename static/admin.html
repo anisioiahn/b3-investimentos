@@ -29,6 +29,9 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .badge-pro{background:rgba(168,85,247,.2);color:#a855f7}
 .badge-ok{background:rgba(22,163,74,.2);color:#4caf50}
 .badge-no{background:rgba(229,57,53,.2);color:#ff6b6b}
+.badge-online{background:rgba(22,163,74,.2);color:#4caf50;display:flex;align-items:center;gap:4px}
+.dot-online{width:7px;height:7px;background:#4caf50;border-radius:50%;display:inline-block;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .field{margin-bottom:12px}
 .field label{display:block;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:5px;font-weight:600;text-transform:uppercase}
 .field input,.field select{width:100%;padding:10px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:13px;outline:none}
@@ -44,15 +47,24 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .sucesso{background:rgba(22,163,74,.15);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:10px;color:#4caf50;font-size:13px;display:none;margin-bottom:10px}
 .page{display:none}.page.active{display:block}
 select option{background:#1a1a2e}
+.paginas-badge{display:inline-block;padding:2px 8px;background:rgba(168,85,247,.15);color:#a855f7;border-radius:10px;font-size:10px;font-weight:600}
+.grafico-bar{display:flex;align-items:flex-end;gap:4px;height:80px;margin-top:12px}
+.grafico-bar-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.grafico-bar-fill{width:100%;background:#7c3aed;border-radius:4px 4px 0 0;min-height:2px;transition:height .3s}
+.grafico-bar-label{font-size:9px;color:rgba(255,255,255,.3);white-space:nowrap}
 </style>
 </head>
 <body>
 <div class="header">
   <h1>⚙️ Janus B3 — Painel Admin</h1>
-  <button class="btn-logout" onclick="logout()">Sair</button>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="font-size:12px;color:rgba(255,255,255,.4)" id="refresh-timer">Atualiza em 30s</div>
+    <button class="btn-logout" onclick="logout()">Sair</button>
+  </div>
 </div>
 <div class="tabs">
   <div class="tab active" onclick="goPage('dashboard',this)">📊 Dashboard</div>
+  <div class="tab" onclick="goPage('online',this)">🟢 Online agora</div>
   <div class="tab" onclick="goPage('usuarios',this)">👥 Usuários</div>
   <div class="tab" onclick="goPage('planos',this)">💎 Planos</div>
   <div class="tab" onclick="goPage('fontes',this)">📰 Fontes de Notícias</div>
@@ -63,6 +75,19 @@ select option{background:#1a1a2e}
   <div class="page active" id="page-dashboard">
     <div class="stats-grid" id="stats-grid">
       <div class="stat-card"><div class="stat-val">—</div><div class="stat-lbl">Total usuários</div></div>
+    </div>
+    <div class="section">
+      <h2>📅 Acessos únicos — últimos 30 dias</h2>
+      <div id="grafico-acessos" style="color:rgba(255,255,255,.3);text-align:center;padding:1rem">Carregando...</div>
+    </div>
+  </div>
+
+  <!-- ONLINE AGORA -->
+  <div class="page" id="page-online">
+    <div class="section">
+      <h2>🟢 Usuários online agora <span id="online-count" style="font-size:13px;font-weight:400;color:rgba(255,255,255,.4);margin-left:8px">— conectados</span></h2>
+      <div style="font-size:12px;color:rgba(255,255,255,.3);margin-bottom:16px">Usuários que acessaram nos últimos 5 minutos. Atualiza automaticamente a cada 30 segundos.</div>
+      <div id="tabela-online"><div style="color:rgba(255,255,255,.3);text-align:center;padding:2rem">Carregando...</div></div>
     </div>
   </div>
 
@@ -83,42 +108,18 @@ select option{background:#1a1a2e}
       <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,.08);padding-top:16px">
         <h3 style="color:#fff;font-size:14px;margin-bottom:12px">Editar plano</h3>
         <div class="field-row">
-          <div class="field">
-            <label>Plano</label>
-            <select id="p-nome">
-              <option value="free">Free</option>
-              <option value="pro">Pro</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Descrição</label>
-            <input id="p-desc" placeholder="Ex: Plano gratuito">
-          </div>
+          <div class="field"><label>Plano</label><select id="p-nome"><option value="free">Free</option><option value="pro">Pro</option></select></div>
+          <div class="field"><label>Descrição</label><input id="p-desc" placeholder="Ex: Plano gratuito"></div>
         </div>
         <div class="field-row">
-          <div class="field">
-            <label>Preço mensal (R$)</label>
-            <input id="p-mensal" type="number" step="0.01" placeholder="0.00">
-          </div>
-          <div class="field">
-            <label>Preço anual (R$)</label>
-            <input id="p-anual" type="number" step="0.01" placeholder="0.00">
-          </div>
+          <div class="field"><label>Preço mensal (R$)</label><input id="p-mensal" type="number" step="0.01" placeholder="0.00"></div>
+          <div class="field"><label>Preço anual (R$)</label><input id="p-anual" type="number" step="0.01" placeholder="0.00"></div>
         </div>
         <div class="field-row">
-          <div class="field">
-            <label>Desconto anual (%)</label>
-            <input id="p-desconto" type="number" placeholder="0">
-          </div>
-          <div class="field">
-            <label>Max alertas (-1 = ilimitado)</label>
-            <input id="p-alertas" type="number" placeholder="-1">
-          </div>
+          <div class="field"><label>Desconto anual (%)</label><input id="p-desconto" type="number" placeholder="0"></div>
+          <div class="field"><label>Max alertas (-1 = ilimitado)</label><input id="p-alertas" type="number" placeholder="-1"></div>
         </div>
-        <div class="field">
-          <label>Max ativos na carteira (-1 = ilimitado)</label>
-          <input id="p-carteira" type="number" placeholder="-1">
-        </div>
+        <div class="field"><label>Max ativos na carteira (-1 = ilimitado)</label><input id="p-carteira" type="number" placeholder="-1"></div>
         <button class="btn btn-primary" onclick="salvarPlano()">💾 Salvar plano</button>
       </div>
     </div>
@@ -136,12 +137,18 @@ select option{background:#1a1a2e}
 </div>
 
 <script>
-function goPage(p,el){
+let _paginaAtual = 'dashboard';
+let _refreshTimer = 30;
+let _refreshInterval = null;
+
+function goPage(p, el){
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   if(el) el.classList.add('active');
+  _paginaAtual = p;
   if(p==='dashboard') carregarStats();
+  if(p==='online') carregarOnline();
   if(p==='usuarios') carregarUsuarios();
   if(p==='planos') carregarPlanos();
   if(p==='fontes') carregarFontes();
@@ -157,16 +164,83 @@ async function logout(){
   window.location.href='/admin/login';
 }
 
+// ── DASHBOARD ──────────────────────────────────────────
 async function carregarStats(){
   const d = await api('/api/admin/stats');
+
   document.getElementById('stats-grid').innerHTML=`
     <div class="stat-card"><div class="stat-val">${d.total_usuarios||0}</div><div class="stat-lbl">Total usuários</div></div>
     <div class="stat-card"><div class="stat-val">${d.verificados||0}</div><div class="stat-lbl">Verificados</div></div>
     <div class="stat-card"><div class="stat-val">${d.plano_free||0}</div><div class="stat-lbl">Plano Free</div></div>
     <div class="stat-card"><div class="stat-val" style="color:#a855f7">${d.plano_pro||0}</div><div class="stat-lbl">Plano Pró</div></div>
-    <div class="stat-card"><div class="stat-val" style="color:#4caf50">${d.ativos||0}</div><div class="stat-lbl">Contas ativas</div></div>`;
+    <div class="stat-card"><div class="stat-val" style="color:#4caf50">${d.ativos||0}</div><div class="stat-lbl">Contas ativas</div></div>
+    <div class="stat-card" onclick="goPage('online',document.querySelectorAll('.tab')[1])" style="cursor:pointer;border-color:rgba(22,163,74,.3)">
+      <div class="stat-val" style="color:#4caf50;display:flex;align-items:center;justify-content:center;gap:8px">
+        <span class="dot-online"></span>${d.online_agora||0}
+      </div>
+      <div class="stat-lbl">Online agora</div>
+    </div>`;
+
+  // Gráfico de acessos
+  const hist = d.historico_acessos || [];
+  if(hist.length){
+    const max = Math.max(...hist.map(h=>h.usuarios), 1);
+    const ultimos = hist.slice(0,14).reverse();
+    document.getElementById('grafico-acessos').innerHTML = `
+      <div class="grafico-bar">
+        ${ultimos.map(h=>{
+          const pct = Math.round(h.usuarios/max*100);
+          const dia = new Date(h.dia).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+          return `<div class="grafico-bar-item">
+            <div style="font-size:10px;color:rgba(255,255,255,.5)">${h.usuarios}</div>
+            <div class="grafico-bar-fill" style="height:${pct}%"></div>
+            <div class="grafico-bar-label">${dia}</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  } else {
+    document.getElementById('grafico-acessos').innerHTML = '<div style="color:rgba(255,255,255,.3);text-align:center;padding:1rem">Sem dados ainda — os acessos aparecerão aqui após o primeiro dia</div>';
+  }
 }
 
+// ── ONLINE AGORA ───────────────────────────────────────
+async function carregarOnline(){
+  const lista = await api('/api/admin/online');
+  const cnt = document.getElementById('online-count');
+  if(cnt) cnt.textContent = `${lista.length} conectado${lista.length!==1?'s':''}`;
+
+  const el = document.getElementById('tabela-online');
+  if(!lista.length){
+    el.innerHTML = '<div style="text-align:center;padding:2rem;color:rgba(255,255,255,.3)">Nenhum usuário online no momento</div>';
+    return;
+  }
+
+  const pagLabels = {
+    cockpit:'🏠 Cockpit', carteira:'📈 Carteira', janus:'🎯 Janus Index',
+    dividendos:'💰 Dividendos', setores:'📊 Setores', backtesting:'🔬 Backtesting',
+    alertas:'🔔 Alertas', params:'⚙️ Parâmetros', log:'📋 Log'
+  };
+
+  el.innerHTML = `
+    <table><thead><tr>
+      <th>Status</th><th>Nome</th><th>E-mail</th><th>Página atual</th><th>Último acesso</th>
+    </tr></thead><tbody>
+    ${lista.map(u=>{
+      const ultimo = new Date(u.ultimo_acesso);
+      const diffMin = Math.round((Date.now() - ultimo.getTime()) / 60000);
+      const pagLabel = pagLabels[u.pagina] || u.pagina || '—';
+      return `<tr>
+        <td><span class="badge badge-online"><span class="dot-online"></span>Online</span></td>
+        <td><strong>${u.nome||'—'}</strong></td>
+        <td style="color:rgba(255,255,255,.5);font-size:12px">${u.email}</td>
+        <td><span class="paginas-badge">${pagLabel}</span></td>
+        <td style="font-size:11px;color:rgba(255,255,255,.4)">há ${diffMin===0?'menos de 1':diffMin} min</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+// ── USUÁRIOS ────────────────────────────────────────────
 async function carregarUsuarios(){
   const usuarios = await api('/api/admin/usuarios');
   if(!usuarios.length){
@@ -198,6 +272,7 @@ async function alterarPlano(uid, plano){
   carregarUsuarios();
 }
 
+// ── PLANOS ──────────────────────────────────────────────
 async function carregarPlanos(){
   const planos = await api('/api/admin/planos');
   document.getElementById('lista-planos').innerHTML=`
@@ -233,6 +308,7 @@ async function salvarPlano(){
   carregarPlanos();
 }
 
+// ── FONTES ──────────────────────────────────────────────
 async function carregarFontes(){
   const cfg = await api('/api/admin/config');
   document.getElementById('lista-fontes').innerHTML=[1,2,3].map(i=>`
@@ -257,8 +333,25 @@ async function salvarFontes(){
   setTimeout(()=>el.style.display='none',3000);
 }
 
+// ── AUTO-REFRESH ────────────────────────────────────────
+function iniciarAutoRefresh(){
+  _refreshTimer = 30;
+  clearInterval(_refreshInterval);
+  _refreshInterval = setInterval(()=>{
+    _refreshTimer--;
+    const el = document.getElementById('refresh-timer');
+    if(el) el.textContent = `Atualiza em ${_refreshTimer}s`;
+    if(_refreshTimer <= 0){
+      _refreshTimer = 30;
+      if(_paginaAtual==='dashboard') carregarStats();
+      if(_paginaAtual==='online') carregarOnline();
+    }
+  }, 1000);
+}
+
 // Init
 carregarStats();
+iniciarAutoRefresh();
 </script>
 </body>
 </html>
