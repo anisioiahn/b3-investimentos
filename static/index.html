@@ -4038,6 +4038,19 @@ async function enviarComentario(eid){
   }
 }
 
+// ── PRESENÇA ─────────────────────────────────────────────────
+function enviarPing(){
+  if(!document.cookie.includes('janus_token')) return;
+  fetch('/api/ping', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({pagina: _paginaAtiva || 'cockpit'})
+  }).catch(()=>{});
+}
+// Envia ping ao carregar e a cada 2 minutos
+enviarPing();
+setInterval(enviarPing, 2 * 60 * 1000);
+
 function toggleMenuSec(){
   const m = document.getElementById('menu-sec');
   const o = document.getElementById('menu-sec-overlay');
@@ -4066,6 +4079,7 @@ function goPage(p,el){
     carregarComunidade();
   }
   if(p==='params'){ renderFontes(); carregarEstrategia(); }
+  enviarPing(); // atualiza página no ping
   if(p==='carteira'){ renderCarteira(); carregarCarteira(); }
   if(p==='janus') carregarJanusIndex();
   if(p==='dividendos') carregarDividendos();
