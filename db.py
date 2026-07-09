@@ -1330,7 +1330,6 @@ def db_listar_backtests(uid, limit=20):
     try:
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # Garante coluna publicada existe
             cur.execute("""
                 ALTER TABLE backtesting_resultados
                 ADD COLUMN IF NOT EXISTS publicada BOOLEAN DEFAULT FALSE,
