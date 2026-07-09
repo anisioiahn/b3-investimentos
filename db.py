@@ -1583,12 +1583,12 @@ def db_listar_estrategias_bt(uid=None, publicas=False, limit=20, ordem='ranking'
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             if publicas:
                 order = {
-                    'ranking': 'COALESCE(e.ranking_score, e.usos) DESC',
+                    'ranking': 'e.usos DESC, e.retorno_medio DESC NULLS LAST',
                     'retorno': 'e.retorno_medio DESC NULLS LAST',
                     'sharpe':  'e.sharpe_medio DESC NULLS LAST',
                     'usos':    'e.usos DESC',
                     'recentes':'e.created_at DESC',
-                }.get(ordem, 'COALESCE(e.ranking_score, e.usos) DESC')
+                }.get(ordem, 'e.usos DESC')
                 cur.execute(f"""
                     SELECT e.*, COALESCE(u.nome, 'Usuário') as autor,
                         COALESCE(AVG(a.estrelas),0)::NUMERIC(3,1) as media_estrelas,
