@@ -3585,9 +3585,13 @@ async function carregarBtHistorico(){
             const corRet = !isNaN(ret) ? (ret>=0?'#16a34a':'#e53935') : 'var(--text3)';
             const alpha  = parseFloat(b.alpha);
             const corAlpha = !isNaN(alpha) ? (alpha>=0?'#16a34a':'#e53935') : 'var(--text3)';
-            const ticker = b.ticker || (b.tickers?.join('+')) || '—';
+            const ticker = b.ticker || '—';
+            const publicada = b.publica === true;
             return `<tr style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
-              <td style="padding:8px 8px;font-weight:700">${ticker}</td>
+              <td style="padding:8px 8px;font-weight:700">
+                ${ticker}
+                ${publicada ? `<span title="Publicada na comunidade" style="margin-left:4px;font-size:9px;padding:1px 6px;background:rgba(22,163,74,0.1);color:#16a34a;border-radius:10px;font-weight:600">🌐 Publicada</span>` : ''}
+              </td>
               <td style="padding:8px 8px;color:var(--text2)">${nomeEst[b.estrategia]||b.estrategia}</td>
               <td style="padding:8px 8px;color:var(--text3)">${fmtData(b.data_inicio)}</td>
               <td style="padding:8px 8px;color:var(--text3)">${fmtData(b.data_fim)}</td>
@@ -3602,11 +3606,11 @@ async function carregarBtHistorico(){
                   onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'"
                   onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">📊</button>
                 <button onclick="publicarSimulacao(${b.id},'${b.estrategia}','${ticker}')"
-                  title="Publicar na comunidade"
-                  style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3);margin-right:4px"
+                  title="${publicada ? 'Já publicada' : 'Publicar na comunidade'}"
+                  ${publicada ? 'disabled style="opacity:.4;cursor:not-allowed;' : 'style="'}background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3);margin-right:4px"
                   onmouseover="this.style.borderColor='#f59e0b';this.style.color='#f59e0b'"
                   onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">🌐</button>
-                <button onclick="excluirBtSimulacao(${b.id})"
+                <button onclick="excluirBtSimulacao(${b.id},${publicada})"
                   title="Excluir"
                   style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3)"
                   onmouseover="this.style.borderColor='#e53935';this.style.color='#e53935'"
@@ -3622,11 +3626,15 @@ async function carregarBtHistorico(){
   }
 }
 
-async function excluirBtSimulacao(id){
-  if(!confirm('Excluir esta simulação?')) return;
+async function excluirBtSimulacao(id, publicada=false){
+  const msg = publicada
+    ? 'Esta simulação está publicada na comunidade.\nExcluir irá removê-la da comunidade também.\n\nDeseja continuar?'
+    : 'Excluir esta simulação?';
+  if(!confirm(msg)) return;
   try{
     await fetch(`/api/backtesting/excluir/${id}`, {method:'DELETE'});
     carregarBtHistorico();
+    if(publicada) carregarComunidade();
   }catch(e){}
 }
 
