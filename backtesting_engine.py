@@ -783,12 +783,21 @@ def executar_backtest_multiplos(params):
     retorno_cdi = round(calcular_cdi_periodo(data_inicio, data_fim), 2)
     alpha = round(metricas.get('retorno_pct', 0) - retorno_ibov, 2) if retorno_ibov else None
 
+    # Janus Score e Selos — mesmo cálculo do ativo único
+    janus_score_est = calcular_janus_score_estrategia(metricas)
+    selos           = calcular_selos(metricas, {
+        'alpha_ibov': alpha,
+        'ibovespa':   {'retorno_pct': retorno_ibov},
+    }, janus_score_est)
+
     return {
         'tickers':     tickers,
         'estrategia':  estrategia,
         'data_inicio': str(data_inicio),
         'data_fim':    str(data_fim),
         'metricas':    metricas,
+        'janus_score': janus_score_est,
+        'selos':       selos,
         'benchmarks': {
             'ibovespa': {'retorno_pct': retorno_ibov, 'patrimonio': patrimonio_ibov},
             'cdi':      {'retorno_pct': retorno_cdi},
@@ -800,9 +809,9 @@ def executar_backtest_multiplos(params):
         },
         'individuais': {
             t: {
-                'retorno_pct': r.get('metricas', {}).get('retorno_pct'),
-                'capital_final': r.get('metricas', {}).get('capital_final'),
-                'n_operacoes': r.get('metricas', {}).get('n_operacoes'),
+                'retorno_pct':  r.get('metricas', {}).get('retorno_pct'),
+                'capital_final':r.get('metricas', {}).get('capital_final'),
+                'n_operacoes':  r.get('metricas', {}).get('n_operacoes'),
             }
             for t, r in resultados_individuais.items()
         },
