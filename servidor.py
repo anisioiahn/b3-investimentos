@@ -1181,6 +1181,32 @@ def api_bt_nova_versao(eid):
         return jsonify({"ok": True, **resultado})
     return jsonify({"erro": "Erro ao criar versão"}), 500
 
+@app.route("/api/backtesting/estrategias/<int:eid>/forks")
+@requer_auth
+def api_bt_forks(eid):
+    """Retorna forks de uma estratégia."""
+    try:
+        conn = db.get_conn()
+        with conn.cursor(cursor_factory=__import__('psycopg2').extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT e.id, e.nome, e.versao, e.retorno_medio, e.sharpe_medio,
+                       e.usos, e.created_at, e.publica,
+                       COALESCE(u.nome,'Usuário') as autor,
+                       COALESCE(AVG(a.estrelas),0)::NUMERIC(3,1) as media_estrelas,
+                       COUNT(DISTINCT a.id) as total_avaliacoes
+                FROM backtesting_estrategias e
+                LEFT JOIN usuarios u ON u.id = e.usuario_id
+                LEFT JOIN backtesting_avaliacoes a ON a.estrategia_id = e.id
+                WHERE e.fork_de = %s AND e.publica = TRUE
+                GROUP BY e.id, u.nome
+                ORDER BY e.created_at DESC
+            """, (eid,))
+            forks = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return jsonify(forks)
+    except Exception as e:
+        return jsonify([])
+
 @app.route("/api/backtesting/estrategias/<int:eid>/versoes")
 @requer_auth
 def api_bt_versoes(eid):
