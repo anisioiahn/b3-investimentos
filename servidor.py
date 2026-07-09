@@ -1053,6 +1053,23 @@ def api_bt_detalhes(eid):
     estrelas    = db.db_media_estrelas(eid, uid())
     return jsonify({"comentarios": comentarios, "estrelas": estrelas})
 
+@app.route("/api/backtesting/debug-publicas")
+@requer_auth
+def api_bt_debug_publicas():
+    try:
+        conn = db.get_conn()
+        with conn.cursor(cursor_factory=__import__('psycopg2').extras.RealDictCursor) as cur:
+            cur.execute("SELECT id, nome, publica, usuario_id FROM backtesting_estrategias ORDER BY id DESC LIMIT 10")
+            todas = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT id, nome, publica, usuario_id FROM backtesting_estrategias WHERE publica = TRUE LIMIT 10")
+            publicas = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT id, nome, publica, usuario_id FROM backtesting_estrategias WHERE publica IS TRUE LIMIT 10")
+            publicas2 = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return jsonify({"todas": todas, "where_true": publicas, "is_true": publicas2})
+    except Exception as e:
+        return jsonify({"erro": str(e)})
+
 @app.route("/api/backtesting/estrategias/publicas")
 @requer_auth
 def api_bt_estrategias_publicas():
