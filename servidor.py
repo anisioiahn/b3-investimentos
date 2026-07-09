@@ -1053,6 +1053,16 @@ def api_bt_detalhes(eid):
     estrelas    = db.db_media_estrelas(eid, uid())
     return jsonify({"comentarios": comentarios, "estrelas": estrelas})
 
+@app.route("/api/backtesting/estrategias/publicas")
+@requer_auth
+def api_bt_estrategias_publicas():
+    ordem = request.args.get('ordem', 'ranking')
+    lista = db.db_listar_estrategias_bt(publicas=True, ordem=ordem)
+    meu_id = uid()
+    for e in lista:
+        e['minha'] = (e.get('usuario_id') == meu_id)
+    return jsonify(lista)
+
 @app.route("/api/backtesting/estrategias", methods=["GET"])
 @requer_auth
 def api_bt_estrategias_get():
@@ -1124,16 +1134,6 @@ def api_bt_nova_versao(eid):
 @requer_auth
 def api_bt_versoes(eid):
     return jsonify(db.db_listar_versoes(eid))
-
-@app.route("/api/backtesting/estrategias/publicas")
-@requer_auth
-def api_bt_estrategias_publicas():
-    ordem = request.args.get('ordem', 'ranking')
-    lista = db.db_listar_estrategias_bt(publicas=True, ordem=ordem)
-    meu_id = uid()
-    for e in lista:
-        e['minha'] = (e.get('usuario_id') == meu_id)
-    return jsonify(lista)
 
 @app.route("/api/backtesting/resultado/<int:bt_id>")
 @requer_auth
