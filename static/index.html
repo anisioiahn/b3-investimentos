@@ -3668,7 +3668,7 @@ async function carregarComunidade(){
         ).join('');
         const isFork = !!e.fork_de;
         const rankScore = e.ranking_score ? `<span style="font-size:10px;color:var(--text3);margin-left:6px">Rank ${parseFloat(e.ranking_score).toFixed(0)}</span>` : '';
-        return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem">
+        return `<div onclick="abrirDetalhesComunidade(${e.id},this)" data-nome="${(e.nome||''). replace(/"/g,'&quot;')}" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
           <div style="font-size:13px;font-weight:700;margin-bottom:2px">
             ${e.nome}
             <span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:4px">${e.versao||'v1.0'}</span>
@@ -3685,12 +3685,11 @@ async function carregarComunidade(){
             ${e.sharpe_medio!=null?`<div><div style="color:var(--text3);font-size:10px">Sharpe</div><div style="font-weight:700">${parseFloat(e.sharpe_medio).toFixed(2)}</div></div>`:''}
           </div>
           ${e.descricao?`<div style="font-size:11px;color:var(--text2);margin-bottom:8px;border-left:2px solid var(--border);padding-left:6px">${e.descricao}</div>`:''}
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <button onclick="abrirDetalhesComunidade(${e.id},this)" data-nome="${(e.nome||'').replace(/"/g,'&quot;')}" class="btn" style="flex:1;font-size:11px;padding:5px">💬 (${e.total_comentarios||0})</button>
-            <button onclick="usarEstrategiaComunidade(${e.id},'${e.tipo||'buy_hold'}')" class="btn" style="font-size:11px;padding:5px;background:var(--green);color:#fff;border-color:var(--green)">▶ Usar</button>
-            <button onclick="forkEstrategia(${e.id},'${(e.nome||'').replace(/'/g,"\\'")}','${e.versao||'v1.0'}')" class="btn" style="font-size:11px;padding:5px" title="Fork — criar minha versão">🍴</button>
-            <button onclick="avaliarEstrategia(${e.id})" class="btn" style="font-size:11px;padding:5px">⭐</button>
-            ${e.minha ? `<button onclick="excluirDaComunidade(${e.id})" class="btn" title="Remover da comunidade" style="font-size:11px;padding:5px;border-color:#e53935;color:#e53935">🗑️</button>` : ''}
+          <div style="display:flex;gap:4px;flex-wrap:wrap" onclick="event.stopPropagation()">
+            <button onclick="usarEstrategiaComunidade(${e.id},'${e.tipo||'buy_hold'}')" class="btn" style="flex:1;font-size:11px;padding:5px;background:var(--green);color:#fff;border-color:var(--green)">▶ Usar</button>
+            <button onclick="forkEstrategia(${e.id},'${(e.nome||'').replace(/'/g,"\\'")}','${e.versao||'v1.0'}')" class="btn" style="font-size:11px;padding:5px" title="Fork">🍴</button>
+            <button onclick="avaliarEstrategia(${e.id})" class="btn" style="font-size:11px;padding:5px" title="Avaliar">⭐</button>
+            ${e.minha ? `<button onclick="excluirDaComunidade(${e.id})" class="btn" title="Remover" style="font-size:11px;padding:5px;border-color:#e53935;color:#e53935">🗑️</button>` : ''}
           </div>
         </div>`;
       }).join('')}
@@ -3768,11 +3767,16 @@ async function publicarSimulacao(btId, estrategia, ticker){
       data_fim:      resultado.data_fim    || null,
       capital_inicial: m.capital_inicial   || null,
       bt_id:         btId,
+      // Referência do fork se veio de um fork
+      fork_de:       window._btForkDe?.id       || null,
+      fork_de_nome:  window._btForkDe?.nome     || null,
+      fork_de_versao:window._btForkDe?.versao   || null,
     })
   });
   const d = await p.json();
   console.log('[BT] Publicar resultado:', d);
   if(d.ok){
+    window._btForkDe = null; // limpa referência
     await carregarBtHistorico();
     await carregarComunidade();
     alert(`✅ "${nome}" publicada!`);
@@ -3810,13 +3814,15 @@ async function forkEstrategia(eid, nomeOriginal, versao){
   });
   const d = await r.json();
   if(d.ok){
-    // Carrega automaticamente no formulário
-    await usarEstrategiaComunidade(d.id, '');
+    // Guarda referência do fork para usar ao publicar
+    window._btForkDe = { id: eid, nome: nomeOriginal, versao: versao, fork_id: d.id };
+    // Carrega no formulário
+    await usarEstrategiaComunidade(eid, '');
     const toast = document.createElement('div');
     toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:12px 24px;border-radius:24px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
-    toast.textContent = `🍴 Fork "${nome}" criado! Ajuste e execute.`;
+    toast.textContent = `🍴 Fork "${nome}" criado! Ajuste e execute. Ao publicar, a referência será mantida.`;
     document.body.appendChild(toast);
-    setTimeout(()=>toast.remove(), 4000);
+    setTimeout(()=>toast.remove(), 5000);
   } else {
     alert('❌ Erro ao criar fork');
   }
