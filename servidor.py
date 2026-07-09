@@ -1087,6 +1087,109 @@ def api_admin_migrate():
         return jsonify({"erro": str(e)}), 500
     return jsonify({"ok": True, "resultados": resultados})
 
+@app.route("/api/cockpit/ajia-resumo")
+@requer_auth
+def api_cockpit_ajia_resumo():
+    """Retorna o resumo da AJIA do dia (cache)."""
+    resumo = db.db_buscar_ajia_cache()
+    if resumo:
+        return jsonify({"ok": True, "resumo": resumo, "fonte": "cache"})
+    return jsonify({"ok": False, "resumo": None})
+
+@app.route("/api/cockpit/ajia-gerar", methods=["POST"])
+@requer_auth
+def api_cockpit_ajia_gerar():
+    """Gera o resumo da AJIA para o dia."""
+    # Verifica cache primeiro
+    resumo = db.db_buscar_ajia_cache()
+    if resumo:
+        return jsonify({"ok": True, "resumo": resumo, "fonte": "cache"})
+
+    # Coleta contexto do mercado
+    setores = _cache.get("setores", {})
+    todas   = [e for s in setores.values() for e in s.get("empresas", []) if e.get("preco")]
+    em_alta = [e for e in todas if (e.get("variacao") or 0) > 0]
+    em_baixa= [e for e in todas if (e.get("variacao") or 0) < 0]
+    var_med  = sum(e.get("variacao_pct", 0) or 0 for e in todas) / len(todas) if todas else 0
+
+    from datetime import date
+    prompt = f"""Você é a AJIA, analista de investimentos do Janus B3.
+Gere um resumo do mercado brasileiro para hoje, {date.today().strftime('%d/%m/%Y')}.
+
+Contexto atual:
+- {len(todas)} ativos monitorados
+- {len(em_alta)} ativos em alta ({round(len(em_alta)/len(todas)*100) if todas else 0}%)
+- {len(em_baixa)} ativos em baixa
+- Variação média: {var_med:+.2f}%
+
+Top altas: {', '.join([f"{e['ticker']} {e.get('variacao_pct',0):+.1f}%" for e in sorted(em_alta, key=lambda x: x.get('variacao_pct',0) or 0, reverse=True)[:3]])}
+Top baixas: {', '.join([f"{e['ticker']} {e.get('variacao_pct',0):+.1f}%" for e in sorted(em_baixa, key=lambda x: x.get('variacao_pct',0) or 0)[:3]])}
+
+Escreva 2-3 frases objetivas e diretas sobre o mercado hoje.
+Seja informativo mas conciso. Máximo 60 palavras. Sem emojis no texto."""
+
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"Content-Type":"application/json","x-api-key":ANTHROPIC_KEY,"anthropic-version":"2023-06-01"},
+            json={"model":"claude-sonnet-4-6","max_tokens":150,"messages":[{"role":"user","content":prompt}]},
+            timeout=20
+        )
+        if resp.status_code == 200:
+            resumo = resp.json()["content"][0]["text"].strip()
+            db.db_salvar_ajia_cache(resumo)
+            return jsonify({"ok": True, "resumo": resumo, "fonte": "ajia"})
+    except Exception as e:
+        print(f"[COCKPIT AJIA] Erro: {e}", flush=True)
+    return jsonify({"ok": False, "resumo": None})
+
+@app.route("/api/cockpit/mudancas")
+@requer_auth
+def api_cockpit_mudancas():
+    """Retorna mudanças do dia."""
+    mudancas = db.db_buscar_mudancas_dia()
+    if not mudancas:
+        # Gera em tempo real a partir do cache de cotações
+        mudancas = _gerar_mudancas_dia()
+    return jsonify(mudancas)
+
+def _gerar_mudancas_dia():
+    """Gera mudanças do dia a partir dos dados em memória."""
+    mudancas = []
+    setores = _cache.get("setores", {})
+    todas   = [e for s in setores.values() for e in s.get("empresas", []) if e.get("preco")]
+
+    # Maiores altas do dia
+    altas = sorted([e for e in todas if (e.get("variacao_pct") or 0) >= 3],
+                   key=lambda x: x.get("variacao_pct", 0), reverse=True)[:3]
+    for e in altas:
+        mudancas.append({
+            "ticker": e["ticker"], "tipo": "alta",
+            "descricao": f"Alta de {e.get('variacao_pct',0):+.1f}% hoje",
+            "valor_atual": e.get("variacao_pct"), "icone": "📈"
+        })
+
+    # Maiores baixas
+    baixas = sorted([e for e in todas if (e.get("variacao_pct") or 0) <= -3],
+                    key=lambda x: x.get("variacao_pct", 0))[:3]
+    for e in baixas:
+        mudancas.append({
+            "ticker": e["ticker"], "tipo": "baixa",
+            "descricao": f"Queda de {e.get('variacao_pct',0):+.1f}% hoje",
+            "valor_atual": e.get("variacao_pct"), "icone": "📉"
+        })
+
+    # Top 5 oportunidades mudou?
+    ranking = _janusRanking[:5] if _janusRanking else []
+    for r in ranking[:3]:
+        mudancas.append({
+            "ticker": r.get("ticker",""), "tipo": "janus",
+            "descricao": f"Score Janus: {r.get('score',0):.0f}/100 — {r.get('nome','')}",
+            "valor_atual": r.get("score"), "icone": "🎯"
+        })
+
+    return mudancas[:10]
+
 @app.route("/api/backtesting/debug-publicas")
 @requer_auth
 def api_bt_debug_publicas():
@@ -2068,6 +2171,7 @@ if _db_ok:
             db.db_init_backtesting_v2_tables,
             db.db_init_backtesting_social_tables,
             db.db_init_presenca_table,
+            db.db_init_cockpit_fase3_tables,
         ]
         for fn in inits:
             try:
