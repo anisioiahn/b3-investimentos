@@ -4008,6 +4008,20 @@ async function confirmarAvaliacao(eid){
 async function abrirDetalhesComunidade(eid, el){
   const nome = (typeof el === 'string') ? el : (el?.dataset?.nome || 'Estratégia');
 
+  // Mostra modal de loading imediatamente
+  const modal = document.createElement('div');
+  modal.id = 'modal-detalhes';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;width:100%;max-width:640px;padding:3rem;text-align:center;box-shadow:0 16px 48px rgba(0,0,0,.3)" onclick="event.stopPropagation()">
+      <div style="font-size:28px;margin-bottom:.75rem">⏳</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text2)">${nome}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">Carregando estratégia...</div>
+      <button onclick="document.getElementById('modal-detalhes').remove()" style="margin-top:1.5rem;background:none;border:1px solid var(--border);border-radius:8px;padding:6px 16px;color:var(--text3);cursor:pointer;font-size:12px">Cancelar</button>
+    </div>`;
+  modal.onclick = ()=>modal.remove();
+  document.body.appendChild(modal);
+
   // Busca dados em paralelo
   const [rDet, rEst, rForks, rVersoes] = await Promise.all([
     fetch(`/api/backtesting/estrategias/${eid}/detalhes`),
@@ -4017,6 +4031,7 @@ async function abrirDetalhesComunidade(eid, el){
   ]);
 
   if(!rDet.ok || !rEst.ok){
+    modal.remove();
     alert('⚠️ Esta estratégia não está mais disponível.');
     await carregarComunidade();
     return;
@@ -4032,9 +4047,7 @@ async function abrirDetalhesComunidade(eid, el){
   const nomeEst = {'buy_hold':'Buy & Hold','medias_moveis':'Médias Móveis','rsi':'RSI/IFR','janus_score':'Janus Score','personalizada':'Personalizada'};
   const starsHtml = [1,2,3,4,5].map(s=>`<span style="color:${s<=Math.round(estrelas.media||0)?'#f59e0b':'var(--border)'};font-size:16px">★</span>`).join('');
 
-  const modal = document.createElement('div');
-  modal.id = 'modal-detalhes';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:1rem';
+  // Substitui o loading pelo conteúdo completo
   modal.innerHTML = `
     <div style="background:var(--card);border-radius:16px;width:100%;max-width:640px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,.3)" onclick="event.stopPropagation()">
 
@@ -4121,7 +4134,7 @@ async function abrirDetalhesComunidade(eid, el){
               </div>
               ${f.retorno_medio!=null?`<span style="font-size:12px;font-weight:700;color:${f.retorno_medio>=0?'#16a34a':'#e53935'}">${f.retorno_medio>=0?'+':''}${parseFloat(f.retorno_medio).toFixed(1)}%</span>`:''}
               <div style="font-size:11px">${[1,2,3,4,5].map(s=>`<span style="color:${s<=Math.round(f.media_estrelas||0)?'#f59e0b':'var(--border)'}">★</span>`).join('')}</div>
-              <button onclick="document.getElementById('modal-detalhes').remove();abrirDetalhesComunidade(${f.id},null)" class="btn" style="font-size:10px;padding:3px 8px">Ver</button>
+              <button onclick="this.textContent='⏳';document.getElementById('modal-detalhes').remove();abrirDetalhesComunidade(${f.id},null)" class="btn" style="font-size:10px;padding:3px 8px">Ver</button>
             </div>`).join('')
           : '<div style="text-align:center;padding:2rem;color:var(--text3)">Nenhum fork público ainda<br><span style="font-size:11px">Seja o primeiro a fazer um fork!</span></div>'}
         </div>
