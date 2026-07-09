@@ -4046,9 +4046,19 @@ function enviarPing(){
     body: JSON.stringify({pagina: _paginaAtiva || 'cockpit'})
   }).catch(()=>{});
 }
-// Envia ping ao carregar e a cada 2 minutos
+// Envia ping ao carregar e a cada 30 segundos
 enviarPing();
-setInterval(enviarPing, 2 * 60 * 1000);
+setInterval(enviarPing, 30 * 1000);
+
+// Marca offline ao fechar/minimizar aba
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'hidden'){
+    // Ping com página 'offline' para remover da lista
+    navigator.sendBeacon('/api/ping-offline');
+  } else {
+    enviarPing();
+  }
+});
 
 function toggleMenuSec(){
   const m = document.getElementById('menu-sec');
