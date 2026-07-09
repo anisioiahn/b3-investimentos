@@ -3734,7 +3734,6 @@ async function _publicarBtResultado(estrategia, dadosStr){
 }
 
 async function publicarSimulacao(btId, estrategia, ticker){
-  // Busca resultado completo do banco para pegar todos os dados
   const r = await fetch(`/api/backtesting/resultado/${btId}`);
   const resultado = await r.json();
   if(resultado.erro){ alert('❌ Erro ao carregar simulação'); return; }
@@ -3748,8 +3747,7 @@ async function publicarSimulacao(btId, estrategia, ticker){
   if(!nome) return;
   const descricao = prompt('Descrição (opcional):') || '';
 
-  const m  = resultado.metricas   || {};
-  const bm = resultado.benchmarks || {};
+  const m = resultado.metricas || {};
 
   const p = await fetch('/api/backtesting/estrategias', {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -3764,11 +3762,15 @@ async function publicarSimulacao(btId, estrategia, ticker){
       data_inicio:   resultado.data_inicio || null,
       data_fim:      resultado.data_fim    || null,
       capital_inicial: m.capital_inicial   || null,
+      bt_id:         btId,
     })
   });
   const d = await p.json();
-  if(d.ok){ carregarComunidade(); alert(`✅ "${nome}" publicada!`); }
-  else alert('❌ Erro ao publicar');
+  if(d.ok){
+    await carregarBtHistorico();
+    await carregarComunidade();
+    alert(`✅ "${nome}" publicada!`);
+  } else alert('❌ Erro ao publicar');
 }
 
 async function excluirDaComunidade(eid){
