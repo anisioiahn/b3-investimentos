@@ -1024,6 +1024,7 @@ def api_bt_avaliar(eid):
     if not 1 <= estrelas <= 5:
         return jsonify({"erro": "Estrelas deve ser entre 1 e 5"}), 400
     ok = db.db_avaliar_estrategia(eid, uid(), estrelas)
+    if ok: db.db_calcular_ranking_score(eid)
     return jsonify({"ok": ok})
 
 @app.route("/api/backtesting/estrategias/<int:eid>/comentar", methods=["POST"])
@@ -1090,12 +1091,45 @@ def api_bt_estrategias_post():
     # Marca a simulação de origem como publicada
     if eid and d.get('bt_id'):
         db.db_marcar_publicada(d['bt_id'], uid(), eid, True)
+    if eid:
+        db.db_calcular_ranking_score(eid)
     return jsonify({"ok": bool(eid), "id": eid})
+
+@app.route("/api/backtesting/estrategias/<int:eid>/fork", methods=["POST"])
+@requer_auth
+def api_bt_fork(eid):
+    d = request.json or {}
+    nome     = d.get('nome', '')
+    descricao= d.get('descricao', '')
+    if not nome:
+        return jsonify({"erro": "Nome obrigatório"}), 400
+    novo_id = db.db_fork_estrategia(uid(), eid, nome, descricao)
+    if novo_id:
+        return jsonify({"ok": True, "id": novo_id})
+    return jsonify({"erro": "Erro ao criar fork"}), 500
+
+@app.route("/api/backtesting/estrategias/<int:eid>/versao", methods=["POST"])
+@requer_auth
+def api_bt_nova_versao(eid):
+    d = request.json or {}
+    regras        = d.get('regras', {})
+    notas_versao  = d.get('notas_versao', '')
+    sim_params    = d.get('simulacao_params')
+    resultado = db.db_nova_versao_estrategia(uid(), eid, regras, notas_versao, sim_params)
+    if resultado:
+        return jsonify({"ok": True, **resultado})
+    return jsonify({"erro": "Erro ao criar versão"}), 500
+
+@app.route("/api/backtesting/estrategias/<int:eid>/versoes")
+@requer_auth
+def api_bt_versoes(eid):
+    return jsonify(db.db_listar_versoes(eid))
 
 @app.route("/api/backtesting/estrategias/publicas")
 @requer_auth
 def api_bt_estrategias_publicas():
-    lista = db.db_listar_estrategias_bt(publicas=True)
+    ordem = request.args.get('ordem', 'ranking')
+    lista = db.db_listar_estrategias_bt(publicas=True, ordem=ordem)
     meu_id = uid()
     for e in lista:
         e['minha'] = (e.get('usuario_id') == meu_id)
