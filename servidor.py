@@ -1272,7 +1272,7 @@ def api_builder_executar():
                 LEFT JOIN companies c ON c.company_id = a.company_id
                 LEFT JOIN janus_scores js ON js.asset_id = r.asset_id
                     AND js.reference_date = r.reference_date
-                LEFT JOIN dividend_data dd ON dd.ticker = a.ticker
+                LEFT JOIN dividend_profile dd ON dd.ticker = a.ticker
                 WHERE r.reference_date = %s AND {where}
                 ORDER BY {order_sql}
                 LIMIT %s
