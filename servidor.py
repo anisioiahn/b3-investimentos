@@ -1092,7 +1092,11 @@ def api_bt_estrategias_post():
 @app.route("/api/backtesting/estrategias/publicas")
 @requer_auth
 def api_bt_estrategias_publicas():
-    return jsonify(db.db_listar_estrategias_bt(publicas=True))
+    lista = db.db_listar_estrategias_bt(publicas=True)
+    meu_id = uid()
+    for e in lista:
+        e['minha'] = (e.get('usuario_id') == meu_id)
+    return jsonify(lista)
 
 @app.route("/api/backtesting/resultado/<int:bt_id>")
 @requer_auth
@@ -1134,6 +1138,21 @@ def api_bt_estrategia_get(eid):
         conn.close()
         if not row: return jsonify({"erro": "Não encontrada"}), 404
         return jsonify(dict(row))
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/api/backtesting/estrategias/<int:eid>/excluir", methods=["DELETE"])
+@requer_auth
+def api_bt_excluir_estrategia(eid):
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM backtesting_estrategias
+                WHERE id=%s AND usuario_id=%s
+            """, (eid, uid()))
+        conn.commit(); conn.close()
+        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
 
