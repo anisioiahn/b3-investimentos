@@ -4613,6 +4613,7 @@ function _renderBuilderResultado(d){
               <th style="padding:6px 8px;text-align:left">Setor</th>
               <th style="padding:6px 8px;text-align:center">Janus Score</th>
               <th style="padding:6px 8px;text-align:right">DY 12m</th>
+              <th style="padding:6px 8px;text-align:right">Div. Score</th>
               ${capital>0?'<th style="padding:6px 8px;text-align:right">Peso</th><th style="padding:6px 8px;text-align:right">Valor</th>':''}
             </tr>
           </thead>
@@ -4635,6 +4636,9 @@ function _renderBuilderResultado(d){
                 </td>
                 <td style="padding:8px;text-align:right;color:${dy>=6?'#16a34a':dy>=3?'#f59e0b':'var(--text2)'};font-weight:${dy>=3?'700':'400'}">
                   ${dy>0?dy.toFixed(1)+'%':'—'}
+                </td>
+                <td style="padding:8px;text-align:right">
+                  ${c.dividend_score>0?`<span style="font-weight:700;color:${c.dividend_score>=70?'#16a34a':c.dividend_score>=50?'#f59e0b':'var(--text3)'}">${parseFloat(c.dividend_score).toFixed(0)}</span>`:'<span style="color:var(--text3)">—</span>'}
                 </td>
                 ${capital>0?`
                   <td style="padding:8px;text-align:right">${c.peso_pct||0}%</td>
