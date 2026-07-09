@@ -1190,6 +1190,157 @@ def _gerar_mudancas_dia():
 
     return mudancas[:10]
 
+@app.route("/api/builder/executar", methods=["POST"])
+@requer_auth
+def api_builder_executar():
+    """
+    Executa o Janus Builder — filtra ativos por critérios e retorna candidatos.
+    """
+    d = request.json or {}
+
+    # Critérios
+    score_min     = d.get('score_min', 0)
+    score_max     = d.get('score_max', 100)
+    dy_min        = d.get('dy_min', 0)
+    dy_max        = d.get('dy_max', 100)
+    setores_inc   = d.get('setores', [])       # [] = todos
+    setores_exc   = d.get('setores_excluir', [])
+    tipos         = d.get('tipos', ['ACAO'])    # ACAO, FII, ETF, BDR
+    max_ativos    = d.get('max_ativos', 20)
+    ordem         = d.get('ordem', 'score')    # score, dy, setor
+    capital       = d.get('capital', 0)
+    peso_tipo     = d.get('peso_tipo', 'igual') # igual, score, dy
+
+    try:
+        import psycopg2.extras as pex
+        conn = db.get_conn()
+        with conn.cursor(cursor_factory=pex.RealDictCursor) as cur:
+            # Busca última data de ranking
+            cur.execute("""
+                SELECT MAX(reference_date) as ultima
+                FROM ranking_snapshots
+            """)
+            ref_row = cur.fetchone()
+            if not ref_row or not ref_row['ultima']:
+                return jsonify({"erro": "Janus Score não disponível ainda. Execute o Janus Score primeiro."}), 400
+            ref_date = ref_row['ultima']
+
+            # Monta filtros dinâmicos
+            conditions = [
+                "r.janus_score >= %s",
+                "r.janus_score <= %s",
+                "a.status = 'ATIVO'",
+            ]
+            params = [score_min, score_max]
+
+            if tipos:
+                placeholders = ','.join(['%s'] * len(tipos))
+                conditions.append(f"a.asset_type IN ({placeholders})")
+                params.extend(tipos)
+
+            if setores_inc:
+                placeholders = ','.join(['%s'] * len(setores_inc))
+                conditions.append(f"c.sector IN ({placeholders})")
+                params.extend(setores_inc)
+
+            if setores_exc:
+                placeholders = ','.join(['%s'] * len(setores_exc))
+                conditions.append(f"(c.sector NOT IN ({placeholders}) OR c.sector IS NULL)")
+                params.extend(setores_exc)
+
+            # Ordem
+            order_map = {
+                'score': 'r.janus_score DESC',
+                'dy':    'COALESCE(dd.dividend_yield_12m, 0) DESC',
+                'nome':  'a.ticker ASC',
+            }
+            order_sql = order_map.get(ordem, 'r.janus_score DESC')
+
+            where = ' AND '.join(conditions)
+            cur.execute(f"""
+                SELECT
+                    a.ticker, a.asset_type,
+                    c.trading_name as nome, c.sector as setor,
+                    r.janus_score as score,
+                    r.quality_score,
+                    r.general_position as posicao,
+                    COALESCE(dd.dividend_yield_12m, 0) as dy_12m,
+                    COALESCE(dd.janus_dividend_score, 0) as dividend_score,
+                    js.confidence
+                FROM ranking_snapshots r
+                JOIN assets a ON a.asset_id = r.asset_id
+                LEFT JOIN companies c ON c.company_id = a.company_id
+                LEFT JOIN janus_scores js ON js.asset_id = r.asset_id
+                    AND js.reference_date = r.reference_date
+                LEFT JOIN dividend_data dd ON dd.ticker = a.ticker
+                WHERE r.reference_date = %s AND {where}
+                ORDER BY {order_sql}
+                LIMIT %s
+            """, [ref_date] + params + [max_ativos])
+
+            candidatos = [dict(r) for r in cur.fetchall()]
+        conn.close()
+
+        # Calcula pesos da carteira
+        total = len(candidatos)
+        if total > 0 and capital > 0:
+            if peso_tipo == 'score':
+                soma = sum(float(c.get('score') or 0) for c in candidatos) or 1
+                for c in candidatos:
+                    pct = float(c.get('score') or 0) / soma * 100
+                    c['peso_pct'] = round(pct, 1)
+                    c['valor_sugerido'] = round(capital * pct / 100, 2)
+            elif peso_tipo == 'dy':
+                soma = sum(float(c.get('dy_12m') or 0) for c in candidatos) or 1
+                for c in candidatos:
+                    pct = float(c.get('dy_12m') or 0) / soma * 100
+                    c['peso_pct'] = round(pct, 1)
+                    c['valor_sugerido'] = round(capital * pct / 100, 2)
+            else:  # igual
+                pct = round(100 / total, 1)
+                valor = round(capital / total, 2)
+                for c in candidatos:
+                    c['peso_pct'] = pct
+                    c['valor_sugerido'] = valor
+
+        # Converte tipos para serialização
+        for c in candidatos:
+            for k, v in c.items():
+                if hasattr(v, '__float__'):
+                    c[k] = float(v)
+
+        return jsonify({
+            "ok": True,
+            "total": total,
+            "criterios": d,
+            "reference_date": str(ref_date),
+            "candidatos": candidatos
+        })
+    except Exception as e:
+        print(f"[BUILDER] Erro: {e}", flush=True)
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/api/builder/setores")
+@requer_auth
+def api_builder_setores():
+    """Retorna lista de setores disponíveis."""
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT c.sector, COUNT(*) as total
+                FROM assets a
+                JOIN companies c ON c.company_id = a.company_id
+                WHERE a.status = 'ATIVO' AND c.sector IS NOT NULL
+                GROUP BY c.sector
+                ORDER BY c.sector
+            """)
+            setores = [{"setor": r[0], "total": r[1]} for r in cur.fetchall()]
+        conn.close()
+        return jsonify(setores)
+    except Exception as e:
+        return jsonify([])
+
 @app.route("/api/backtesting/debug-publicas")
 @requer_auth
 def api_bt_debug_publicas():
