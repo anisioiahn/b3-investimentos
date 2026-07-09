@@ -713,13 +713,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <div class="content">
     <!-- PÁGINA COCKPIT -->
     <div class="page active" id="page-cockpit">
-      <!-- Saudação + Frame de atualizações -->
-      <div style="margin-bottom:1rem">
-        <div id="cockpit-header">
-          <div style="font-size:20px;font-weight:700;color:var(--text)" id="cockpit-saudacao">Bom dia! 👋</div>
-          <div style="font-size:13px;color:var(--text2);margin-top:4px" id="cockpit-resumo-dia">Carregando resumo do mercado...</div>
+      <!-- Saudação + AJIA -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 20px;margin-bottom:1rem">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+          <div>
+            <div style="font-size:20px;font-weight:700;color:var(--text)" id="cockpit-saudacao">Bom dia! 👋</div>
+            <div style="font-size:13px;color:var(--text2);margin-top:4px" id="cockpit-resumo-dia"></div>
+          </div>
+          <button onclick="gerarAjiaCockpit(this)" id="btn-ajia-cockpit"
+            style="font-size:11px;padding:5px 12px;border:1px solid var(--border);border-radius:8px;background:none;color:var(--text3);cursor:pointer;white-space:nowrap;flex-shrink:0">
+            🤖 Resumo do dia
+          </button>
         </div>
-        <!-- IDs ocultos para manter compatibilidade com o JS -->
+        <!-- Resumo AJIA -->
+        <div id="cockpit-ajia-resumo" style="display:none;margin-top:10px;padding:10px;background:var(--bg);border-radius:8px;border-left:3px solid var(--green)">
+          <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:4px">🤖 AJIA</div>
+          <div id="cockpit-ajia-texto" style="font-size:12px;color:var(--text2);line-height:1.6"></div>
+        </div>
+        <!-- IDs ocultos para manter compatibilidade -->
         <span id="ck-att-cotacao" style="display:none"></span>
         <span id="ck-att-janus" style="display:none"></span>
         <span id="ck-att-dividendos" style="display:none"></span>
@@ -764,6 +775,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         </div>
       </div>
 
+      <!-- Mudanças do Dia -->
+      <div id="cockpit-mudancas-frame" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 20px;margin-bottom:1rem;display:none">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">⚡ Destaques do Dia</div>
+        <div id="cockpit-mudancas" style="display:flex;gap:.75rem;flex-wrap:wrap"></div>
+      </div>
+
       <!-- Grid 3 módulos -->
       <div class="cockpit-grid">
         <!-- Módulo 1: IBOVESPA + Termômetro -->
@@ -803,7 +820,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
             <div id="cockpit-agenda"></div>
           </div>
         </div>
-        <!-- Módulo 3: Minha Carteira + Minha Estratégia -->
+        <!-- Módulo 3: Minha Carteira + Minha Estratégia + Radar -->
         <div style="display:flex;flex-direction:column;gap:1rem">
           <div class="cockpit-card">
             <div class="cockpit-card-title">📈 Minha Carteira</div>
@@ -812,6 +829,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <div class="cockpit-card">
             <div class="cockpit-card-title">🎯 Minha Estratégia</div>
             <div id="cockpit-estrategia"></div>
+          </div>
+          <div class="cockpit-card">
+            <div class="cockpit-card-title">🕸️ Radar Janus</div>
+            <div style="position:relative;height:200px">
+              <canvas id="cockpit-radar-chart"></canvas>
+            </div>
+            <div id="cockpit-radar-legenda" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;justify-content:center;font-size:10px;color:var(--text3)"></div>
           </div>
         </div>
       </div>
@@ -2407,11 +2431,13 @@ function _agendaMesProximo(){
 function renderCockpit(){
   _renderCockpitSaudacao();
   calcularJanusPulse();
+  carregarMudancasDia();
   _renderCockpitHeatmap();
   _renderCockpitOportunidades();
   _renderCockpitDividendos();
   _renderCockpitCarteira();
   _renderCockpitEstrategia();
+  setTimeout(renderRadarJanus, 300);
   carregarAgenda(false);
   setTimeout(()=>carregarIbovChart('1M', document.querySelector('#cockpit-ibov-chart')?.closest('.cockpit-card')?.querySelector('.range-btn')), 200);
 }
@@ -2600,6 +2626,139 @@ function calcularJanusPulse(){
     momEl.style.color = momentum>=0?'#16a34a':'#e53935';
   }
   if(scoEl)  scoEl.textContent  = scoreMedio !== null ? scoreMedio.toFixed(1) : '—';
+}
+
+// ── COCKPIT FASE 3 ────────────────────────────────────────────
+
+// AJIA Resumo do dia
+async function gerarAjiaCockpit(btn){
+  const el = document.getElementById('cockpit-ajia-resumo');
+  const txt= document.getElementById('cockpit-ajia-texto');
+  if(!el || !txt) return;
+
+  // Verifica se já está aberto
+  if(el.style.display !== 'none'){
+    el.style.display = 'none';
+    if(btn) btn.textContent = '🤖 Resumo do dia';
+    return;
+  }
+
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Gerando...'; }
+  el.style.display = 'block';
+  txt.textContent = 'A AJIA está analisando o mercado...';
+
+  try{
+    // Tenta cache primeiro
+    let r = await fetch('/api/cockpit/ajia-resumo');
+    let d = await r.json();
+    if(!d.resumo){
+      // Gera novo resumo
+      r = await fetch('/api/cockpit/ajia-gerar', {method:'POST'});
+      d = await r.json();
+    }
+    if(d.resumo){
+      txt.textContent = d.resumo;
+      if(btn){ btn.disabled=false; btn.textContent='🤖 Fechar resumo'; }
+    } else {
+      txt.textContent = 'Não foi possível gerar o resumo agora.';
+      if(btn){ btn.disabled=false; btn.textContent='🤖 Resumo do dia'; }
+    }
+  }catch(e){
+    txt.textContent = 'Erro ao conectar com a AJIA.';
+    if(btn){ btn.disabled=false; btn.textContent='🤖 Resumo do dia'; }
+  }
+}
+
+// Mudanças do Dia
+async function carregarMudancasDia(){
+  try{
+    const r = await fetch('/api/cockpit/mudancas');
+    const mudancas = await r.json();
+    const frame = document.getElementById('cockpit-mudancas-frame');
+    const el    = document.getElementById('cockpit-mudancas');
+    if(!mudancas?.length || !el){ if(frame) frame.style.display='none'; return; }
+
+    frame.style.display = 'block';
+    const cores = {alta:'#16a34a', baixa:'#e53935', janus:'#7c3aed', dividendo:'#f59e0b', alerta:'#e53935'};
+    el.innerHTML = mudancas.map(m=>{
+      const cor = cores[m.tipo] || 'var(--text2)';
+      return `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--bg);border-radius:20px;white-space:nowrap">
+        <span>${m.icone||'📊'}</span>
+        <span style="font-size:11px;font-weight:700">${m.ticker}</span>
+        <span style="font-size:11px;color:${cor}">${m.descricao}</span>
+      </div>`;
+    }).join('');
+  }catch(e){}
+}
+
+// Radar Janus
+function renderRadarJanus(){
+  const ctx = document.getElementById('cockpit-radar-chart');
+  if(!ctx) return;
+
+  const setores = Object.values(DADOS.setores||{});
+  if(!setores.length) return;
+
+  const todas = setores.flatMap(s=>s.empresas||[]).filter(e=>e.preco);
+  if(!todas.length) return;
+
+  // Calcula scores por dimensão usando dados disponíveis
+  const calcMedia = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+
+  // Qualidade — % ativos com variação positiva (proxy)
+  const emAlta    = todas.filter(e=>(e.variacao||0)>0).length / todas.length * 100;
+  // Dividendos — usa ranking de dividendos se disponível
+  const divScores = (_janusRanking||[]).filter(j=>j.dividend_score).map(j=>j.dividend_score);
+  const dividendos= divScores.length ? calcMedia(divScores) : 50;
+  // Valor — usa scores do Janus
+  const janusScores = (_janusRanking||[]).filter(j=>j.score).map(j=>j.score);
+  const valor     = janusScores.length ? calcMedia(janusScores) : 50;
+  // Momentum — variação média normalizada (0-100)
+  const variacoes = todas.map(e=>e.variacao_pct||0);
+  const varMed    = calcMedia(variacoes);
+  const momentum  = Math.max(0, Math.min(100, 50 + varMed * 5));
+  // Risco — drawdown invertido (quanto maior, mais arriscado = menor score)
+  const risco     = Math.max(0, Math.min(100, 100 - Math.abs(varMed) * 8));
+  // Crescimento — ativos em alta acima de 1%
+  const crescimento = todas.filter(e=>(e.variacao_pct||0)>1).length / todas.length * 100;
+
+  const dados  = [emAlta, dividendos, valor, momentum, risco, crescimento].map(v=>Math.round(v));
+  const labels = ['Qualidade','Dividendos','Valor','Momentum','Risco Baixo','Crescimento'];
+
+  if(_radarChart){ _radarChart.destroy(); }
+  _radarChart = new Chart(ctx, {
+    type: 'radar',
+    data:{
+      labels,
+      datasets:[{
+        label:'Mercado hoje',
+        data: dados,
+        backgroundColor:'rgba(124,58,237,0.15)',
+        borderColor:'#7c3aed',
+        borderWidth:2,
+        pointBackgroundColor:'#7c3aed',
+        pointRadius:3,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{
+        r:{
+          min:0, max:100,
+          ticks:{ display:false },
+          grid:{ color:'rgba(255,255,255,.08)' },
+          pointLabels:{ font:{size:9}, color:'var(--text3)' }
+        }
+      }
+    }
+  });
+
+  // Legenda com valores
+  const leg = document.getElementById('cockpit-radar-legenda');
+  if(leg) leg.innerHTML = labels.map((l,i)=>
+    `<span>${l}: <strong style="color:var(--text)">${dados[i]}</strong></span>`
+  ).join('');
 }
 
 function _renderCockpitSaudacao(){
