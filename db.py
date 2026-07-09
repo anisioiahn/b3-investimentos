@@ -1621,8 +1621,6 @@ def db_registrar_presenca(usuario_id, pagina=None, user_agent=None):
 
 def db_usuarios_online(minutos=5):
     """Retorna usuários que fizeram ping nos últimos N minutos."""
-    from datetime import datetime, timezone, timedelta
-    limite = (datetime.now(timezone(timedelta(hours=-3))) - timedelta(minutes=minutos)).isoformat()
     try:
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -1631,9 +1629,9 @@ def db_usuarios_online(minutos=5):
                        u.nome, u.email
                 FROM usuarios_presenca p
                 JOIN usuarios u ON u.id = p.usuario_id
-                WHERE p.ultimo_acesso >= %s
+                WHERE p.ultimo_acesso::timestamp with time zone >= NOW() - INTERVAL '%s minutes'
                 ORDER BY p.ultimo_acesso DESC
-            """, (limite,))
+            """ % minutos)
             return [dict(r) for r in cur.fetchall()]
     except Exception as e:
         print(f"[DB] Erro online: {e}", flush=True)
@@ -1647,13 +1645,20 @@ def db_historico_acessos_diario():
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT DATE(ultimo_acesso::timestamp) as dia,
+                SELECT DATE(ultimo_acesso::timestamp with time zone) as dia,
                        COUNT(DISTINCT usuario_id) as usuarios
                 FROM usuarios_presenca
-                WHERE ultimo_acesso >= NOW() - INTERVAL '30 days'
+                WHERE ultimo_acesso::timestamp with time zone >= NOW() - INTERVAL '30 days'
                 GROUP BY dia ORDER BY dia DESC
+                LIMIT 30
             """)
-            return [dict(r) for r in cur.fetchall()]
-    except: return []
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                r['dia'] = str(r['dia'])
+                r['usuarios'] = int(r['usuarios'])
+            return rows
+    except Exception as e:
+        print(f"[DB] Erro histórico acessos: {e}", flush=True)
+        return []
     finally:
         conn.close()
