@@ -1330,20 +1330,23 @@ def db_listar_backtests(uid, limit=20):
     try:
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Garante coluna publicada existe
             cur.execute("""
-                SELECT r.id, r.ticker, r.estrategia, r.data_inicio, r.data_fim,
-                       r.capital_inicial, r.capital_final, r.retorno_pct,
-                       r.retorno_ibov, r.alpha, r.drawdown_max, r.sharpe,
-                       r.n_operacoes, r.created_at,
-                       e.id as estrategia_id, e.nome as estrategia_nome, e.publica
-                FROM backtesting_resultados r
-                LEFT JOIN backtesting_estrategias e
-                    ON e.usuario_id = r.usuario_id
-                    AND e.tipo = r.estrategia
-                    AND e.created_at >= r.created_at
-                    AND e.publica = TRUE
-                WHERE r.usuario_id=%s
-                ORDER BY r.created_at DESC LIMIT %s
+                ALTER TABLE backtesting_resultados
+                ADD COLUMN IF NOT EXISTS publicada BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS estrategia_id INTEGER
+            """)
+            conn.commit()
+            cur.execute("""
+                SELECT id, ticker, estrategia, data_inicio, data_fim,
+                       capital_inicial, capital_final, retorno_pct,
+                       retorno_ibov, alpha, drawdown_max, sharpe,
+                       n_operacoes, created_at,
+                       COALESCE(publicada, FALSE) as publica,
+                       estrategia_id
+                FROM backtesting_resultados
+                WHERE usuario_id=%s
+                ORDER BY created_at DESC LIMIT %s
             """, (uid, limit))
             return [dict(r) for r in cur.fetchall()]
     except Exception as e:
@@ -1351,6 +1354,20 @@ def db_listar_backtests(uid, limit=20):
         return []
     finally:
         conn.close()
+
+def db_marcar_publicada(bt_id, usuario_id, estrategia_id, publicada=True):
+    """Marca/desmarca uma simulação como publicada."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE backtesting_resultados
+                SET publicada=%s, estrategia_id=%s
+                WHERE id=%s AND usuario_id=%s
+            """, (publicada, estrategia_id, bt_id, usuario_id))
+        conn.commit(); conn.close()
+    except Exception as e:
+        print(f"[DB] Erro marcar publicada: {e}", flush=True)
 
 # ── BACKTESTING v2 — ESTRATÉGIAS COMPARTILHADAS ───────────────
 def db_init_backtesting_v2_tables(conn):
