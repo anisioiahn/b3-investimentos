@@ -4672,31 +4672,31 @@ async function carregarTermometro(anos, btn){
       return;
     }
     const emBaixa = [...setores].sort((a,b)=>a.dist_pico_pct-b.dist_pico_pct).slice(0,5);
-    const emAlta  = [...setores].sort((a,b)=>b.dist_vale_pct-a.dist_vale_pct).slice(0,5);
+    const emAlta  = [...setores].sort((a,b)=>b.retorno_periodo_pct-a.retorno_periodo_pct).slice(0,5);
     const renderLista = (lista, tipo) => lista.map(s=>{
-      const pct  = tipo==='baixa' ? s.dist_pico_pct : s.dist_vale_pct;
-      const cor  = tipo==='baixa' ? '#e53935' : '#16a34a';
-      const lbl  = tipo==='baixa' ? 'do pico' : 'do vale';
-      const bar  = Math.min(100, Math.abs(pct));
-      const nomeSetor = _setorPtBR[s.setor] || s.setor || '—';
+      const pct      = tipo==='baixa' ? s.dist_pico_pct : s.retorno_periodo_pct;
+      const cor      = tipo==='baixa' ? '#e53935' : '#16a34a';
+      const lbl      = tipo==='baixa' ? 'do pico' : 'no período';
+      const bar      = Math.min(100, Math.abs(pct));
+      const nomeSetor= _setorPtBR[s.setor] || s.setor || '—';
       return `<div style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-          <span style="font-size:12px;font-weight:600">${nomeSetor}</span>
+          <span style="font-size:12px;font-weight:600">${nomeSetor} <span style="font-size:10px;font-weight:400;color:var(--text3)">${s.n_ativos} ativos</span></span>
           <span style="font-size:12px;font-weight:700;color:${cor}">${pct>=0?'+':''}${pct}% ${lbl}</span>
         </div>
         <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
           <div style="height:100%;width:${bar}%;background:${cor};border-radius:4px"></div>
         </div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">Pico: ${s.data_pico} · Vale: ${s.data_vale}</div>
+        ${tipo==='baixa'?`<div style="font-size:10px;color:var(--text3);margin-top:2px">Retorno no período: <strong style="color:${s.retorno_periodo_pct>=0?'#16a34a':'#e53935'}">${s.retorno_periodo_pct>=0?'+':''}${s.retorno_periodo_pct}%</strong></div>`:''}
       </div>`;
     }).join('');
     el.innerHTML = `
       <div>
-        <div style="font-size:12px;font-weight:700;color:#e53935;margin-bottom:.75rem">📉 Setores em BAIXA — possível oportunidade</div>
+        <div style="font-size:12px;font-weight:700;color:#e53935;margin-bottom:.75rem">📉 Mais distantes do pico — possível oportunidade</div>
         ${renderLista(emBaixa, 'baixa')}
       </div>
       <div>
-        <div style="font-size:12px;font-weight:700;color:#16a34a;margin-bottom:.75rem">📈 Setores em ALTA — cautela</div>
+        <div style="font-size:12px;font-weight:700;color:#16a34a;margin-bottom:.75rem">📈 Melhor retorno no período — cautela</div>
         ${renderLista(emAlta, 'alta')}
       </div>`;
   }catch(e){
