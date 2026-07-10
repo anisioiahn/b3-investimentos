@@ -196,6 +196,25 @@ def atualizar_cache():
             _progresso["setor_atual"] = f"Buscando cotações... ({_progresso['atual']}/{total_tickers})"
             time.sleep(0.3)
 
+        # STEP 3.5: Busca últimos preços do banco para fallback
+        log("📦 Buscando preços de fallback do banco...", "info")
+        fallback_precos = {}
+        try:
+            conn_fb = db.get_conn()
+            with conn_fb.cursor() as cur:
+                cur.execute("""
+                    SELECT DISTINCT ON (ticker) ticker, close
+                    FROM historico_precos
+                    WHERE intervalo = '1d'
+                    ORDER BY ticker, data DESC
+                """)
+                for row in cur.fetchall():
+                    fallback_precos[row[0]] = float(row[1])
+            conn_fb.close()
+            log(f"📦 {len(fallback_precos)} preços de fallback carregados", "info")
+        except Exception as e:
+            log(f"⚠️ Erro fallback: {e}", "aviso")
+
         # STEP 4: Monta cache por setor em português
         ativos_processados = 0
         for setor_en, tickers in tickers_por_setor.items():
@@ -225,12 +244,20 @@ def atualizar_cache():
                         "logo": d.get("logourl", f"https://icons.brapi.dev/icons/{ticker}.svg"),
                     })
                 else:
+                    # Fallback: usa último preço do histórico local
+                    preco_fb = fallback_precos.get(ticker)
                     empresas.append({
                         "ticker": ticker,
                         "nome": tm["nome"],
                         "cor": tm["cor"],
-                        "preco": None,
+                        "preco": preco_fb,
+                        "variacao": 0,
+                        "variacao_pct": 0,
+                        "maxima_dia": None,
+                        "minima_dia": None,
+                        "volume": None,
                         "logo": f"https://icons.brapi.dev/icons/{ticker}.svg",
+                        "fallback": True,  # indica que é preço do dia anterior
                     })
                 ativos_processados += 1
                 _progresso["atual"] = ativos_processados
