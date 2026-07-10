@@ -1554,10 +1554,99 @@ def api_risco_ranking():
 @requer_auth
 def api_risco_ativo(ticker):
     """Score de risco detalhado de um ativo."""
-    resultado = db.db_risk_score_ativo(ticker.upper())
-    if not resultado:
-        return jsonify({"erro": "Ativo não encontrado"}), 404
-    return jsonify(resultado)
+    ticker = ticker.upper()
+    try:
+        conn = db.get_conn()
+        with conn.cursor(cursor_factory=__import__('psycopg2').extras.RealDictCursor) as cur:
+            # Verifica se ativo existe
+            cur.execute("SELECT asset_id FROM assets WHERE ticker=%s LIMIT 1", (ticker,))
+            asset = cur.fetchone()
+            if not asset:
+                conn.close()
+                return jsonify({"erro": f"Ticker {ticker} não encontrado"}), 404
+            asset_id = asset['asset_id']
+
+            # Última data de referência
+            cur.execute("SELECT MAX(reference_date) as dt FROM market_snapshots WHERE asset_id=%s", (asset_id,))
+            ref = cur.fetchone()
+            ref_date = ref['dt'] if ref and ref['dt'] else None
+
+            # Dados de mercado e financeiros
+            beta = vol_m = total_debt = ebitda_val = None
+            if ref_date:
+                cur.execute("""
+                    SELECT ms.beta, ms.volume, fs.total_debt, fs.ebitda
+                    FROM market_snapshots ms
+                    LEFT JOIN financial_snapshots fs ON fs.asset_id = ms.asset_id
+                        AND fs.reference_date = ms.reference_date
+                    WHERE ms.asset_id=%s AND ms.reference_date=%s
+                    LIMIT 1
+                """, (asset_id, ref_date))
+                row = cur.fetchone()
+                if row:
+                    beta = row['beta']; vol_m = row['volume']
+                    total_debt = row['total_debt']; ebitda_val = row['ebitda']
+
+            # Volatilidade 30 dias do histórico
+            cur.execute("""
+                SELECT ROUND(STDDEV(retorno)*100::numeric,2) as vol_diaria
+                FROM (
+                    SELECT (close - LAG(close) OVER (ORDER BY data))
+                           / NULLIF(LAG(close) OVER (ORDER BY data),0) as retorno
+                    FROM historico_precos
+                    WHERE ticker=%s AND intervalo='1d'
+                      AND data >= CURRENT_DATE - INTERVAL '30 days'
+                ) t WHERE retorno IS NOT NULL
+            """, (ticker,))
+            vr = cur.fetchone()
+            vol = float(vr['vol_diaria']) if vr and vr['vol_diaria'] else 2.0
+
+            # Drawdown máximo 2 anos
+            cur.execute("""
+                SELECT ROUND(MIN(drawdown)*100::numeric,1) as dd_max
+                FROM (
+                    SELECT (close - MAX(close) OVER (ORDER BY data
+                            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW))
+                           / NULLIF(MAX(close) OVER (ORDER BY data
+                            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW),0) as drawdown
+                    FROM historico_precos
+                    WHERE ticker=%s AND intervalo='1d'
+                      AND data >= CURRENT_DATE - INTERVAL '2 years'
+                ) t
+            """, (ticker,))
+            dr = cur.fetchone()
+            dd = abs(float(dr['dd_max'])) if dr and dr['dd_max'] else 15.0
+
+        conn.close()
+
+        b   = float(beta or 1.0)
+        vm  = float(vol_m or 0)
+        de  = float(total_debt or 0) / float(ebitda_val) if ebitda_val and float(ebitda_val) > 0 else 0
+
+        pts_vol   = min(25, vol / 3 * 25)
+        pts_beta  = min(20, max(0, b) / 2 * 20)
+        pts_divid = min(20, max(0, de) / 5 * 20)
+        pts_dd    = min(20, dd / 60 * 20)
+        pts_liq   = max(0, 15 - min(15, vm / 5_000_000 * 15))
+        risk_score= round(min(100, max(0, pts_vol+pts_beta+pts_divid+pts_dd+pts_liq)), 1)
+
+        label = ('🟢 Muito Baixo' if risk_score<=20 else '🟢 Baixo' if risk_score<=40
+                 else '🟡 Moderado' if risk_score<=60 else '🟠 Alto' if risk_score<=80
+                 else '🔴 Muito Alto')
+
+        return jsonify({
+            'risk_score': risk_score, 'label': label,
+            'detalhes': {
+                'volatilidade':  {'valor': round(vol,2), 'pts': round(pts_vol,1),   'max':25, 'unidade':'%/dia'},
+                'beta':          {'valor': round(b,2),   'pts': round(pts_beta,1),  'max':20, 'unidade':'x'},
+                'divida_ebitda': {'valor': round(de,2),  'pts': round(pts_divid,1), 'max':20, 'unidade':'x'},
+                'drawdown':      {'valor': round(dd,1),  'pts': round(pts_dd,1),    'max':20, 'unidade':'%'},
+                'liquidez':      {'valor': round(vm/1e6,1),'pts':round(pts_liq,1),  'max':15, 'unidade':'M/dia'},
+            }
+        })
+    except Exception as e:
+        print(f"[RISCO] Erro {ticker}: {e}", flush=True)
+        return jsonify({"erro": str(e)}), 500
 
 @app.route("/api/backtesting/debug-publicas")
 @requer_auth
