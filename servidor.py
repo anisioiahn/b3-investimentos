@@ -1695,6 +1695,165 @@ def api_risco_ativo(ticker):
         print(f"[RISCO] Erro {ticker}: {e}", flush=True)
         return jsonify({"erro": str(e)}), 500
 
+@app.route("/api/carteiras-comunidade", methods=["GET"])
+@requer_auth
+def api_carteiras_comunidade_listar():
+    ordem = request.args.get('ordem', 'ranking')
+    return jsonify(db.db_listar_carteiras_publicas(uid(), ordem))
+
+@app.route("/api/carteiras-comunidade", methods=["POST"])
+@requer_auth
+def api_carteiras_comunidade_publicar():
+    d = request.json or {}
+    nome      = d.get('nome', 'Minha Carteira')
+    descricao = d.get('descricao', '')
+    composicao= d.get('composicao', [])
+    capital   = d.get('capital_total')
+    retorno   = d.get('retorno_12m')
+    if not composicao:
+        return jsonify({"erro": "Carteira vazia"}), 400
+    cid = db.db_publicar_carteira(uid(), nome, descricao, composicao, capital, retorno)
+    if cid:
+        db.db_calcular_ranking_carteira(cid)
+        return jsonify({"ok": True, "id": cid})
+    return jsonify({"erro": "Erro ao publicar"}), 500
+
+@app.route("/api/carteiras-comunidade/<int:cid>")
+@requer_auth
+def api_carteiras_comunidade_detalhe(cid):
+    cart = db.db_detalhe_carteira_publica(cid, uid())
+    if not cart: return jsonify({"erro": "Não encontrada"}), 404
+    return jsonify(cart)
+
+@app.route("/api/carteiras-comunidade/<int:cid>/avaliar", methods=["POST"])
+@requer_auth
+def api_carteiras_comunidade_avaliar(cid):
+    estrelas = int((request.json or {}).get('estrelas', 0))
+    if not 1 <= estrelas <= 5:
+        return jsonify({"erro": "Estrelas inválidas"}), 400
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO carteiras_avaliacoes (carteira_id, usuario_id, estrelas, created_at)
+                VALUES (%s,%s,%s,%s)
+                ON CONFLICT (carteira_id, usuario_id) DO UPDATE SET estrelas=%s
+            """, (cid, uid(), estrelas, now, estrelas))
+        conn.commit(); conn.close()
+        db.db_calcular_ranking_carteira(cid)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/api/carteiras-comunidade/<int:cid>/comentar", methods=["POST"])
+@requer_auth
+def api_carteiras_comunidade_comentar(cid):
+    comentario = (request.json or {}).get('comentario', '').strip()
+    if not comentario: return jsonify({"erro": "Comentário vazio"}), 400
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO carteiras_comentarios (carteira_id, usuario_id, comentario, created_at)
+                VALUES (%s,%s,%s,%s)
+            """, (cid, uid(), comentario, now))
+        conn.commit(); conn.close()
+        db.db_calcular_ranking_carteira(cid)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/api/carteiras-comunidade/<int:cid>/favoritar", methods=["POST"])
+@requer_auth
+def api_carteiras_comunidade_favoritar(cid):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM carteiras_favoritos WHERE carteira_id=%s AND usuario_id=%s", (cid, uid()))
+            if cur.fetchone():
+                cur.execute("DELETE FROM carteiras_favoritos WHERE carteira_id=%s AND usuario_id=%s", (cid, uid()))
+                favoritou = False
+            else:
+                cur.execute("INSERT INTO carteiras_favoritos (carteira_id, usuario_id, created_at) VALUES (%s,%s,%s)", (cid, uid(), now))
+                favoritou = True
+        conn.commit(); conn.close()
+        return jsonify({"ok": True, "favoritou": favoritou})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/api/carteiras-comunidade/seguir/<int:autor_id>", methods=["POST"])
+@requer_auth
+def api_carteiras_comunidade_seguir(autor_id):
+    if autor_id == uid(): return jsonify({"erro": "Não pode seguir a si mesmo"}), 400
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM carteiras_seguidores WHERE autor_id=%s AND seguidor_id=%s", (autor_id, uid()))
+            if cur.fetchone():
+                cur.execute("DELETE FROM carteiras_seguidores WHERE autor_id=%s AND seguidor_id=%s", (autor_id, uid()))
+                seguindo = False
+            else:
+                cur.execute("INSERT INTO carteiras_seguidores (autor_id, seguidor_id, created_at) VALUES (%s,%s,%s)", (autor_id, uid(), now))
+                seguindo = True
+        conn.commit(); conn.close()
+        return jsonify({"ok": True, "seguindo": seguindo})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/api/carteiras-comunidade/<int:cid>/clonar", methods=["POST"])
+@requer_auth
+def api_carteiras_comunidade_clonar(cid):
+    """Clona a carteira pública para a conta do usuário."""
+    try:
+        cart = db.db_detalhe_carteira_publica(cid, uid())
+        if not cart: return jsonify({"erro": "Carteira não encontrada"}), 404
+        composicao = cart.get('composicao', [])
+        if not composicao: return jsonify({"erro": "Carteira vazia"}), 400
+
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+        conn = db.get_conn()
+        adicionados = 0
+        with conn.cursor() as cur:
+            for ativo in composicao:
+                ticker = ativo.get('ticker')
+                if not ticker: continue
+                try:
+                    cur.execute("""
+                        INSERT INTO carteira (usuario_id, ticker, quantidade, preco_medio, data_compra, corretora)
+                        VALUES (%s,%s,%s,%s,%s,%s)
+                    """, (uid(), ticker, ativo.get('quantidade', 0),
+                          ativo.get('preco_medio', 0), now[:10], 'Comunidade Janus'))
+                    adicionados += 1
+                except: pass
+            # Incrementa contador de clones
+            cur.execute("UPDATE carteiras_publicas SET clones=COALESCE(clones,0)+1 WHERE id=%s", (cid,))
+        conn.commit(); conn.close()
+        db.db_calcular_ranking_carteira(cid)
+        return jsonify({"ok": True, "adicionados": adicionados})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/api/carteiras-comunidade/<int:cid>/despublicar", methods=["POST"])
+@requer_auth
+def api_carteiras_comunidade_despublicar(cid):
+    try:
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("UPDATE carteiras_publicas SET publica=FALSE WHERE id=%s AND usuario_id=%s", (cid, uid()))
+        conn.commit(); conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
 @app.route("/api/backtesting/debug-publicas")
 @requer_auth
 def api_bt_debug_publicas():
@@ -2677,6 +2836,7 @@ if _db_ok:
             db.db_init_backtesting_social_tables,
             db.db_init_presenca_table,
             db.db_init_cockpit_fase3_tables,
+            db.db_init_carteiras_comunidade,
         ]
         for fn in inits:
             try:
