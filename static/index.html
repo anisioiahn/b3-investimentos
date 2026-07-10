@@ -4720,16 +4720,11 @@ async function carregarOportunidadesAtivos(){
       const corScore = score>=80?'#16a34a':score>=60?'#f59e0b':'#e53935';
       const corRSI   = rsi<30?'#16a34a':rsi<50?'#f59e0b':'var(--text3)';
       const corDist  = dist<-10?'#16a34a':dist<0?'#f59e0b':'var(--text3)';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:${i>0?'1px solid var(--border)':'none'}">
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:${i>0?'1px solid var(--border)':'none'};cursor:pointer" onclick="abrirGrafico('${a.ticker}')" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
         <div style="font-size:13px;font-weight:700;color:var(--text3);min-width:18px">${i+1}</div>
-        <div onclick="abrirAtivoDaBusca('${a.ticker}')" style="width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg);cursor:pointer" title="Ver gráfico e notícias">
-          <img src="https://icons.brapi.dev/icons/${a.ticker}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent='${(a.ticker||'').substring(0,4)}'">
-        </div>
+        <div class="ji-logo" style="background:#0066cc;width:32px;height:32px;flex-shrink:0">${ji_logoHtml(a.ticker)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700">
-            <span onclick="abrirAtivoDaBusca('${a.ticker}')" style="cursor:pointer" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color=''">${a.ticker}</span>
-            <span style="font-size:10px;color:var(--text3);font-weight:400">${setor}</span>
-          </div>
+          <div style="font-size:13px;font-weight:700">${a.ticker} <span style="font-size:10px;color:var(--text3);font-weight:400">${setor}</span></div>
           <div style="display:flex;gap:8px;font-size:10px;margin-top:2px">
             <span>Score: <strong style="color:${corScore}">${score.toFixed(0)}</strong></span>
             <span>RSI: <strong style="color:${corRSI}">${rsi.toFixed(0)}</strong></span>
@@ -4757,16 +4752,11 @@ async function carregarOportunidadesDividendos(){
       const score = parseFloat(a.dividend_score||0);
       const js    = parseFloat(a.score||0);
       const setor = _setorPtBR[a.setor] || a.setor || '';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:${i>0?'1px solid var(--border)':'none'}">
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:${i>0?'1px solid var(--border)':'none'};cursor:pointer" onclick="abrirGrafico('${a.ticker}')" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
         <div style="font-size:13px;font-weight:700;color:var(--text3);min-width:18px">${i+1}</div>
-        <div onclick="abrirAtivoDaBusca('${a.ticker}')" style="width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg);cursor:pointer" title="Ver gráfico e notícias">
-          <img src="https://icons.brapi.dev/icons/${a.ticker}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent='${(a.ticker||'').substring(0,4)}'">
-        </div>
+        <div class="ji-logo" style="background:#16a34a;width:32px;height:32px;flex-shrink:0">${ji_logoHtml(a.ticker)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700">
-            <span onclick="abrirAtivoDaBusca('${a.ticker}')" style="cursor:pointer" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color=''">${a.ticker}</span>
-            <span style="font-size:10px;color:var(--text3);font-weight:400">${a.asset_type||''} ${setor?'· '+setor:''}</span>
-          </div>
+          <div style="font-size:13px;font-weight:700">${a.ticker} <span style="font-size:10px;color:var(--text3);font-weight:400">${a.asset_type||''} ${setor?'· '+setor:''}</span></div>
           <div style="display:flex;gap:8px;font-size:10px;margin-top:2px">
             <span>DY 12m: <strong style="color:${dy>=8?'#16a34a':dy>=5?'#f59e0b':'var(--text2)'}">${dy.toFixed(1)}%</strong></span>
             ${a.dy_5y?`<span>DY 5a: <strong>${parseFloat(a.dy_5y).toFixed(1)}%</strong></span>`:''}
