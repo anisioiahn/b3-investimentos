@@ -955,7 +955,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <div class="carteira-toolbar">
           <div class="carteira-title">💼 Minha Carteira</div>
           <div style="display:flex;gap:6px">
-            <button class="btn-add-pos" onclick="abrirPublicarCarteira()" style="background:none;border:1px solid var(--green);color:var(--green)">🌐 Publicar</button>
             <button class="btn-add-pos" onclick="abrirModalPosicao()">+ Adicionar posição</button>
           </div>
         </div>
@@ -5218,6 +5217,38 @@ async function avaliarCarteiraComunidade(cid){
   if(d.ok){ carregarCarteirasComunidade(); }
 }
 
+async function publicarCategoria(nomeCategoria, icone, ativos){
+  if(!ativos?.length){ alert('Esta categoria está vazia!'); return; }
+  // Ativos vem como string JSON do onclick — já parseado
+  const composicao = typeof ativos === 'string' ? JSON.parse(ativos) : ativos;
+
+  const nome = prompt(`Nome para publicar na comunidade:`, `${icone} ${nomeCategoria} — Janus`);
+  if(!nome) return;
+  const descricao = prompt('Descrição (opcional):') || '';
+
+  // Calcula percentual relativo
+  const total = composicao.reduce((s,a)=>s+(parseFloat(a.percentual)||0),0);
+  const composicaoFinal = composicao.map(a=>({
+    ticker:      a.ticker,
+    quantidade:  a.quantidade,
+    preco_medio: a.preco_medio,
+    percentual:  total>0 ? parseFloat(((parseFloat(a.percentual)||0)/total*100).toFixed(1)) : 0,
+  }));
+
+  const resp = await fetch('/api/carteiras-comunidade', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ nome, descricao, composicao: composicaoFinal })
+  });
+  const d = await resp.json();
+  if(d.ok){
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:12px 24px;border-radius:24px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+    toast.textContent = `✅ "${nome}" publicada na comunidade!`;
+    document.body.appendChild(toast);
+    setTimeout(()=>toast.remove(), 4000);
+  } else { alert('❌ Erro ao publicar: ' + (d.erro||'')); }
+}
+
 async function comentarCarteira(cid){
   const el = document.getElementById(`cart-comentario-${cid}`);
   const texto = el?.value?.trim();
@@ -7428,6 +7459,10 @@ function renderCarteiraCategorias(){
         <div style="display:flex;gap:6px;align-items:center">
           ${g.id!==null?`<button onclick="event.stopPropagation();editarCategoria(${g.id})" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text3)" title="Editar">✏️</button>
           <button onclick="event.stopPropagation();excluirCategoria(${g.id})" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text3)" title="Excluir">🗑</button>`:''}
+          <button onclick="event.stopPropagation();publicarCategoria('${g.nome}','${g.icone}',${JSON.stringify(g.ativos.map(a=>({ticker:a.ticker,quantidade:a.quantidade,preco_medio:a.preco_medio,percentual:parseFloat(a.valor_atual||a.valor_investido||0)}))).replace(/"/g,'&quot;')})"
+            style="background:none;border:1px solid var(--green);border-radius:6px;cursor:pointer;font-size:11px;color:var(--green);padding:2px 8px;font-family:inherit" title="Publicar esta categoria na comunidade">
+            🌐 Publicar
+          </button>
           <span style="font-size:11px;color:var(--text3)">${g.ativos.length} ativo(s)</span>
         </div>
       </div>
