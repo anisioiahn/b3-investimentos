@@ -1203,13 +1203,20 @@ def api_builder_executar():
     score_max     = d.get('score_max', 100)
     dy_min        = d.get('dy_min', 0)
     dy_max        = d.get('dy_max', 100)
-    setores_inc   = d.get('setores', [])       # [] = todos
+    setores_inc   = d.get('setores', [])
     setores_exc   = d.get('setores_excluir', [])
-    tipos         = d.get('tipos', ['ACAO'])    # ACAO, FII, ETF, BDR
+    tipos         = d.get('tipos', ['ACAO'])
     max_ativos    = d.get('max_ativos', 20)
-    ordem         = d.get('ordem', 'score')    # score, dy, setor
+    ordem         = d.get('ordem', 'score')
     capital       = d.get('capital', 0)
-    peso_tipo     = d.get('peso_tipo', 'igual') # igual, score, dy
+    peso_tipo     = d.get('peso_tipo', 'igual')
+    # Filtros fundamentalistas (0 = sem filtro)
+    roe_min       = d.get('roe_min', 0)      # % ex: 15 = 15%
+    roic_min      = d.get('roic_min', 0)
+    margem_min    = d.get('margem_min', 0)
+    pl_max        = d.get('pl_max', 0)       # 0 = sem filtro
+    pvp_max       = d.get('pvp_max', 0)
+    ev_max        = d.get('ev_max', 0)
 
     try:
         import psycopg2.extras as pex
@@ -1257,6 +1264,26 @@ def api_builder_executar():
                 conditions.append("COALESCE(dd.dividend_yield_12m, 0) <= %s")
                 params.append(dy_max)
 
+            # Filtros fundamentalistas — valores em % (ex: 15 = 15% = 0.15 no banco)
+            if roe_min > 0:
+                conditions.append("roe_v.raw_value >= %s")
+                params.append(roe_min / 100)
+            if roic_min > 0:
+                conditions.append("roic_v.raw_value >= %s")
+                params.append(roic_min / 100)
+            if margem_min > 0:
+                conditions.append("mg_v.raw_value >= %s")
+                params.append(margem_min / 100)
+            if pl_max > 0:
+                conditions.append("pe_v.raw_value <= %s")
+                params.append(pl_max)
+            if pvp_max > 0:
+                conditions.append("pvp_v.raw_value <= %s")
+                params.append(pvp_max)
+            if ev_max > 0:
+                conditions.append("ev_v.raw_value <= %s")
+                params.append(ev_max)
+
             order_map = {
                 'score': 'COALESCE(r.janus_score, 0) DESC',
                 'dy':    'COALESCE(dd.dividend_yield_12m, 0) DESC',
@@ -1278,6 +1305,19 @@ def api_builder_executar():
                 if dy_min > 0 else
                 "LEFT JOIN dividend_profile dd ON dd.ticker = a.ticker"
             )
+
+            # JOINs dos indicadores — JOIN quando há filtro, LEFT JOIN caso contrário
+            def ind_join(alias, code, filtro_ativo):
+                tipo = "JOIN" if filtro_ativo else "LEFT JOIN"
+                return f"{tipo} indicator_values {alias} ON {alias}.asset_id = a.asset_id AND {alias}.indicator_code = '{code}' AND {alias}.reference_date = '{ref_date}'"
+
+            join_roe  = ind_join("roe_v",  "FIN_ROE",            roe_min > 0)
+            join_roic = ind_join("roic_v", "FIN_ROIC",           roic_min > 0)
+            join_mg   = ind_join("mg_v",   "FIN_NET_MARGIN",      margem_min > 0)
+            join_rg   = ind_join("rg_v",   "FIN_REVENUE_GROWTH",  False)
+            join_pe   = ind_join("pe_v",   "VAL_PE",              pl_max > 0)
+            join_pvp  = ind_join("pvp_v",  "VAL_PVP",             pvp_max > 0)
+            join_ev   = ind_join("ev_v",   "VAL_EV_EBITDA",       ev_max > 0)
 
             where = ' AND '.join(conditions)
             cur.execute(f"""
@@ -1315,13 +1355,13 @@ def api_builder_executar():
                     AND ms.reference_date = '{ref_date}'
                 LEFT JOIN financial_snapshots fs ON fs.asset_id = a.asset_id
                     AND fs.reference_date = '{ref_date}'
-                LEFT JOIN indicator_values roe_v  ON roe_v.asset_id  = a.asset_id AND roe_v.indicator_code  = 'FIN_ROE'             AND roe_v.reference_date  = '{ref_date}'
-                LEFT JOIN indicator_values roic_v ON roic_v.asset_id = a.asset_id AND roic_v.indicator_code = 'FIN_ROIC'            AND roic_v.reference_date = '{ref_date}'
-                LEFT JOIN indicator_values mg_v   ON mg_v.asset_id   = a.asset_id AND mg_v.indicator_code   = 'FIN_NET_MARGIN'      AND mg_v.reference_date   = '{ref_date}'
-                LEFT JOIN indicator_values rg_v   ON rg_v.asset_id   = a.asset_id AND rg_v.indicator_code   = 'FIN_REVENUE_GROWTH'  AND rg_v.reference_date   = '{ref_date}'
-                LEFT JOIN indicator_values pe_v   ON pe_v.asset_id   = a.asset_id AND pe_v.indicator_code   = 'VAL_PE'              AND pe_v.reference_date   = '{ref_date}'
-                LEFT JOIN indicator_values pvp_v  ON pvp_v.asset_id  = a.asset_id AND pvp_v.indicator_code  = 'VAL_PVP'             AND pvp_v.reference_date  = '{ref_date}'
-                LEFT JOIN indicator_values ev_v   ON ev_v.asset_id   = a.asset_id AND ev_v.indicator_code   = 'VAL_EV_EBITDA'       AND ev_v.reference_date   = '{ref_date}'
+                {join_roe}
+                {join_roic}
+                {join_mg}
+                {join_rg}
+                {join_pe}
+                {join_pvp}
+                {join_ev}
                 WHERE {where}
                 ORDER BY {order_sql}
                 LIMIT %s
