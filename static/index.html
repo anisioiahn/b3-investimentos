@@ -634,6 +634,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <div class="tab" onclick="goPage('janus',this)">🎯 Janus Score</div>
     <div class="tab" onclick="goPage('dividendos',this)">💰 Dividendos</div>
     <div class="tab" onclick="goPage('setores',this)">📊 Setores</div>
+    <div class="tab" onclick="goPage('oportunidades',this)">🎯 Oportunidades</div>
     <div class="tab" onclick="goPage('backtesting',this)">🔬 Backtesting</div>
     <div class="tab" onclick="goPage('builder',this)">🏗️ Builder</div>
     <div class="tab" onclick="goPage('empresas',this)" id="tab-empresas" style="display:none">🏢 <span id="tab-sname">Empresas</span></div>
@@ -800,15 +801,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           <div class="cockpit-card-title" style="margin-top:4px">🌡️ Termômetro do Mercado</div>
           <div id="cockpit-heatmap" style="max-height:200px;overflow-y:auto;padding-right:4px"></div>
         </div>
-        <!-- Módulo 2: Top 5 Oportunidades + Top 5 Dividendos -->
+        <!-- Módulo 2: Card Oportunidades + Agenda -->
         <div style="display:flex;flex-direction:column;gap:1rem">
-          <div class="cockpit-card">
-            <div class="cockpit-card-title">⭐ Top 5 Oportunidades</div>
-            <div id="cockpit-oportunidades"></div>
-          </div>
-          <div class="cockpit-card">
-            <div class="cockpit-card-title">💰 Top 5 Dividendos</div>
-            <div id="cockpit-dividendos"></div>
+          <div class="cockpit-card" onclick="goPage('oportunidades',document.querySelector('.tab[onclick*=\'oportunidades\']'))" style="cursor:pointer" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+            <div class="cockpit-card-title">🎯 Oportunidades Janus</div>
+            <div id="cockpit-oportunidades-preview" style="font-size:12px;color:var(--text2)">Carregando...</div>
+            <div style="margin-top:.75rem;font-size:12px;color:var(--green);font-weight:600">Ver todas as oportunidades →</div>
           </div>
           <div class="cockpit-card">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
@@ -951,6 +949,68 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     </div>
 
     <div class="page" id="page-alertas"><div id="altbox"></div></div>
+    <!-- PÁGINA OPORTUNIDADES -->
+    <div class="page" id="page-oportunidades">
+      <div style="max-width:1100px;margin:0 auto">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+          <div>
+            <div style="font-size:20px;font-weight:700">🎯 Oportunidades Janus</div>
+            <div style="font-size:13px;color:var(--text2);margin-top:2px">Qualidade fundamentalista + timing de mercado + análise setorial</div>
+          </div>
+          <button onclick="gerarAjiaOportunidades(this)"
+            style="font-size:12px;padding:8px 16px;border:1px solid var(--green);border-radius:8px;background:rgba(22,163,74,0.08);color:var(--green);cursor:pointer;font-family:inherit">
+            🤖 Análise da AJIA
+          </button>
+        </div>
+
+        <!-- AJIA Card -->
+        <div id="oport-ajia-card" style="display:none;background:var(--card);border:1px solid var(--green);border-radius:14px;padding:1rem 1.25rem;margin-bottom:1.5rem">
+          <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:6px">🤖 AJIA — Oportunidade do Dia</div>
+          <div id="oport-ajia-texto" style="font-size:13px;color:var(--text2);line-height:1.7"></div>
+        </div>
+
+        <!-- 1. Termômetro Setorial -->
+        <div class="cockpit-card" style="margin-bottom:1.5rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
+            <div class="cockpit-card-title" style="margin:0">🌡️ Termômetro Setorial</div>
+            <div style="display:flex;gap:4px">
+              <button onclick="carregarTermometro(1,this)" class="range-btn" style="font-size:11px;padding:4px 10px">1 ano</button>
+              <button onclick="carregarTermometro(2,this)" class="range-btn active" style="font-size:11px;padding:4px 10px">2 anos</button>
+              <button onclick="carregarTermometro(5,this)" class="range-btn" style="font-size:11px;padding:4px 10px">5 anos</button>
+            </div>
+          </div>
+          <div id="oport-termometro" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+            <div style="text-align:center;padding:2rem;color:var(--text3)">Carregando...</div>
+          </div>
+        </div>
+
+        <!-- 2. Top Oportunidades + Top Dividendos -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+
+          <!-- Top Oportunidades -->
+          <div class="cockpit-card">
+            <div class="cockpit-card-title">🎯 Top Oportunidades</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:.75rem">Score Janus alto + preço abaixo da média histórica + RSI baixo</div>
+            <div id="oport-ativos">
+              <div style="text-align:center;padding:2rem;color:var(--text3)">Carregando...</div>
+            </div>
+          </div>
+
+          <!-- Top Dividendos -->
+          <div class="cockpit-card">
+            <div class="cockpit-card-title">💰 Top Dividendos</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:.75rem">Maior DY + Consistência + Janus Dividend Score</div>
+            <div id="oport-dividendos">
+              <div style="text-align:center;padding:2rem;color:var(--text3)">Carregando...</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- PÁGINA BUILDER -->
     <div class="page" id="page-builder">
       <div style="max-width:1000px;margin:0 auto">
@@ -2599,13 +2659,38 @@ function renderCockpit(){
   calcularJanusPulse();
   carregarMudancasDia();
   _renderCockpitHeatmap();
-  _renderCockpitOportunidades();
-  _renderCockpitDividendos();
   _renderCockpitCarteira();
   _renderCockpitEstrategia();
+  _carregarPreviewOportunidades();
   setTimeout(renderRadarJanus, 300);
   carregarAgenda(false);
   setTimeout(()=>carregarIbovChart('1M', document.querySelector('#cockpit-ibov-chart')?.closest('.cockpit-card')?.querySelector('.range-btn')), 200);
+}
+
+async function _carregarPreviewOportunidades(){
+  const el = document.getElementById('cockpit-oportunidades-preview');
+  if(!el) return;
+  try{
+    const [rAt, rDiv] = await Promise.all([
+      fetch('/api/oportunidades/ativos?limit=3'),
+      fetch('/api/oportunidades/dividendos?limit=3'),
+    ]);
+    const ativos = await rAt.json();
+    const divs   = await rDiv.json();
+    if(!ativos?.length && !divs?.length){
+      el.innerHTML = '<span style="color:var(--text3)">Sem dados disponíveis</span>';
+      return;
+    }
+    el.innerHTML = `
+      ${ativos?.length ? `<div style="margin-bottom:6px"><span style="font-size:10px;font-weight:700;color:var(--text3)">🎯 OPORTUNIDADES</span><div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">
+        ${ativos.slice(0,3).map(a=>`<span style="padding:2px 8px;background:rgba(22,163,74,0.1);border-radius:20px;font-size:11px;font-weight:700;color:var(--green)">${a.ticker} <span style="font-weight:400">${parseFloat(a.score_oportunidade||0).toFixed(0)}</span></span>`).join('')}
+      </div></div>` : ''}
+      ${divs?.length ? `<div><span style="font-size:10px;font-weight:700;color:var(--text3)">💰 DIVIDENDOS</span><div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">
+        ${divs.slice(0,3).map(a=>`<span style="padding:2px 8px;background:rgba(245,158,11,0.1);border-radius:20px;font-size:11px;font-weight:700;color:#f59e0b">${a.ticker} <span style="font-weight:400">${parseFloat(a.dy_12m||0).toFixed(1)}%</span></span>`).join('')}
+      </div></div>` : ''}`;
+  }catch(e){
+    el.innerHTML = '<span style="color:var(--text3)">Clique para ver oportunidades</span>';
+  }
 }
 
 async function _renderCockpitEstrategia(){
@@ -4548,6 +4633,158 @@ document.addEventListener('visibilitychange', ()=>{
   }
 });
 
+// ── MÓDULO OPORTUNIDADES ─────────────────────────────────────
+async function carregarOportunidades(){
+  await Promise.all([
+    carregarTermometro(2),
+    carregarOportunidadesAtivos(),
+    carregarOportunidadesDividendos(),
+  ]);
+}
+
+async function carregarTermometro(anos, btn){
+  if(btn){
+    document.querySelectorAll('#page-oportunidades .range-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  const el = document.getElementById('oport-termometro');
+  if(!el) return;
+  try{
+    const r = await fetch(`/api/oportunidades/termometro?anos=${anos}`);
+    const setores = await r.json();
+    if(!setores?.length){
+      el.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3);grid-column:1/-1">Sem dados históricos suficientes ainda</div>';
+      return;
+    }
+    const emBaixa = [...setores].sort((a,b)=>a.dist_pico_pct-b.dist_pico_pct).slice(0,5);
+    const emAlta  = [...setores].sort((a,b)=>b.dist_vale_pct-a.dist_vale_pct).slice(0,5);
+    const renderLista = (lista, tipo) => lista.map(s=>{
+      const pct  = tipo==='baixa' ? s.dist_pico_pct : s.dist_vale_pct;
+      const cor  = tipo==='baixa' ? '#e53935' : '#16a34a';
+      const lbl  = tipo==='baixa' ? 'do pico' : 'do vale';
+      const bar  = Math.min(100, Math.abs(pct));
+      return `<div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+          <span style="font-size:12px;font-weight:600">${s.setor}</span>
+          <span style="font-size:12px;font-weight:700;color:${cor}">${pct>=0?'+':''}${pct}% ${lbl}</span>
+        </div>
+        <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
+          <div style="height:100%;width:${bar}%;background:${cor};border-radius:4px"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Pico: ${s.data_pico} · Vale: ${s.data_vale}</div>
+      </div>`;
+    }).join('');
+    el.innerHTML = `
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#e53935;margin-bottom:.75rem">📉 Setores em BAIXA — possível oportunidade</div>
+        ${renderLista(emBaixa, 'baixa')}
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#16a34a;margin-bottom:.75rem">📈 Setores em ALTA — cautela</div>
+        ${renderLista(emAlta, 'alta')}
+      </div>`;
+  }catch(e){
+    el.innerHTML='<div style="text-align:center;padding:2rem;color:#e53935;grid-column:1/-1">❌ Erro ao carregar</div>';
+  }
+}
+
+async function carregarOportunidadesAtivos(){
+  const el = document.getElementById('oport-ativos');
+  if(!el) return;
+  try{
+    const r = await fetch('/api/oportunidades/ativos?limit=10');
+    const ativos = await r.json();
+    if(!ativos?.length){ el.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">Sem dados suficientes</div>'; return; }
+    el.innerHTML = ativos.map((a,i)=>{
+      const score = parseFloat(a.score||0);
+      const rsi   = parseFloat(a.rsi||50);
+      const dist  = parseFloat(a.dist_media_2a||0);
+      const oport = parseFloat(a.score_oportunidade||0);
+      const corScore = score>=80?'#16a34a':score>=60?'#f59e0b':'#e53935';
+      const corRSI   = rsi<30?'#16a34a':rsi<50?'#f59e0b':'var(--text3)';
+      const corDist  = dist<-10?'#16a34a':dist<0?'#f59e0b':'var(--text3)';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:${i>0?'1px solid var(--border)':'none'}">
+        <div style="font-size:13px;font-weight:700;color:var(--text3);min-width:18px">${i+1}</div>
+        <div style="width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg)">
+          <img src="https://icons.brapi.dev/icons/${a.ticker}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent='${(a.ticker||'').substring(0,4)}'">
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700">${a.ticker} <span style="font-size:10px;color:var(--text3)">${a.setor||''}</span></div>
+          <div style="display:flex;gap:8px;font-size:10px;margin-top:2px">
+            <span>Score: <strong style="color:${corScore}">${score.toFixed(0)}</strong></span>
+            <span>RSI: <strong style="color:${corRSI}">${rsi.toFixed(0)}</strong></span>
+            <span>vs méd 2a: <strong style="color:${corDist}">${dist>0?'+':''}${dist.toFixed(1)}%</strong></span>
+          </div>
+        </div>
+        <div style="text-align:center;flex-shrink:0">
+          <div style="font-size:16px;font-weight:800;color:${oport>=70?'#16a34a':oport>=50?'#f59e0b':'var(--text2)'}">${oport.toFixed(0)}</div>
+          <div style="font-size:9px;color:var(--text3)">OPORT.</div>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){}
+}
+
+async function carregarOportunidadesDividendos(){
+  const el = document.getElementById('oport-dividendos');
+  if(!el) return;
+  try{
+    const r = await fetch('/api/oportunidades/dividendos?limit=10');
+    const ativos = await r.json();
+    if(!ativos?.length){ el.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">Sem dados</div>'; return; }
+    el.innerHTML = ativos.map((a,i)=>{
+      const dy    = parseFloat(a.dy_12m||0);
+      const score = parseFloat(a.dividend_score||0);
+      const js    = parseFloat(a.score||0);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:${i>0?'1px solid var(--border)':'none'}">
+        <div style="font-size:13px;font-weight:700;color:var(--text3);min-width:18px">${i+1}</div>
+        <div style="width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg)">
+          <img src="https://icons.brapi.dev/icons/${a.ticker}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent='${(a.ticker||'').substring(0,4)}'">
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700">${a.ticker} <span style="font-size:10px;color:var(--text3)">${a.asset_type||''}</span></div>
+          <div style="display:flex;gap:8px;font-size:10px;margin-top:2px">
+            <span>DY 12m: <strong style="color:${dy>=8?'#16a34a':dy>=5?'#f59e0b':'var(--text2)'}">${dy.toFixed(1)}%</strong></span>
+            ${a.dy_5y?`<span>DY 5a: <strong>${parseFloat(a.dy_5y).toFixed(1)}%</strong></span>`:''}
+            ${js>0?`<span>Score: <strong>${js.toFixed(0)}</strong></span>`:''}
+          </div>
+        </div>
+        <div style="text-align:center;flex-shrink:0">
+          <div style="font-size:16px;font-weight:800;color:${score>=70?'#16a34a':score>=50?'#f59e0b':'var(--text2)'}">${score>0?score.toFixed(0):'—'}</div>
+          <div style="font-size:9px;color:var(--text3)">DIV.SCR</div>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){}
+}
+
+async function gerarAjiaOportunidades(btn){
+  const card = document.getElementById('oport-ajia-card');
+  const txt  = document.getElementById('oport-ajia-texto');
+  if(card.style.display !== 'none'){
+    card.style.display = 'none';
+    if(btn) btn.textContent = '🤖 Análise da AJIA';
+    return;
+  }
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Analisando...'; }
+  card.style.display = 'block';
+  txt.textContent = 'A AJIA está analisando as oportunidades do dia...';
+  try{
+    const r = await fetch('/api/oportunidades/ajia', {method:'POST'});
+    const d = await r.json();
+    if(d.analise){
+      txt.textContent = d.analise;
+      if(btn){ btn.disabled=false; btn.textContent='🤖 Fechar análise'; }
+    } else {
+      txt.textContent = 'Não foi possível gerar a análise agora.';
+      if(btn){ btn.disabled=false; btn.textContent='🤖 Análise da AJIA'; }
+    }
+  }catch(e){
+    txt.textContent = 'Erro ao conectar com a AJIA.';
+    if(btn){ btn.disabled=false; btn.textContent='🤖 Análise da AJIA'; }
+  }
+}
+
 // ── JANUS BUILDER ────────────────────────────────────────────
 let _builderResultado = null;
 
@@ -4932,6 +5169,7 @@ function goPage(p,el){
     carregarBtHistorico();
     carregarComunidade();
   }
+  if(p==='oportunidades'){ carregarOportunidades(); }
   if(p==='builder'){ iniciarBuilder(); }
   if(p==='params'){ renderFontes(); carregarEstrategia(); }
   enviarPing(); // atualiza página no ping
