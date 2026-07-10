@@ -1180,7 +1180,7 @@ def _gerar_mudancas_dia():
         })
 
     # Top 5 oportunidades mudou?
-    ranking = _janusRanking[:5] if _janusRanking else []
+    ranking = _cache.get('janus_ranking', [])[:5]
     for r in ranking[:3]:
         mudancas.append({
             "ticker": r.get("ticker",""), "tipo": "janus",
