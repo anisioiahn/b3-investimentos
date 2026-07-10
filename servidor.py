@@ -1822,10 +1822,19 @@ def api_carteiras_comunidade_clonar(cid):
         now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
         conn = db.get_conn()
         adicionados = 0
+        ignorados = 0
         with conn.cursor() as cur:
+            # Busca tickers que o usuário já tem
+            cur.execute("SELECT ticker FROM carteira WHERE usuario_id=%s AND status='confirmada'", (uid(),))
+            tickers_existentes = {r[0] for r in cur.fetchall()}
+
             for ativo in composicao:
                 ticker = ativo.get('ticker')
                 if not ticker: continue
+                # Opção A — ignora se já existe
+                if ticker in tickers_existentes:
+                    ignorados += 1
+                    continue
                 try:
                     cur.execute("""
                         INSERT INTO carteira (usuario_id, ticker, quantidade, preco_medio, data_compra, corretora)
@@ -1838,7 +1847,9 @@ def api_carteiras_comunidade_clonar(cid):
             cur.execute("UPDATE carteiras_publicas SET clones=COALESCE(clones,0)+1 WHERE id=%s", (cid,))
         conn.commit(); conn.close()
         db.db_calcular_ranking_carteira(cid)
-        return jsonify({"ok": True, "adicionados": adicionados})
+        msg = f"{adicionados} ativo(s) adicionado(s)"
+        if ignorados: msg += f", {ignorados} já existia(m) na sua carteira"
+        return jsonify({"ok": True, "adicionados": adicionados, "ignorados": ignorados, "msg": msg})
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
 
