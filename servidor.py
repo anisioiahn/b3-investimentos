@@ -1327,24 +1327,24 @@ def api_builder_executar():
                 conditions.append("ev_v.raw_value <= %s")
                 params.append(ev_max)
 
-            # Filtro de risco — aplicado via HAVING na subquery de risk_score
-            risco_having = ""
+            # Filtro de risco via subquery no WHERE
             if risco_max > 0:
-                risco_having = f"""
-                HAVING COALESCE((
-                    SELECT LEAST(100, GREATEST(0,
-                        LEAST(25, COALESCE(ms2.beta,1) / 2 * 15) +
-                        LEAST(20, GREATEST(0, COALESCE(ms2.beta,1)) / 2 * 20) +
-                        LEAST(20, GREATEST(0, COALESCE(fs2.total_debt / NULLIF(fs2.ebitda,0), 2)) / 5 * 20) +
-                        GREATEST(0, 15 - LEAST(15, COALESCE(ms2.volume,0) / 5000000 * 15))
-                    ))
-                    FROM market_snapshots ms2
-                    LEFT JOIN financial_snapshots fs2 ON fs2.asset_id = ms2.asset_id
-                        AND fs2.reference_date = ms2.reference_date
-                    WHERE ms2.asset_id = a.asset_id
-                    ORDER BY ms2.reference_date DESC LIMIT 1
-                ), 0) <= {risco_max}
-                """
+                conditions.append(f"""
+                    COALESCE((
+                        SELECT LEAST(100, GREATEST(0,
+                            LEAST(25, COALESCE(ms2.beta,1) / 2 * 15) +
+                            LEAST(20, GREATEST(0, COALESCE(ms2.beta,1)) / 2 * 20) +
+                            LEAST(20, GREATEST(0, COALESCE(fs2.total_debt / NULLIF(fs2.ebitda,0), 2)) / 5 * 20) +
+                            GREATEST(0, 15 - LEAST(15, COALESCE(ms2.volume,0) / 5000000 * 15))
+                        ))
+                        FROM market_snapshots ms2
+                        LEFT JOIN financial_snapshots fs2
+                            ON fs2.asset_id = ms2.asset_id
+                            AND fs2.reference_date = ms2.reference_date
+                        WHERE ms2.asset_id = a.asset_id
+                        ORDER BY ms2.reference_date DESC LIMIT 1
+                    ), 100) <= {risco_max}
+                """)
 
             order_map = {
                 'score': 'COALESCE(r.janus_score, 0) DESC',
@@ -1440,7 +1440,6 @@ def api_builder_executar():
                 {join_pvp}
                 {join_ev}
                 WHERE {where}
-                {risco_having}
                 ORDER BY {order_sql}
                 LIMIT %s
             """, params + [max_ativos])
