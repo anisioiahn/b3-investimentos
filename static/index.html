@@ -1018,9 +1018,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
               </div>
             </div>
 
+            <!-- Filtros Fundamentalistas -->
+            <div class="cockpit-card">
+              <div class="cockpit-card-title">4️⃣ Fundamentos <span style="font-size:10px;font-weight:400;color:var(--text3)">(opcional)</span></div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                ${[
+                  ['builder-roe-min',   'ROE mínimo (%)', '0'],
+                  ['builder-roic-min',  'ROIC mínimo (%)', '0'],
+                  ['builder-margem-min','Margem Líquida mínima (%)', '0'],
+                  ['builder-pl-max',   'P/L máximo (x)', ''],
+                  ['builder-pvp-max',  'P/VP máximo (x)', ''],
+                  ['builder-ev-max',   'EV/EBITDA máximo (x)', ''],
+                ].map(([id, lbl, val])=>`
+                  <div>
+                    <label style="font-size:11px;color:var(--text2)">${lbl}</label>
+                    <input type="number" id="${id}" value="${val}" min="0" step="0.5" placeholder="Sem filtro"
+                      style="width:100%;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--text);margin-top:3px">
+                  </div>`).join('')}
+              </div>
+            </div>
+
             <!-- Setores -->
             <div class="cockpit-card">
-              <div class="cockpit-card-title">4️⃣ Setores</div>
+              <div class="cockpit-card-title">5️⃣ Setores</div>
               <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Deixe vazio para todos os setores</div>
               <div id="builder-setores-lista" style="display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto">
                 <div style="font-size:12px;color:var(--text3)">Carregando setores...</div>
@@ -1029,7 +1049,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
             <!-- Configuração da carteira -->
             <div class="cockpit-card">
-              <div class="cockpit-card-title">5️⃣ Configuração</div>
+              <div class="cockpit-card-title">6️⃣ Configuração</div>
               <div style="display:flex;flex-direction:column;gap:10px">
                 <div>
                   <label style="font-size:11px;color:var(--text2)">Máximo de ativos</label>
@@ -4550,6 +4570,13 @@ async function executarBuilder(){
     capital:     parseFloat(document.getElementById('builder-capital')?.value || '10000'),
     peso_tipo:   document.getElementById('builder-peso-tipo')?.value || 'igual',
     ordem:       document.getElementById('builder-ordem')?.value || 'score',
+    // Filtros fundamentalistas
+    roe_min:    parseFloat(document.getElementById('builder-roe-min')?.value||'0')||0,
+    roic_min:   parseFloat(document.getElementById('builder-roic-min')?.value||'0')||0,
+    margem_min: parseFloat(document.getElementById('builder-margem-min')?.value||'0')||0,
+    pl_max:     parseFloat(document.getElementById('builder-pl-max')?.value||'0')||0,
+    pvp_max:    parseFloat(document.getElementById('builder-pvp-max')?.value||'0')||0,
+    ev_max:     parseFloat(document.getElementById('builder-ev-max')?.value||'0')||0,
   };
 
   const resEl = document.getElementById('builder-resultado');
