@@ -110,16 +110,31 @@ def get_fontes():
     ]
 
 # ── COTAÇÕES ──────────────────────────────────────────────────
-def buscar_lote(tickers):
-    try:
-        r = requests.get(f"{QUOTE_URL}/{','.join(tickers)}",
-                         headers={"Authorization": f"Bearer {TOKEN_BRAPI}"}, timeout=20)
-        if r.status_code == 200:
-            return {d["symbol"]: d for d in r.json().get("results", [])}
-        elif r.status_code == 429:
-            log("⏳ Rate limit, aguardando 30s...", "aviso"); time.sleep(30)
-    except Exception as e:
-        log(f"⚠️ Erro lote: {e}", "aviso")
+def buscar_lote(tickers, tentativas=3):
+    """Busca cotações com retry automático. Ignora tickers fracionários (sufixo F)."""
+    # Filtra fracionários — têm cotação duplicada e poluem os setores
+    tickers_filtrados = [t for t in tickers if not t.endswith('F')]
+    if not tickers_filtrados:
+        return {}
+    for tentativa in range(tentativas):
+        try:
+            r = requests.get(
+                f"{QUOTE_URL}/{','.join(tickers_filtrados)}",
+                headers={"Authorization": f"Bearer {TOKEN_BRAPI}"},
+                timeout=25
+            )
+            if r.status_code == 200:
+                return {d["symbol"]: d for d in r.json().get("results", [])}
+            elif r.status_code == 429:
+                log("⏳ Rate limit, aguardando 30s...", "aviso")
+                time.sleep(30)
+                continue
+        except Exception as e:
+            if tentativa < tentativas - 1:
+                log(f"⚠️ Retry {tentativa+1}/{tentativas-1}: {e}", "aviso")
+                time.sleep(2 * (tentativa + 1))
+            else:
+                log(f"⚠️ Erro lote após {tentativas} tentativas: {e}", "aviso")
     return {}
 
 def buscar_lista_completa_b3():
