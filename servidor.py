@@ -1587,35 +1587,47 @@ def api_risco_ativo(ticker):
                     beta = row['beta']; vol_m = row['volume']
                     total_debt = row['total_debt']; ebitda_val = row['ebitda']
 
-            # Volatilidade 30 dias do histórico
-            cur.execute("""
-                SELECT STDDEV(retorno)*100 as vol_diaria
-                FROM (
-                    SELECT (close - LAG(close) OVER (ORDER BY data))
-                           / NULLIF(LAG(close) OVER (ORDER BY data),0) as retorno
-                    FROM historico_precos
-                    WHERE ticker=%s AND intervalo='1d'
-                      AND data >= CURRENT_DATE - INTERVAL '30 days'
-                ) t WHERE retorno IS NOT NULL
-            """, (ticker,))
-            vr = cur.fetchone()
-            vol = float(vr['vol_diaria']) if vr and vr['vol_diaria'] else 2.0
+            # Volatilidade 30 dias
+            vol = 2.0
+            try:
+                cur.execute("""
+                    WITH precos AS (
+                        SELECT data, close,
+                               LAG(close) OVER (ORDER BY data) as prev_close
+                        FROM historico_precos
+                        WHERE ticker=%s AND intervalo='1d'
+                          AND data >= CURRENT_DATE - INTERVAL '30 days'
+                    )
+                    SELECT STDDEV((close - prev_close) / NULLIF(prev_close,0)) * 100 as vol
+                    FROM precos WHERE prev_close IS NOT NULL
+                """, (ticker,))
+                vr = cur.fetchone()
+                if vr and vr['vol']: vol = float(vr['vol'])
+            except Exception as e1:
+                print(f"[RISCO] Erro vol {ticker}: {e1}", flush=True)
+                conn.rollback()
 
             # Drawdown máximo 2 anos
-            cur.execute("""
-                SELECT MIN(drawdown)*100 as dd_max
-                FROM (
-                    SELECT (close - MAX(close) OVER (ORDER BY data
-                            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW))
-                           / NULLIF(MAX(close) OVER (ORDER BY data
-                            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW),0) as drawdown
-                    FROM historico_precos
-                    WHERE ticker=%s AND intervalo='1d'
-                      AND data >= CURRENT_DATE - INTERVAL '2 years'
-                ) t
-            """, (ticker,))
+            dd = 15.0
+            try:
+                cur.execute("""
+                    WITH precos AS (
+                        SELECT data, close,
+                               MAX(close) OVER (ORDER BY data) as pico
+                        FROM historico_precos
+                        WHERE ticker=%s AND intervalo='1d'
+                          AND data >= CURRENT_DATE - INTERVAL '2 years'
+                    )
+                    SELECT MIN((close - pico) / NULLIF(pico,0)) * 100 as dd
+                    FROM precos WHERE pico > 0
+                """, (ticker,))
+                dr = cur.fetchone()
+                if dr and dr['dd']: dd = abs(float(dr['dd']))
+            except Exception as e2:
+                print(f"[RISCO] Erro dd {ticker}: {e2}", flush=True)
+                conn.rollback()
             dr = cur.fetchone()
-            dd = abs(float(dr['dd_max'])) if dr and dr['dd_max'] else 15.0
+            dd = abs(float(dr['dd'])) if dr and dr['dd'] else 15.0
 
         conn.close()
 
