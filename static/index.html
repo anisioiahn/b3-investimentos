@@ -1154,6 +1154,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
                   <input type="number" id="builder-ev-max" value="" min="0" step="0.5" placeholder="Sem filtro"
                     style="width:100%;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--text);margin-top:3px">
                 </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">Risco máximo (0-100)</label>
+                  <input type="number" id="builder-risco-max" value="" min="0" max="100" placeholder="Sem filtro"
+                    style="width:100%;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--text);margin-top:3px">
+                </div>
               </div>
             </div>
 
@@ -1776,6 +1781,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       </div>
       <div style="display:flex;align-items:center;gap:10px">
         <div id="modal-janus-badge"></div>
+        <div id="modal-risk-badge" style="margin-top:4px"></div>
         <button class="modal-close" onclick="fecharModal()">✕</button>
       </div>
     </div>
@@ -5709,6 +5715,68 @@ let _painelCo = null;
 let _jaiaHistorico = []; // histórico de conversa da AJIA por sessão
 let _jaiaContexto = null; // contexto do ativo para a AJIA
 
+async function abrirDetalheRisco(ticker){
+  const r = await fetch(`/api/risco/${ticker}`);
+  const d = await r.json();
+  if(d.erro || !d.risk_score) return;
+
+  const cor = d.risk_score<=20?'#16a34a':d.risk_score<=40?'#22c55e':d.risk_score<=60?'#f59e0b':d.risk_score<=80?'#f97316':'#e53935';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;max-width:420px;width:100%;padding:1.5rem;box-shadow:0 16px 48px rgba(0,0,0,.3)" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <div>
+          <div style="font-size:16px;font-weight:700">🛡️ Score de Risco — ${ticker}</div>
+          <div style="font-size:12px;color:var(--text3)">Quanto maior, mais arriscado</div>
+        </div>
+        <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text3)">✕</button>
+      </div>
+
+      <!-- Score principal -->
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;padding:1rem;background:var(--bg);border-radius:12px">
+        <div style="font-size:48px;font-weight:800;color:${cor}">${d.risk_score}</div>
+        <div>
+          <div style="font-size:15px;font-weight:700;color:${cor}">${d.label}</div>
+          <div style="background:var(--card);border-radius:20px;height:8px;width:160px;overflow:hidden;margin-top:6px">
+            <div style="height:100%;width:${d.risk_score}%;background:linear-gradient(90deg,#16a34a,#f59e0b,#e53935);border-radius:20px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detalhamento por componente -->
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${Object.entries(d.detalhes).map(([k,v])=>{
+          const labels = {
+            volatilidade:'📊 Volatilidade 30d',
+            beta:'📈 Beta (sensib. mercado)',
+            divida_ebitda:'💳 Dívida/EBITDA',
+            drawdown:'📉 Drawdown máx 2 anos',
+            liquidez:'💧 Liquidez (vol. inverso)',
+          };
+          const pct = v.pts / v.max * 100;
+          const corPts = pct<=33?'#16a34a':pct<=66?'#f59e0b':'#e53935';
+          return `<div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:12px">
+              <span>${labels[k]||k}</span>
+              <span style="color:var(--text3)">${v.valor}${v.unidade} → <strong style="color:${corPts}">${v.pts}/${v.max}pts</strong></span>
+            </div>
+            <div style="background:var(--bg);border-radius:4px;height:5px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${corPts};border-radius:4px"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <div style="margin-top:1rem;font-size:11px;color:var(--text3);padding:8px;background:var(--bg);border-radius:8px">
+        Score de Risco = Volatilidade (25%) + Beta (20%) + Dívida/EBITDA (20%) + Drawdown (20%) + Liquidez invertida (15%)
+      </div>
+    </div>`;
+  modal.onclick = ()=>modal.remove();
+  document.body.appendChild(modal);
+}
+
 async function abrirGrafico(ticker){
   _painelTicker = ticker;
   _jaiaHistorico = []; // reset histórico ao abrir novo ativo
@@ -5739,7 +5807,7 @@ async function abrirGrafico(ticker){
   const setorEl = document.getElementById('modal-setor');
   if(setorEl) setorEl.textContent = co.setor_nome || '';
 
-  // Badge Janus
+  // Badge Janus + Score de Risco
   const janusItem = (_janusRanking || []).find(j => j.ticker === ticker);
   const badgeEl = document.getElementById('modal-janus-badge');
   if(janusItem?.score !== null && janusItem?.score !== undefined){
@@ -5749,6 +5817,24 @@ async function abrirGrafico(ticker){
   } else {
     badgeEl.style.display = 'none';
   }
+
+  // Busca e exibe Score de Risco
+  fetch(`/api/risco/${ticker}`)
+    .then(r=>r.json())
+    .then(risco=>{
+      if(risco?.risk_score != null){
+        const cor = risco.risk_score<=20?'#16a34a':risco.risk_score<=40?'#22c55e':risco.risk_score<=60?'#f59e0b':risco.risk_score<=80?'#f97316':'#e53935';
+        const riskEl = document.getElementById('modal-risk-badge');
+        if(riskEl){
+          riskEl.innerHTML = `<span title="Score de Risco: ${risco.label}"
+            onclick="abrirDetalheRisco('${ticker}')"
+            style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:${cor}22;border:1px solid ${cor}44;border-radius:20px;font-size:11px;font-weight:700;color:${cor};cursor:pointer">
+            🛡️ Risco ${risco.risk_score}
+          </span>`;
+          riskEl.style.display = 'block';
+        }
+      }
+    }).catch(()=>{});
 
   // Abre na aba cotação por padrão
   trocarAba('cotacao');
