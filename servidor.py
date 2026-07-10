@@ -1430,6 +1430,69 @@ def api_builder_setores():
     except Exception as e:
         return jsonify([])
 
+@app.route("/api/oportunidades/termometro")
+@requer_auth
+def api_oportunidades_termometro():
+    """Termômetro setorial por período."""
+    anos = int(request.args.get('anos', 2))
+    anos = min(max(anos, 1), 5)
+    return jsonify(db.db_termometro_setorial(anos))
+
+@app.route("/api/oportunidades/ativos")
+@requer_auth
+def api_oportunidades_ativos():
+    """Top oportunidades Janus — Score alto + preço baixo + RSI baixo."""
+    limit = int(request.args.get('limit', 20))
+    return jsonify(db.db_oportunidades_janus(limit))
+
+@app.route("/api/oportunidades/dividendos")
+@requer_auth
+def api_oportunidades_dividendos():
+    """Top pagadores de dividendos."""
+    limit = int(request.args.get('limit', 20))
+    return jsonify(db.db_top_dividendos_oportunidades(limit))
+
+@app.route("/api/oportunidades/ajia", methods=["POST"])
+@requer_auth
+def api_oportunidades_ajia():
+    """AJIA analisa oportunidade do dia."""
+    from datetime import date
+    # Cache diário
+    cache_key = f"oportunidade_ajia_{date.today()}"
+    if hasattr(app, '_oport_ajia_cache') and app._oport_ajia_cache.get('data') == str(date.today()):
+        return jsonify({"ok": True, "analise": app._oport_ajia_cache['analise'], "fonte": "cache"})
+
+    # Busca top 3 oportunidades
+    oport = db.db_oportunidades_janus(3)
+    setor = db.db_termometro_setorial(2)
+    if not oport: return jsonify({"ok": False})
+
+    top3 = ', '.join([f"{o['ticker']} (Score {o['score']}, RSI {o['rsi']}, {o['dist_media_2a']}% da média)" for o in oport])
+    setor_baixa = next((s for s in setor if s['dist_pico_pct'] < -20), None)
+
+    prompt = f"""Você é a AJIA, analista de investimentos do Janus B3.
+Analise as oportunidades de hoje em 3-4 frases objetivas.
+
+Top oportunidades: {top3}
+{f"Setor em maior baixa: {setor_baixa['setor']} ({setor_baixa['dist_pico_pct']}% do pico em 2 anos)" if setor_baixa else ''}
+
+Seja direto e mencione os tickers. Máximo 80 palavras. Não use emojis no texto."""
+
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"Content-Type":"application/json","x-api-key":ANTHROPIC_KEY,"anthropic-version":"2023-06-01"},
+            json={"model":"claude-sonnet-4-6","max_tokens":150,"messages":[{"role":"user","content":prompt}]},
+            timeout=20
+        )
+        if resp.status_code == 200:
+            analise = resp.json()["content"][0]["text"].strip()
+            app._oport_ajia_cache = {'data': str(date.today()), 'analise': analise}
+            return jsonify({"ok": True, "analise": analise, "fonte": "ajia"})
+    except Exception as e:
+        print(f"[OPORT AJIA] Erro: {e}", flush=True)
+    return jsonify({"ok": False})
+
 @app.route("/api/backtesting/debug-publicas")
 @requer_auth
 def api_bt_debug_publicas():
