@@ -2209,3 +2209,194 @@ def db_termometro_setor_detalhe(setor, periodo_anos=2):
         return []
     finally:
         conn.close()
+
+# ── RISK ENGINE ───────────────────────────────────────────────
+def db_calcular_risk_scores(limit=500):
+    """
+    Calcula Score de Risco 0-100 para todos os ativos.
+    Quanto MAIOR o score, MAIS arriscado é o ativo.
+    Componentes:
+      - Volatilidade 30d  (25%) — desvio padrão dos retornos diários
+      - Beta               (20%) — sensibilidade ao mercado
+      - Dívida/EBITDA      (20%) — risco de crédito
+      - Drawdown máx 2a    (20%) — maior queda histórica
+      - Liquidez inversa   (15%) — volume baixo = risco alto
+    """
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT MAX(reference_date) as dt FROM ranking_snapshots")
+            ref = cur.fetchone()
+            if not ref or not ref['dt']: return []
+            ref_date = ref['dt']
+
+            cur.execute("""
+                WITH
+                -- 1. Volatilidade — desvio padrão dos retornos diários (30 dias)
+                volatilidade AS (
+                    SELECT ticker,
+                        STDDEV(
+                            (close - LAG(close) OVER (PARTITION BY ticker ORDER BY data))
+                            / NULLIF(LAG(close) OVER (PARTITION BY ticker ORDER BY data), 0)
+                        ) * 100 as vol_diaria
+                    FROM historico_precos
+                    WHERE intervalo = '1d'
+                      AND data >= CURRENT_DATE - INTERVAL '30 days'
+                    GROUP BY ticker
+                    HAVING COUNT(*) >= 15
+                ),
+                -- 2. Drawdown máximo nos últimos 2 anos
+                drawdown AS (
+                    SELECT ticker,
+                        MIN(
+                            (close - MAX(close) OVER (PARTITION BY ticker ORDER BY data
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW))
+                            / NULLIF(MAX(close) OVER (PARTITION BY ticker ORDER BY data
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW), 0)
+                        ) * 100 as drawdown_max
+                    FROM historico_precos
+                    WHERE intervalo = '1d'
+                      AND data >= CURRENT_DATE - INTERVAL '2 years'
+                    GROUP BY ticker
+                )
+                SELECT
+                    a.ticker,
+                    c.trading_name as nome,
+                    c.sector as setor,
+                    -- Componentes brutos
+                    COALESCE(v.vol_diaria, 3) as volatilidade,
+                    COALESCE(ms.beta, 1) as beta,
+                    COALESCE(fs.total_debt / NULLIF(fs.ebitda, 0), 5) as divida_ebitda,
+                    COALESCE(ABS(d.drawdown_max), 30) as drawdown,
+                    COALESCE(ms.volume, 0) as volume,
+                    -- Score de Risco final (0-100, maior = mais arriscado)
+                    ROUND(LEAST(100, GREATEST(0,
+                        -- Volatilidade: 0%=0pts, 3%+=25pts (normaliza 0-25)
+                        LEAST(25, COALESCE(v.vol_diaria, 3) / 3 * 25) * 0.25 / 0.25 +
+                        -- Beta: 0=0pts, 2+=20pts
+                        LEAST(20, GREATEST(0, COALESCE(ms.beta, 1)) / 2 * 20) +
+                        -- Dívida/EBITDA: 0=0pts, 5x+=20pts
+                        LEAST(20, GREATEST(0, COALESCE(fs.total_debt / NULLIF(fs.ebitda,0), 3)) / 5 * 20) +
+                        -- Drawdown: 0=0pts, 60%+=20pts
+                        LEAST(20, ABS(COALESCE(d.drawdown_max, 20)) / 60 * 20) +
+                        -- Liquidez inversa: volume alto=0pts, volume zero=15pts
+                        GREATEST(0, 15 - LEAST(15, COALESCE(ms.volume, 0) / 5000000 * 15))
+                    ))::numeric, 1) as risk_score
+                FROM ranking_snapshots r
+                JOIN assets a ON a.asset_id = r.asset_id
+                JOIN companies c ON c.company_id = a.company_id
+                LEFT JOIN market_snapshots ms ON ms.asset_id = a.asset_id
+                    AND ms.reference_date = r.reference_date
+                LEFT JOIN financial_snapshots fs ON fs.asset_id = a.asset_id
+                    AND fs.reference_date = r.reference_date
+                LEFT JOIN volatilidade v ON v.ticker = a.ticker
+                LEFT JOIN drawdown d ON d.ticker = a.ticker
+                WHERE r.reference_date = %s
+                  AND a.asset_type = 'ACAO'
+                  AND a.status = 'ATIVO'
+                ORDER BY risk_score ASC
+                LIMIT %s
+            """, (ref_date, limit))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro risk scores: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
+
+def db_risk_score_ativo(ticker):
+    """Retorna o score de risco de um ativo específico com detalhamento."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT MAX(reference_date) as dt FROM ranking_snapshots")
+            ref = cur.fetchone()
+            if not ref or not ref['dt']: return None
+            ref_date = ref['dt']
+
+            cur.execute("""
+                WITH
+                volatilidade AS (
+                    SELECT ticker,
+                        STDDEV(
+                            (close - LAG(close) OVER (PARTITION BY ticker ORDER BY data))
+                            / NULLIF(LAG(close) OVER (PARTITION BY ticker ORDER BY data), 0)
+                        ) * 100 as vol_diaria
+                    FROM historico_precos
+                    WHERE intervalo = '1d' AND ticker = %s
+                      AND data >= CURRENT_DATE - INTERVAL '30 days'
+                    GROUP BY ticker
+                ),
+                drawdown AS (
+                    SELECT ticker,
+                        MIN(
+                            (close - MAX(close) OVER (PARTITION BY ticker ORDER BY data
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW))
+                            / NULLIF(MAX(close) OVER (PARTITION BY ticker ORDER BY data
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW), 0)
+                        ) * 100 as drawdown_max
+                    FROM historico_precos
+                    WHERE intervalo = '1d' AND ticker = %s
+                      AND data >= CURRENT_DATE - INTERVAL '2 years'
+                    GROUP BY ticker
+                )
+                SELECT
+                    COALESCE(v.vol_diaria, 3) as volatilidade,
+                    COALESCE(ms.beta, 1) as beta,
+                    fs.total_debt, fs.ebitda,
+                    COALESCE(fs.total_debt / NULLIF(fs.ebitda, 0), 0) as divida_ebitda,
+                    ABS(COALESCE(d.drawdown_max, 0)) as drawdown,
+                    ms.volume
+                FROM ranking_snapshots r
+                JOIN assets a ON a.asset_id = r.asset_id
+                LEFT JOIN market_snapshots ms ON ms.asset_id = a.asset_id
+                    AND ms.reference_date = r.reference_date
+                LEFT JOIN financial_snapshots fs ON fs.asset_id = a.asset_id
+                    AND fs.reference_date = r.reference_date
+                LEFT JOIN volatilidade v ON v.ticker = a.ticker
+                LEFT JOIN drawdown d ON d.ticker = a.ticker
+                WHERE r.reference_date = %s AND a.ticker = %s
+                LIMIT 1
+            """, (ticker, ticker, ref_date, ticker))
+            row = cur.fetchone()
+            if not row: return None
+            row = dict(row)
+
+            # Calcula score e pontos por componente
+            vol   = float(row['volatilidade'] or 3)
+            beta  = float(row['beta'] or 1)
+            div_e = float(row['divida_ebitda'] or 0)
+            dd    = float(row['drawdown'] or 0)
+            vol_m = float(row['volume'] or 0)
+
+            pts_vol   = min(25, vol / 3 * 25)
+            pts_beta  = min(20, max(0, beta) / 2 * 20)
+            pts_divid = min(20, max(0, div_e) / 5 * 20)
+            pts_dd    = min(20, dd / 60 * 20)
+            pts_liq   = max(0, 15 - min(15, vol_m / 5000000 * 15))
+
+            risk_score = round(min(100, max(0,
+                pts_vol + pts_beta + pts_divid + pts_dd + pts_liq)), 1)
+
+            label = ('🟢 Muito Baixo' if risk_score <= 20 else
+                     '🟢 Baixo'       if risk_score <= 40 else
+                     '🟡 Moderado'    if risk_score <= 60 else
+                     '🟠 Alto'        if risk_score <= 80 else
+                     '🔴 Muito Alto')
+
+            return {
+                'risk_score': risk_score,
+                'label': label,
+                'detalhes': {
+                    'volatilidade':  {'valor': round(vol, 2),   'pts': round(pts_vol, 1),   'max': 25, 'unidade': '%/dia'},
+                    'beta':          {'valor': round(beta, 2),  'pts': round(pts_beta, 1),  'max': 20, 'unidade': 'x'},
+                    'divida_ebitda': {'valor': round(div_e, 2), 'pts': round(pts_divid, 1), 'max': 20, 'unidade': 'x'},
+                    'drawdown':      {'valor': round(dd, 1),    'pts': round(pts_dd, 1),    'max': 20, 'unidade': '%'},
+                    'liquidez':      {'valor': round(vol_m/1e6, 1), 'pts': round(pts_liq, 1), 'max': 15, 'unidade': 'M/dia'},
+                }
+            }
+    except Exception as e:
+        print(f"[DB] Erro risk ativo: {e}", flush=True)
+        return None
+    finally:
+        conn.close()
