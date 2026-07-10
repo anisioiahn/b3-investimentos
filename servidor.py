@@ -1430,6 +1430,14 @@ def api_builder_setores():
     except Exception as e:
         return jsonify([])
 
+@app.route("/api/oportunidades/termometro/detalhe")
+@requer_auth
+def api_oportunidades_termometro_detalhe():
+    setor = request.args.get('setor','')
+    anos  = int(request.args.get('anos', 2))
+    if not setor: return jsonify([])
+    return jsonify(db.db_termometro_setor_detalhe(setor, anos))
+
 @app.route("/api/oportunidades/termometro")
 @requer_auth
 def api_oportunidades_termometro():
