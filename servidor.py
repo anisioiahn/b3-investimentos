@@ -1589,7 +1589,7 @@ def api_risco_ativo(ticker):
 
             # Volatilidade 30 dias do histórico
             cur.execute("""
-                SELECT ROUND(CAST(STDDEV(retorno)*100 AS NUMERIC),2) as vol_diaria
+                SELECT STDDEV(retorno)*100 as vol_diaria
                 FROM (
                     SELECT (close - LAG(close) OVER (ORDER BY data))
                            / NULLIF(LAG(close) OVER (ORDER BY data),0) as retorno
@@ -1603,7 +1603,7 @@ def api_risco_ativo(ticker):
 
             # Drawdown máximo 2 anos
             cur.execute("""
-                SELECT ROUND(CAST(MIN(drawdown)*100 AS NUMERIC),1) as dd_max
+                SELECT MIN(drawdown)*100 as dd_max
                 FROM (
                     SELECT (close - MAX(close) OVER (ORDER BY data
                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW))
