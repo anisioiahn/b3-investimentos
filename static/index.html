@@ -5106,6 +5106,7 @@ function _renderBuilderResultado(d){
     const setor = _setorPtBR[c.setor] || c.setor || '—';
     const risco = parseFloat(c.risk_score||0);
     const corRisco = risco<=20?'#16a34a':risco<=40?'#22c55e':risco<=60?'#f59e0b':risco<=80?'#f97316':'#e53935';
+    const lblRisco = risco<=20?'Muito Baixo':risco<=40?'Baixo':risco<=60?'Moderado':risco<=80?'Alto':'Muito Alto';
     return `<tr class="builder-row-${c.ticker}" style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
       <td style="padding:8px 4px;text-align:center">
         <input type="checkbox" class="builder-check-${c.ticker}" onchange="_toggleBuilderTicker('${c.ticker}',this.checked)"
@@ -5116,18 +5117,20 @@ function _renderBuilderResultado(d){
           <div style="width:28px;height:28px;border-radius:6px;overflow:hidden;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--text3)">
             <img src="https://icons.brapi.dev/icons/${c.ticker}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent='${c.ticker.substring(0,4)}'">
           </div>
-          <div><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></div>
+          <div>
+            <div style="font-weight:700">${c.ticker}</div>
+            <div style="font-size:10px;color:var(--text3)">${c.asset_type}</div>
+          </div>
         </div>
       </td>
-      <td style="padding:8px;color:var(--text2);font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nome||'—'}</td>
       <td style="padding:8px;color:var(--text3);font-size:11px;white-space:nowrap">${setor}</td>
       <td style="padding:8px;text-align:center">
-        <div style="width:30px;height:30px;border-radius:50%;border:2px solid ${corScore};display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${corScore}">${score>0?score.toFixed(0):'—'}</div>
+        <div style="width:32px;height:32px;border-radius:50%;border:2px solid ${corScore};display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${corScore}">${score>0?score.toFixed(0):'—'}</div>
       </td>
       <td style="padding:8px;text-align:center">
-        ${risco>0?`<span onclick="abrirDetalheRisco('${c.ticker}')" title="Score de Risco — clique para detalhes"
-          style="font-size:11px;font-weight:700;color:${corRisco};cursor:pointer;padding:2px 6px;border-radius:10px;background:${corRisco}18">
-          🛡️${risco.toFixed(0)}</span>`:'—'}
+        ${risco>0?`<span onclick="abrirDetalheRisco('${c.ticker}')" title="${lblRisco}"
+          style="font-size:11px;font-weight:700;color:${corRisco};cursor:pointer;padding:2px 8px;border-radius:10px;border:1px solid ${corRisco}44">
+          ${risco.toFixed(0)}</span>`:'—'}
       </td>
       <td style="padding:8px;text-align:right;color:${dy>=6?'#16a34a':dy>=3?'#f59e0b':'var(--text2)'};font-weight:${dy>=3?'700':'400'}">${dy>0?dy.toFixed(1)+'%':'—'}</td>
       <td style="padding:8px;text-align:right">${c.dividend_score>0?`<span style="font-weight:700;color:${c.dividend_score>=70?'#16a34a':c.dividend_score>=50?'#f59e0b':'var(--text3)'}">${parseFloat(c.dividend_score).toFixed(0)}</span>`:'—'}</td>
@@ -5224,6 +5227,15 @@ function _renderBuilderResultado(d){
       <div id="builder-tab-visao-geral" style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead><tr style="color:var(--text3);font-size:10px;border-bottom:2px solid var(--border)">
+            <th style="padding:6px 4px;width:30px"></th>
+            <th style="padding:6px 8px;text-align:left">Ativo</th>
+            <th style="padding:6px 8px;text-align:left">Setor</th>
+            <th style="padding:6px 8px;text-align:center">Score</th>
+            <th style="padding:6px 8px;text-align:center">Risco</th>
+            <th style="padding:6px 8px;text-align:right">DY 12m</th>
+            <th style="padding:6px 8px;text-align:right">Div. Score</th>
+            ${capital>0?'<th style="padding:6px 8px;text-align:right">Peso</th><th style="padding:6px 8px;text-align:right">Valor</th>':''}
+          </tr></thead>
             <th style="padding:6px 4px;width:30px"></th>
             <th style="padding:6px 8px;text-align:left">Ativo</th>
             <th style="padding:6px 8px;text-align:left">Empresa</th>
