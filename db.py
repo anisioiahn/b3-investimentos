@@ -2149,3 +2149,63 @@ def db_top_dividendos_oportunidades(limit=20):
         return []
     finally:
         conn.close()
+
+def db_termometro_setor_detalhe(setor, periodo_anos=2):
+    """
+    Retorna os ativos de um setor com todas as variáveis do cálculo.
+    """
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                WITH retornos_ativo AS (
+                    SELECT
+                        a.ticker,
+                        c.trading_name as nome,
+                        FIRST_VALUE(h.close) OVER (
+                            PARTITION BY a.ticker ORDER BY h.data ASC
+                        ) as preco_inicio,
+                        LAST_VALUE(h.close) OVER (
+                            PARTITION BY a.ticker ORDER BY h.data ASC
+                            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                        ) as preco_atual,
+                        MAX(h.close) OVER (PARTITION BY a.ticker) as pico_ativo,
+                        MIN(h.close) OVER (PARTITION BY a.ticker) as vale_ativo,
+                        MIN(h.data) OVER (PARTITION BY a.ticker) as data_inicio,
+                        MAX(h.data) OVER (PARTITION BY a.ticker) as data_fim
+                    FROM historico_precos h
+                    JOIN assets a ON a.ticker = h.ticker
+                    JOIN companies c ON c.company_id = a.company_id
+                    WHERE h.intervalo = '1d'
+                      AND h.data >= CURRENT_DATE - INTERVAL '%s years'
+                      AND c.sector = %%s
+                      AND a.asset_type = 'ACAO'
+                      AND a.status = 'ATIVO'
+                ),
+                resumo AS (
+                    SELECT DISTINCT ON (ticker)
+                        ticker, nome, preco_inicio, preco_atual,
+                        pico_ativo, vale_ativo, data_inicio, data_fim
+                    FROM retornos_ativo
+                    WHERE preco_inicio > 0
+                )
+                SELECT
+                    ticker, nome,
+                    ROUND(preco_inicio::numeric, 2)  as preco_inicio,
+                    ROUND(preco_atual::numeric, 2)   as preco_atual,
+                    ROUND(pico_ativo::numeric, 2)    as pico_ativo,
+                    ROUND(vale_ativo::numeric, 2)    as vale_ativo,
+                    data_inicio, data_fim,
+                    ROUND(((preco_atual - preco_inicio) / preco_inicio * 100)::numeric, 1) as retorno_pct,
+                    ROUND(((preco_atual - pico_ativo)   / pico_ativo   * 100)::numeric, 1) as dist_pico_pct,
+                    ROUND(((preco_atual - vale_ativo)   / vale_ativo   * 100)::numeric, 1) as dist_vale_pct
+                FROM resumo
+                WHERE preco_inicio > 0 AND preco_atual > 0
+                ORDER BY dist_pico_pct ASC
+            """ % periodo_anos, (setor,))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro detalhe setor: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
