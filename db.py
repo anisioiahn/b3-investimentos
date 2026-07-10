@@ -1951,18 +1951,32 @@ def db_buscar_mudancas_dia():
 
 def db_termometro_setorial(periodo_anos=2):
     """
-    Calcula pico, vale e posição atual de cada setor
-    nos últimos N anos. Retorna setores em alta e baixa.
+    Calcula retorno percentual acumulado de cada setor no período.
+    Usa retorno individual de cada ativo (não preço absoluto médio)
+    para evitar distorções por composição do setor.
     """
     try:
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                WITH precos_setor AS (
+                WITH -- Preço inicial e final de cada ativo no período
+                retornos_ativo AS (
                     SELECT
+                        a.ticker,
                         c.sector as setor,
-                        h.data,
-                        AVG(h.close) as preco_medio
+                        -- Preço no início do período (primeira data disponível após o corte)
+                        FIRST_VALUE(h.close) OVER (
+                            PARTITION BY a.ticker ORDER BY h.data ASC
+                        ) as preco_inicio,
+                        -- Preço atual (última data disponível)
+                        LAST_VALUE(h.close) OVER (
+                            PARTITION BY a.ticker ORDER BY h.data ASC
+                            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                        ) as preco_atual,
+                        -- Pico e vale individuais
+                        MAX(h.close) OVER (PARTITION BY a.ticker) as pico_ativo,
+                        MIN(h.close) OVER (PARTITION BY a.ticker) as vale_ativo,
+                        h.data
                     FROM historico_precos h
                     JOIN assets a ON a.ticker = h.ticker
                     JOIN companies c ON c.company_id = a.company_id
@@ -1970,38 +1984,37 @@ def db_termometro_setorial(periodo_anos=2):
                       AND h.data >= CURRENT_DATE - INTERVAL '%s years'
                       AND c.sector IS NOT NULL
                       AND a.asset_type = 'ACAO'
-                    GROUP BY c.sector, h.data
+                      AND a.status = 'ATIVO'
                 ),
-                stats_setor AS (
+                -- Pega só uma linha por ativo (valores já calculados via window)
+                resumo_ativo AS (
+                    SELECT DISTINCT ON (ticker)
+                        ticker, setor,
+                        preco_inicio, preco_atual, pico_ativo, vale_ativo
+                    FROM retornos_ativo
+                    WHERE preco_inicio > 0
+                ),
+                -- Retorno percentual de cada ativo
+                retorno_pct AS (
                     SELECT
                         setor,
-                        MAX(preco_medio) as pico,
-                        MIN(preco_medio) as vale,
-                        (SELECT preco_medio FROM precos_setor p2
-                         WHERE p2.setor = ps.setor
-                         ORDER BY data DESC LIMIT 1) as atual,
-                        (SELECT data FROM precos_setor p2
-                         WHERE p2.setor = ps.setor
-                         ORDER BY preco_medio DESC LIMIT 1) as data_pico,
-                        (SELECT data FROM precos_setor p2
-                         WHERE p2.setor = ps.setor
-                         ORDER BY preco_medio ASC LIMIT 1) as data_vale,
-                        COUNT(DISTINCT data) as dias
-                    FROM precos_setor ps
-                    GROUP BY setor
-                    HAVING COUNT(DISTINCT data) >= 60
+                        ticker,
+                        (preco_atual - preco_inicio) / preco_inicio * 100 as retorno,
+                        (preco_atual - pico_ativo)   / pico_ativo   * 100 as dist_pico,
+                        (preco_atual - vale_ativo)   / vale_ativo   * 100 as dist_vale
+                    FROM resumo_ativo
+                    WHERE preco_inicio > 0 AND preco_atual > 0
                 )
+                -- Média dos retornos por setor
                 SELECT
                     setor,
-                    ROUND(pico::numeric, 2) as pico,
-                    ROUND(vale::numeric, 2) as vale,
-                    ROUND(atual::numeric, 2) as atual,
-                    data_pico,
-                    data_vale,
-                    ROUND(((atual - pico) / NULLIF(pico, 0) * 100)::numeric, 1) as dist_pico_pct,
-                    ROUND(((atual - vale) / NULLIF(vale, 0) * 100)::numeric, 1) as dist_vale_pct
-                FROM stats_setor
-                WHERE atual IS NOT NULL
+                    COUNT(ticker) as n_ativos,
+                    ROUND(AVG(retorno)::numeric, 1)   as retorno_periodo_pct,
+                    ROUND(AVG(dist_pico)::numeric, 1) as dist_pico_pct,
+                    ROUND(AVG(dist_vale)::numeric, 1) as dist_vale_pct
+                FROM retorno_pct
+                GROUP BY setor
+                HAVING COUNT(ticker) >= 3
                 ORDER BY dist_pico_pct ASC
             """ % periodo_anos)
             return [dict(r) for r in cur.fetchall()]
