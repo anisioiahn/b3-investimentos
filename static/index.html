@@ -5328,10 +5328,16 @@ function goBack(){currentSector=null;document.getElementById('tab-empresas').sty
 // ── SETORES ──────────────────────────────────────────────────
 function renderSectors(){
   document.getElementById('sgrid').innerHTML=Object.entries(DADOS.setores||{}).map(([id,s])=>{
-    const comCotacao = s.empresas.filter(e=>e.preco!=null);
-    const alta   = comCotacao.filter(e=>(e.variacao||0)>0).length;
-    const baixa  = comCotacao.filter(e=>(e.variacao||0)<0).length;
-    const total  = comCotacao.length;
+    // Separa ativos com cotação real (não fallback) dos sem cotação
+    const comCotacaoReal = s.empresas.filter(e=>e.preco!=null && !e.fallback);
+    const comFallback    = s.empresas.filter(e=>e.preco!=null && e.fallback);
+    const semCotacao     = s.empresas.filter(e=>e.preco==null);
+    const semDados       = comFallback.length + semCotacao.length;
+
+    // Alta/baixa calculada APENAS com cotação real
+    const alta  = comCotacaoReal.filter(e=>(e.variacao||0)>0).length;
+    const baixa = comCotacaoReal.filter(e=>(e.variacao||0)<0).length;
+    const total = comCotacaoReal.length;
 
     let classCard = '', termHtml = '';
     if(total > 0){
@@ -5348,11 +5354,20 @@ function renderSectors(){
       }
     }
 
+    // Alerta de ativos sem cotação
+    const alertaSemCotacao = semDados > 0 ? `
+      <div onclick="event.stopPropagation();mostrarMotivosSemCotacao('${id}','${s.nome}',${semDados})"
+        style="margin-top:6px;font-size:10px;color:#f59e0b;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:3px"
+        title="Ver motivos">
+        ⚠️ ${semDados} sem cotação
+      </div>` : '';
+
     return `<div class="sector-card ${classCard}" onclick="abrirSetor('${id}')">
       <div class="sector-icon" style="background:${s.cor_fundo}">${s.icone}</div>
       <div class="sector-name">${s.nome}</div>
-      <div class="sector-count">${total}/${s.empresas.length} com cotação</div>
+      <div class="sector-count">${total}/${s.empresas.length} com cotação hoje</div>
       ${termHtml}
+      ${alertaSemCotacao}
     </div>`;
   }).join('');
 }
@@ -5367,13 +5382,20 @@ function abrirSetor(id){
 }
 function renderEmpresas(silencioso){
   const s=DADOS.setores[currentSector];if(!s)return;
-  const ordenadas=[...s.empresas].filter(e=>e.preco!=null).sort((a,b)=>b.preco-a.preco);
+
+  // Separa com cotação real, fallback e sem cotação
+  const comCotacao = [...s.empresas].filter(e=>e.preco!=null && !e.fallback).sort((a,b)=>b.preco-a.preco);
+  const comFallback= [...s.empresas].filter(e=>e.preco!=null && e.fallback).sort((a,b)=>(b.preco||0)-(a.preco||0));
+  const semCotacao = [...s.empresas].filter(e=>e.preco==null);
+  const semDados   = [...comFallback, ...semCotacao];
+
   document.getElementById('narea').innerHTML='';
-  document.getElementById('clist').innerHTML=ordenadas.map(c=>{
+
+  // Renderiza ativos com cotação real
+  const renderAtivo = (c, opts={}) => {
     const vr=c.variacao||0,vp=c.variacao_pct||0;
     const cls=vr>0?'up':vr<0?'dn':'flat',arrow=vr>0?'▲':vr<0?'▼':'—',sign=vr>=0?'+':'';
     const logoHtml=c.logo?`<img src="${c.logo}" alt="${c.nome}" onerror="this.parentElement.textContent='${c.ticker.substring(0,4)}'">`:c.ticker.substring(0,4);
-    // Verifica alertas existentes para este ticker
     const altAcima=_alertasServidor.find(a=>a.ticker===c.ticker&&a.direcao==='acima');
     const altAbaixo=_alertasServidor.find(a=>a.ticker===c.ticker&&a.direcao==='abaixo');
     const alertasHtml=`
@@ -5386,8 +5408,48 @@ function renderEmpresas(silencioso){
       ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${altAbaixo.valor.toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${c.ticker}','abaixo')">✕</button></div>`:''}`;
     const ji=(_janusRanking||[]).find(j=>j.ticker===c.ticker);
     const jiBadge=ji?.score!=null?`<span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(ji.score))}" style="font-size:10px;padding:2px 7px">${ji.score.toFixed(1)}</span>`:'';
+
+    if(opts.semCotacao){
+      // Indicação visual para ativos sem cotação real
+      const tagFallback = c.fallback
+        ? `<span style="font-size:9px;padding:2px 6px;background:rgba(245,158,11,0.15);color:#f59e0b;border-radius:10px;margin-left:4px">⏱ D-1</span>`
+        : `<span style="font-size:9px;padding:2px 6px;background:rgba(150,150,150,0.15);color:var(--text3);border-radius:10px;margin-left:4px">sem cotação</span>`;
+      return `<div class="co-row" style="cursor:default;opacity:0.65">
+        <div class="co-logo" style="background:${c.cor}">${logoHtml}</div>
+        <div class="co-info">
+          <div class="co-nome">${c.nome} ${tagFallback}</div>
+          <div class="sec-sub">${c.ticker}</div>
+        </div>
+        <div class="co-price" style="color:var(--text3)">
+          ${c.preco ? `R$ ${parseFloat(c.preco).toFixed(2)}` : '—'}
+          <div style="font-size:10px;color:var(--text3)">não entra no cálculo</div>
+        </div>
+      </div>`;
+    }
+
     return `<div class="co-row" style="cursor:default">
-      <div class="co-logo" style="background:${c.cor}">${logoHtml}</div>
+      <div class="co-logo" style="background:${c.cor}">${logoHtml}</div>`
+  };
+
+  document.getElementById('clist').innerHTML = [
+    ...comCotacao.map(c => {
+      const vr=c.variacao||0,vp=c.variacao_pct||0;
+      const cls=vr>0?'up':vr<0?'dn':'flat',arrow=vr>0?'▲':vr<0?'▼':'—',sign=vr>=0?'+':'';
+      const logoHtml=c.logo?`<img src="${c.logo}" alt="${c.nome}" onerror="this.parentElement.textContent='${c.ticker.substring(0,4)}'">`:c.ticker.substring(0,4);
+      const altAcima=_alertasServidor.find(a=>a.ticker===c.ticker&&a.direcao==='acima');
+      const altAbaixo=_alertasServidor.find(a=>a.ticker===c.ticker&&a.direcao==='abaixo');
+      const alertasHtml=`
+        <div class="tgt-lbl">Alertas de preço</div>
+        <div class="alerta-inline">
+          <button class="alerta-dir-btn acima ${altAcima?'ativo':''}" onclick="event.stopPropagation();toggleDirAlerta('${c.ticker}','acima',this)">▲ Acima</button>
+          <button class="alerta-dir-btn abaixo ${altAbaixo?'ativo':''}" onclick="event.stopPropagation();toggleDirAlerta('${c.ticker}','abaixo',this)">▼ Abaixo</button>
+        </div>
+        ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${altAcima.valor.toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${c.ticker}','acima')">✕</button></div>`:''}
+        ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${altAbaixo.valor.toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${c.ticker}','abaixo')">✕</button></div>`:''}`;
+      const ji=(_janusRanking||[]).find(j=>j.ticker===c.ticker);
+      const jiBadge=ji?.score!=null?`<span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(ji.score))}" style="font-size:10px;padding:2px 7px">${ji.score.toFixed(1)}</span>`:'';
+      return `<div class="co-row" style="cursor:default">
+        <div class="co-logo" style="background:${c.cor}">${logoHtml}</div>
       <div class="co-info" style="flex:1.5">
         <div class="co-name">${c.nome}</div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">
@@ -5407,7 +5469,81 @@ function renderEmpresas(silencioso){
         <button class="btn" style="padding:8px 12px;font-size:13px" onclick="abrirModalPosicao('${c.ticker}')" title="Adicionar à carteira">➕</button>
       </div>
     </div>`;
-  }).join('');
+    }),
+    // Separador e ativos sem cotação
+    ...(semDados.length > 0 ? [`
+      <div style="padding:10px 12px;margin:8px 0;background:rgba(245,158,11,0.08);border-radius:10px;border:1px solid rgba(245,158,11,0.2)">
+        <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:2px">
+          ⚠️ ${semDados.length} ativo${semDados.length>1?'s':''} sem cotação hoje
+        </div>
+        <div style="font-size:11px;color:var(--text3)">
+          Não entram no cálculo de alta/baixa do setor.
+          <span onclick="mostrarMotivosSemCotacao('${currentSector}','${s.nome}',${semDados.length})"
+            style="color:var(--green);cursor:pointer;text-decoration:underline;margin-left:4px">Ver motivos</span>
+        </div>
+      </div>`,
+      ...semDados.map(c=>{
+        const logoHtml=c.logo?`<img src="${c.logo}" alt="${c.nome}" onerror="this.parentElement.textContent='${c.ticker.substring(0,4)}'">`:c.ticker.substring(0,4);
+        const tag = c.fallback
+          ? `<span style="font-size:9px;padding:2px 6px;background:rgba(245,158,11,0.15);color:#f59e0b;border-radius:10px">⏱ D-1</span>`
+          : `<span style="font-size:9px;padding:2px 6px;background:rgba(150,150,150,0.15);color:var(--text3);border-radius:10px">sem cotação</span>`;
+        return `<div class="co-row" style="opacity:0.55;cursor:default">
+          <div class="co-logo" style="background:${c.cor}">${logoHtml}</div>
+          <div class="co-info" style="flex:1.5">
+            <div class="co-name">${c.nome} ${tag}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+              <span class="co-ticker">${c.ticker}</span>
+            </div>
+          </div>
+          <div class="co-price-blk" style="text-align:right;flex:1">
+            <div class="co-price" style="color:var(--text3)">${c.preco?`R$ ${parseFloat(c.preco).toFixed(2)}`:'—'}</div>
+            <div style="font-size:10px;color:var(--text3)">não entra no cálculo</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:center;flex-shrink:0" onclick="event.stopPropagation()">
+            <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:8px 12px;font-size:13px" onclick="abrirGrafico('${c.ticker}')">📊</button>
+          </div>
+        </div>`;
+      })
+    ] : [])
+  ].join('');
+}
+
+function mostrarMotivosSemCotacao(setorId, nomeSetor, qtd){
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;max-width:460px;width:100%;padding:1.5rem;box-shadow:0 16px 48px rgba(0,0,0,.3)" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <div style="font-size:15px;font-weight:700">⚠️ ${qtd} ativo${qtd>1?'s':''} sem cotação — ${nomeSetor}</div>
+        <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text3)">✕</button>
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:1rem">
+        Estes ativos <strong>não entraram no cálculo</strong> de alta/baixa do setor hoje.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+        <div style="padding:10px;background:var(--bg);border-radius:10px">
+          <div style="font-weight:700;margin-bottom:4px">📉 Baixa liquidez</div>
+          <div style="color:var(--text3)">Ativo negociado raramente ou com volume muito baixo. A fonte de dados não retorna cotação para ativos sem negociação no dia.</div>
+        </div>
+        <div style="padding:10px;background:var(--bg);border-radius:10px">
+          <div style="font-weight:700;margin-bottom:4px">⏸️ Suspensão temporária</div>
+          <div style="color:var(--text3)">A B3 pode suspender negociação por eventos corporativos como assembleias, fatos relevantes ou investigações.</div>
+        </div>
+        <div style="padding:10px;background:var(--bg);border-radius:10px">
+          <div style="font-weight:700;margin-bottom:4px">⚖️ Recuperação judicial</div>
+          <div style="color:var(--text3)">Empresas em processo de recuperação judicial frequentemente têm negociação restrita ou suspensa.</div>
+        </div>
+        <div style="padding:10px;background:var(--bg);border-radius:10px">
+          <div style="font-weight:700;margin-bottom:4px">🔄 Falha momentânea na coleta</div>
+          <div style="color:var(--text3)">Timeout ou instabilidade na fonte de dados durante a última atualização. Tente forçar uma atualização.</div>
+        </div>
+      </div>
+      <div style="margin-top:1rem;padding:10px;background:rgba(245,158,11,0.1);border-radius:10px;font-size:12px;color:#f59e0b">
+        ⏱ Ativos marcados como <strong>D-1</strong> têm o último preço conhecido mas sem variação do dia.
+      </div>
+    </div>`;
+  modal.onclick = ()=>modal.remove();
+  document.body.appendChild(modal);
 }
 
 // Modal de configuração de alerta
