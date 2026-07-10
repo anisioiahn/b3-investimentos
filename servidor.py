@@ -1372,6 +1372,21 @@ def api_builder_executar():
                     COALESCE(dd.dividend_yield_12m, 0) as dy_12m,
                     COALESCE(dd.janus_dividend_score, 0) as dividend_score,
                     js.confidence,
+                    -- Risk Score inline
+                    COALESCE((
+                        SELECT LEAST(100, GREATEST(0,
+                            -- Volatilidade proxy: usa beta como proxy se não tiver histórico
+                            LEAST(25, COALESCE(ms2.beta,1) / 2 * 15) +
+                            LEAST(20, GREATEST(0, COALESCE(ms2.beta,1)) / 2 * 20) +
+                            LEAST(20, GREATEST(0, COALESCE(fs2.total_debt / NULLIF(fs2.ebitda,0), 2)) / 5 * 20) +
+                            GREATEST(0, 15 - LEAST(15, COALESCE(ms2.volume,0) / 5000000 * 15))
+                        ))
+                        FROM market_snapshots ms2
+                        LEFT JOIN financial_snapshots fs2 ON fs2.asset_id = ms2.asset_id
+                            AND fs2.reference_date = ms2.reference_date
+                        WHERE ms2.asset_id = a.asset_id
+                        ORDER BY ms2.reference_date DESC LIMIT 1
+                    ), 0) as risk_score,
                     ms.last_price as preco,
                     ms.volume,
                     ms.market_cap,
