@@ -1543,6 +1543,22 @@ Seja direto e mencione os tickers. Máximo 80 palavras. Não use emojis no texto
         print(f"[OPORT AJIA] Erro: {e}", flush=True)
     return jsonify({"ok": False})
 
+@app.route("/api/risco/ranking")
+@requer_auth
+def api_risco_ranking():
+    """Ranking de ativos por risco (menor ao maior)."""
+    limit = int(request.args.get('limit', 100))
+    return jsonify(db.db_calcular_risk_scores(limit))
+
+@app.route("/api/risco/<ticker>")
+@requer_auth
+def api_risco_ativo(ticker):
+    """Score de risco detalhado de um ativo."""
+    resultado = db.db_risk_score_ativo(ticker.upper())
+    if not resultado:
+        return jsonify({"erro": "Ativo não encontrado"}), 404
+    return jsonify(resultado)
+
 @app.route("/api/backtesting/debug-publicas")
 @requer_auth
 def api_bt_debug_publicas():
