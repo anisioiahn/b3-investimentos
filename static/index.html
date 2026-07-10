@@ -52,7 +52,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .app{max-width:960px;margin:0 auto;background:var(--card);min-height:100vh;box-shadow:var(--shadow);overflow-x:hidden}
 
 /* HEADER */
-.header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid var(--border);background:#fff;position:sticky;top:0;z-index:100}
+.header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid var(--border);background:#fff;position:sticky;top:0;z-index:200}
 /* ── MOBILE ─────────────────────────────── */
 .bottom-bar{display:none}
 @media(max-width:768px){
@@ -104,7 +104,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .btn:hover{border-color:var(--green);color:var(--green)}
 
 /* TABS */
-.tabs{display:flex;border-bottom:1px solid var(--border);padding:0 1.5rem;background:#fff;overflow-x:auto}
+.tabs{display:flex;border-bottom:1px solid var(--border);padding:0 1.5rem;background:#fff;overflow:visible;position:relative;z-index:100}
 .tab{padding:11px 14px;font-size:13px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;display:flex;align-items:center;gap:5px}
 .tab-ativo{background:var(--green-light);border-bottom-color:var(--green)!important;color:var(--green)!important;gap:6px}
 .tab-ativo-logo{width:18px;height:18px;border-radius:4px;overflow:hidden;flex-shrink:0;background:#0066cc;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff}
@@ -114,7 +114,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .tab.active{color:var(--green);border-bottom-color:var(--green);font-weight:600}
 .tab-badge{background:#e53935;color:#fff;font-size:10px;font-weight:600;border-radius:10px;padding:1px 6px}
 .tab-dropdown{position:relative;display:inline-flex;align-items:stretch}
-.tab-dropdown-menu{display:none;position:absolute;top:100%;left:0;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:300;min-width:200px;padding:6px;margin-top:2px}
+.tab-dropdown-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:500;min-width:200px;padding:6px;margin-top:0}
 .tab-dropdown:hover .tab-dropdown-menu,.tab-dropdown.open .tab-dropdown-menu{display:block}
 .tab-dropdown-item{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;white-space:nowrap;transition:all .1s}
 .tab-dropdown-item:hover{background:var(--bg);color:var(--green)}
