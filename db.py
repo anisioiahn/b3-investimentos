@@ -1946,3 +1946,193 @@ def db_buscar_mudancas_dia():
     except: return []
     finally:
         conn.close()
+
+# ── MÓDULO OPORTUNIDADES ──────────────────────────────────────
+
+def db_termometro_setorial(periodo_anos=2):
+    """
+    Calcula pico, vale e posição atual de cada setor
+    nos últimos N anos. Retorna setores em alta e baixa.
+    """
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                WITH precos_setor AS (
+                    SELECT
+                        c.sector as setor,
+                        h.data,
+                        AVG(h.close) as preco_medio
+                    FROM historico_precos h
+                    JOIN assets a ON a.ticker = h.ticker
+                    JOIN companies c ON c.company_id = a.company_id
+                    WHERE h.intervalo = '1d'
+                      AND h.data >= CURRENT_DATE - INTERVAL '%s years'
+                      AND c.sector IS NOT NULL
+                      AND a.asset_type = 'ACAO'
+                    GROUP BY c.sector, h.data
+                ),
+                stats_setor AS (
+                    SELECT
+                        setor,
+                        MAX(preco_medio) as pico,
+                        MIN(preco_medio) as vale,
+                        (SELECT preco_medio FROM precos_setor p2
+                         WHERE p2.setor = ps.setor
+                         ORDER BY data DESC LIMIT 1) as atual,
+                        (SELECT data FROM precos_setor p2
+                         WHERE p2.setor = ps.setor
+                         ORDER BY preco_medio DESC LIMIT 1) as data_pico,
+                        (SELECT data FROM precos_setor p2
+                         WHERE p2.setor = ps.setor
+                         ORDER BY preco_medio ASC LIMIT 1) as data_vale,
+                        COUNT(DISTINCT data) as dias
+                    FROM precos_setor ps
+                    GROUP BY setor
+                    HAVING COUNT(DISTINCT data) >= 60
+                )
+                SELECT
+                    setor,
+                    ROUND(pico::numeric, 2) as pico,
+                    ROUND(vale::numeric, 2) as vale,
+                    ROUND(atual::numeric, 2) as atual,
+                    data_pico,
+                    data_vale,
+                    ROUND(((atual - pico) / NULLIF(pico, 0) * 100)::numeric, 1) as dist_pico_pct,
+                    ROUND(((atual - vale) / NULLIF(vale, 0) * 100)::numeric, 1) as dist_vale_pct
+                FROM stats_setor
+                WHERE atual IS NOT NULL
+                ORDER BY dist_pico_pct ASC
+            """ % periodo_anos)
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro termômetro setorial: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
+
+def db_oportunidades_janus(limit=20):
+    """
+    Ativos com alto Janus Score + preço abaixo da média histórica + RSI baixo.
+    Score de Oportunidade = Score Janus * (1 - posição_relativa) * (1 - RSI/100)
+    """
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Última data de ranking
+            cur.execute("SELECT MAX(reference_date) as dt FROM ranking_snapshots")
+            ref = cur.fetchone()
+            if not ref or not ref['dt']: return []
+            ref_date = ref['dt']
+
+            cur.execute("""
+                WITH ultimos_precos AS (
+                    SELECT ticker,
+                        MAX(CASE WHEN data >= CURRENT_DATE - INTERVAL '1 year'  THEN close END) as max_1a,
+                        MIN(CASE WHEN data >= CURRENT_DATE - INTERVAL '1 year'  THEN close END) as min_1a,
+                        MAX(CASE WHEN data >= CURRENT_DATE - INTERVAL '2 years' THEN close END) as max_2a,
+                        MIN(CASE WHEN data >= CURRENT_DATE - INTERVAL '2 years' THEN close END) as min_2a,
+                        AVG(CASE WHEN data >= CURRENT_DATE - INTERVAL '1 year'  THEN close END) as media_1a,
+                        AVG(CASE WHEN data >= CURRENT_DATE - INTERVAL '2 years' THEN close END) as media_2a,
+                        (SELECT close FROM historico_precos h2
+                         WHERE h2.ticker = h.ticker AND h2.intervalo='1d'
+                         ORDER BY data DESC LIMIT 1) as preco_atual
+                    FROM historico_precos h
+                    WHERE intervalo = '1d'
+                      AND data >= CURRENT_DATE - INTERVAL '2 years'
+                    GROUP BY ticker
+                    HAVING COUNT(*) >= 100
+                ),
+                rsi_calc AS (
+                    SELECT ticker,
+                        AVG(CASE WHEN diff > 0 THEN diff ELSE 0 END) as ganho_med,
+                        AVG(CASE WHEN diff < 0 THEN ABS(diff) ELSE 0 END) as perda_med
+                    FROM (
+                        SELECT ticker,
+                            close - LAG(close) OVER (PARTITION BY ticker ORDER BY data) as diff
+                        FROM historico_precos
+                        WHERE intervalo='1d'
+                          AND data >= CURRENT_DATE - INTERVAL '30 days'
+                    ) t
+                    WHERE diff IS NOT NULL
+                    GROUP BY ticker
+                )
+                SELECT
+                    a.ticker,
+                    c.trading_name as nome,
+                    c.sector as setor,
+                    a.asset_type,
+                    r.janus_score as score,
+                    up.preco_atual,
+                    up.media_1a,
+                    up.media_2a,
+                    up.max_1a,
+                    up.min_1a,
+                    up.max_2a,
+                    up.min_2a,
+                    ROUND(((up.preco_atual - up.media_1a) / NULLIF(up.media_1a,0) * 100)::numeric, 1) as dist_media_1a,
+                    ROUND(((up.preco_atual - up.media_2a) / NULLIF(up.media_2a,0) * 100)::numeric, 1) as dist_media_2a,
+                    ROUND(((up.preco_atual - up.max_2a)  / NULLIF(up.max_2a,0)  * 100)::numeric, 1) as dist_pico_2a,
+                    CASE
+                        WHEN rc.perda_med = 0 THEN 100
+                        ELSE ROUND((100 - (100 / (1 + rc.ganho_med / NULLIF(rc.perda_med,0))))::numeric, 1)
+                    END as rsi,
+                    ROUND((
+                        r.janus_score * 0.5 +
+                        LEAST(50, GREATEST(0, -((up.preco_atual - up.media_2a) / NULLIF(up.media_2a,0) * 100))) +
+                        CASE
+                            WHEN rc.perda_med = 0 THEN 0
+                            ELSE LEAST(30, GREATEST(0, 30 - (100 - (100 / (1 + rc.ganho_med / NULLIF(rc.perda_med,0)))) * 0.3))
+                        END
+                    )::numeric / 1.3, 1) as score_oportunidade
+                FROM ranking_snapshots r
+                JOIN assets a ON a.asset_id = r.asset_id
+                JOIN companies c ON c.company_id = a.company_id
+                JOIN ultimos_precos up ON up.ticker = a.ticker
+                LEFT JOIN rsi_calc rc ON rc.ticker = a.ticker
+                WHERE r.reference_date = %s
+                  AND r.janus_score >= 60
+                  AND up.preco_atual IS NOT NULL
+                  AND a.asset_type = 'ACAO'
+                ORDER BY score_oportunidade DESC
+                LIMIT %s
+            """, (ref_date, limit))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro oportunidades: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
+
+def db_top_dividendos_oportunidades(limit=20):
+    """Top pagadores de dividendos com dados históricos."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT
+                    dp.ticker,
+                    c.trading_name as nome,
+                    c.sector as setor,
+                    a.asset_type,
+                    dp.dividend_yield_12m as dy_12m,
+                    dp.dividend_yield_5y as dy_5y,
+                    dp.janus_dividend_score as dividend_score,
+                    dp.trailing_annual_rate,
+                    r.janus_score as score
+                FROM dividend_profile dp
+                JOIN assets a ON a.ticker = dp.ticker
+                JOIN companies c ON c.company_id = a.company_id
+                LEFT JOIN ranking_snapshots r ON r.asset_id = a.asset_id
+                    AND r.reference_date = (SELECT MAX(reference_date) FROM ranking_snapshots)
+                WHERE dp.dividend_yield_12m > 0
+                  AND a.status = 'ATIVO'
+                ORDER BY dp.janus_dividend_score DESC NULLS LAST, dp.dividend_yield_12m DESC
+                LIMIT %s
+            """, (limit,))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro top dividendos: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
