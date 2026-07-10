@@ -2403,3 +2403,243 @@ def db_risk_score_ativo(ticker):
     finally:
         try: conn.close()
         except: pass
+
+# ── COMUNIDADE DE CARTEIRAS ───────────────────────────────────
+
+def db_init_carteiras_comunidade(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS carteiras_publicas (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER NOT NULL,
+                nome TEXT NOT NULL,
+                descricao TEXT,
+                composicao JSONB NOT NULL,
+                capital_total NUMERIC,
+                retorno_12m NUMERIC,
+                n_ativos INTEGER,
+                publica BOOLEAN DEFAULT TRUE,
+                clones INTEGER DEFAULT 0,
+                ranking_score NUMERIC DEFAULT 0,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS carteiras_avaliacoes (
+                id SERIAL PRIMARY KEY,
+                carteira_id INTEGER NOT NULL,
+                usuario_id INTEGER NOT NULL,
+                estrelas INTEGER NOT NULL CHECK (estrelas BETWEEN 1 AND 5),
+                created_at TEXT,
+                UNIQUE(carteira_id, usuario_id)
+            );
+            CREATE TABLE IF NOT EXISTS carteiras_comentarios (
+                id SERIAL PRIMARY KEY,
+                carteira_id INTEGER NOT NULL,
+                usuario_id INTEGER NOT NULL,
+                comentario TEXT NOT NULL,
+                created_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS carteiras_favoritos (
+                carteira_id INTEGER NOT NULL,
+                usuario_id INTEGER NOT NULL,
+                created_at TEXT,
+                PRIMARY KEY (carteira_id, usuario_id)
+            );
+            CREATE TABLE IF NOT EXISTS carteiras_seguidores (
+                autor_id INTEGER NOT NULL,
+                seguidor_id INTEGER NOT NULL,
+                created_at TEXT,
+                PRIMARY KEY (autor_id, seguidor_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_carteiras_publicas_usuario
+                ON carteiras_publicas(usuario_id);
+            CREATE INDEX IF NOT EXISTS idx_carteiras_publicas_ranking
+                ON carteiras_publicas(publica, ranking_score DESC);
+        """)
+    conn.commit()
+
+def db_publicar_carteira(uid, nome, descricao, composicao, capital_total, retorno_12m):
+    """Publica ou atualiza a carteira do usuário na comunidade."""
+    import json
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            # Verifica se já tem carteira publicada
+            cur.execute("""
+                SELECT id FROM carteiras_publicas
+                WHERE usuario_id=%s AND publica=TRUE
+                ORDER BY created_at DESC LIMIT 1
+            """, (uid,))
+            existente = cur.fetchone()
+            if existente:
+                cur.execute("""
+                    UPDATE carteiras_publicas
+                    SET nome=%s, descricao=%s, composicao=%s,
+                        capital_total=%s, retorno_12m=%s,
+                        n_ativos=%s, updated_at=%s
+                    WHERE id=%s
+                    RETURNING id
+                """, (nome, descricao, json.dumps(composicao),
+                      capital_total, retorno_12m,
+                      len(composicao), now, existente[0]))
+                cid = cur.fetchone()[0]
+            else:
+                cur.execute("""
+                    INSERT INTO carteiras_publicas
+                        (usuario_id, nome, descricao, composicao,
+                         capital_total, retorno_12m, n_ativos,
+                         publica, created_at, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,TRUE,%s,%s)
+                    RETURNING id
+                """, (uid, nome, descricao, json.dumps(composicao),
+                      capital_total, retorno_12m,
+                      len(composicao), now, now))
+                cid = cur.fetchone()[0]
+        conn.commit(); conn.close()
+        return cid
+    except Exception as e:
+        print(f"[DB] Erro publicar carteira: {e}", flush=True)
+        return None
+
+def db_listar_carteiras_publicas(uid_atual=None, ordem='ranking', limit=20):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            order_map = {
+                'ranking':   'cp.ranking_score DESC',
+                'avaliacao': 'media_estrelas DESC',
+                'seguidores':'total_seguidores DESC',
+                'clones':    'cp.clones DESC',
+                'recentes':  'cp.updated_at DESC',
+            }
+            order_sql = order_map.get(ordem, 'cp.ranking_score DESC')
+            cur.execute(f"""
+                SELECT cp.*,
+                    u.nome as autor,
+                    COALESCE(AVG(ca.estrelas),0)::NUMERIC(3,1) as media_estrelas,
+                    COUNT(DISTINCT ca.id) as total_avaliacoes,
+                    COUNT(DISTINCT cc.id) as total_comentarios,
+                    COUNT(DISTINCT cf.usuario_id) as total_favoritos,
+                    COUNT(DISTINCT cs.seguidor_id) as total_seguidores
+                FROM carteiras_publicas cp
+                LEFT JOIN usuarios u ON u.id = cp.usuario_id
+                LEFT JOIN carteiras_avaliacoes ca ON ca.carteira_id = cp.id
+                LEFT JOIN carteiras_comentarios cc ON cc.carteira_id = cp.id
+                LEFT JOIN carteiras_favoritos cf ON cf.carteira_id = cp.id
+                LEFT JOIN carteiras_seguidores cs ON cs.autor_id = cp.usuario_id
+                WHERE cp.publica = TRUE
+                GROUP BY cp.id, u.nome
+                ORDER BY {order_sql}
+                LIMIT %s
+            """, (limit,))
+            rows = [dict(r) for r in cur.fetchall()]
+            # Marca minha carteira e favoritos do usuário atual
+            if uid_atual:
+                favs = set()
+                seguindo = set()
+                cur.execute("SELECT carteira_id FROM carteiras_favoritos WHERE usuario_id=%s", (uid_atual,))
+                for r in cur.fetchall(): favs.add(r[0])
+                cur.execute("SELECT autor_id FROM carteiras_seguidores WHERE seguidor_id=%s", (uid_atual,))
+                for r in cur.fetchall(): seguindo.add(r[0])
+                for row in rows:
+                    row['minha']    = (row.get('usuario_id') == uid_atual)
+                    row['favoritei']= (row['id'] in favs)
+                    row['sigo']     = (row.get('usuario_id') in seguindo)
+            return rows
+    except Exception as e:
+        print(f"[DB] Erro listar carteiras: {e}", flush=True)
+        return []
+    finally:
+        conn.close()
+
+def db_detalhe_carteira_publica(cid, uid_atual=None):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT cp.*, u.nome as autor,
+                    COALESCE(AVG(ca.estrelas),0)::NUMERIC(3,1) as media_estrelas,
+                    COUNT(DISTINCT ca.id) as total_avaliacoes,
+                    COUNT(DISTINCT cc.id) as total_comentarios,
+                    COUNT(DISTINCT cf.usuario_id) as total_favoritos,
+                    COUNT(DISTINCT cs.seguidor_id) as total_seguidores
+                FROM carteiras_publicas cp
+                LEFT JOIN usuarios u ON u.id = cp.usuario_id
+                LEFT JOIN carteiras_avaliacoes ca ON ca.carteira_id = cp.id
+                LEFT JOIN carteiras_comentarios cc ON cc.carteira_id = cp.id
+                LEFT JOIN carteiras_favoritos cf ON cf.carteira_id = cp.id
+                LEFT JOIN carteiras_seguidores cs ON cs.autor_id = cp.usuario_id
+                WHERE cp.id = %s AND cp.publica = TRUE
+                GROUP BY cp.id, u.nome
+            """, (cid,))
+            cart = cur.fetchone()
+            if not cart: return None
+            cart = dict(cart)
+
+            # Comentários
+            cur.execute("""
+                SELECT cc.comentario, cc.created_at, u.nome as autor
+                FROM carteiras_comentarios cc
+                JOIN usuarios u ON u.id = cc.usuario_id
+                WHERE cc.carteira_id = %s
+                ORDER BY cc.created_at DESC LIMIT 50
+            """, (cid,))
+            cart['comentarios'] = [dict(r) for r in cur.fetchall()]
+
+            # Avaliação do usuário atual
+            if uid_atual:
+                cur.execute("""
+                    SELECT estrelas FROM carteiras_avaliacoes
+                    WHERE carteira_id=%s AND usuario_id=%s
+                """, (cid, uid_atual))
+                av = cur.fetchone()
+                cart['minha_avaliacao'] = av[0] if av else None
+                cur.execute("SELECT 1 FROM carteiras_favoritos WHERE carteira_id=%s AND usuario_id=%s", (cid, uid_atual))
+                cart['favoritei'] = bool(cur.fetchone())
+                cur.execute("SELECT 1 FROM carteiras_seguidores WHERE autor_id=%s AND seguidor_id=%s", (cart['usuario_id'], uid_atual))
+                cart['sigo'] = bool(cur.fetchone())
+                cart['minha'] = (cart['usuario_id'] == uid_atual)
+        conn.close()
+        return cart
+    except Exception as e:
+        print(f"[DB] Erro detalhe carteira: {e}", flush=True)
+        return None
+    finally:
+        conn.close()
+
+def db_calcular_ranking_carteira(cid):
+    """Ranking score da carteira baseado em avaliações, seguidores e clones."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT
+                    COALESCE(AVG(ca.estrelas),0) as media_estrelas,
+                    COUNT(DISTINCT ca.id) as total_aval,
+                    COUNT(DISTINCT cs.seguidor_id) as seguidores,
+                    COUNT(DISTINCT cc.id) as comentarios,
+                    cp.clones
+                FROM carteiras_publicas cp
+                LEFT JOIN carteiras_avaliacoes ca ON ca.carteira_id = cp.id
+                LEFT JOIN carteiras_seguidores cs ON cs.autor_id = cp.usuario_id
+                LEFT JOIN carteiras_comentarios cc ON cc.carteira_id = cp.id
+                WHERE cp.id = %s
+                GROUP BY cp.id, cp.clones
+            """, (cid,))
+            r = cur.fetchone()
+            if not r: return 0
+            score = (
+                float(r['media_estrelas']) / 5 * 40 +
+                min(25, float(r['seguidores']) / 10 * 25) +
+                min(20, float(r['clones']) / 10 * 20) +
+                min(15, float(r['comentarios']) / 5 * 15)
+            )
+            score = round(score, 1)
+            cur.execute("UPDATE carteiras_publicas SET ranking_score=%s WHERE id=%s", (score, cid))
+        conn.commit(); conn.close()
+        return score
+    except Exception as e:
+        print(f"[DB] Erro ranking carteira: {e}", flush=True)
+        return 0
