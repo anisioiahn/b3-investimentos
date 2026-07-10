@@ -1289,13 +1289,39 @@ def api_builder_executar():
                     r.general_position as posicao,
                     COALESCE(dd.dividend_yield_12m, 0) as dy_12m,
                     COALESCE(dd.janus_dividend_score, 0) as dividend_score,
-                    js.confidence
+                    js.confidence,
+                    ms.last_price as preco,
+                    ms.volume,
+                    ms.market_cap,
+                    ms.beta,
+                    fs.net_income as lucro,
+                    fs.ebitda,
+                    fs.total_debt as divida_total,
+                    fs.equity as patrimonio,
+                    roe_v.raw_value   as roe,
+                    roic_v.raw_value  as roic,
+                    mg_v.raw_value    as margem_liquida,
+                    rg_v.raw_value    as crescimento_receita,
+                    pe_v.raw_value    as pl,
+                    pvp_v.raw_value   as pvp,
+                    ev_v.raw_value    as ev_ebitda
                 FROM assets a
                 LEFT JOIN companies c ON c.company_id = a.company_id
                 {join_ranking}
                 LEFT JOIN janus_scores js ON js.asset_id = a.asset_id
                     AND js.reference_date = '{ref_date}'
                 {join_dividend}
+                LEFT JOIN market_snapshots ms ON ms.asset_id = a.asset_id
+                    AND ms.reference_date = '{ref_date}'
+                LEFT JOIN financial_snapshots fs ON fs.asset_id = a.asset_id
+                    AND fs.reference_date = '{ref_date}'
+                LEFT JOIN indicator_values roe_v  ON roe_v.asset_id  = a.asset_id AND roe_v.indicator_code  = 'FIN_ROE'             AND roe_v.reference_date  = '{ref_date}'
+                LEFT JOIN indicator_values roic_v ON roic_v.asset_id = a.asset_id AND roic_v.indicator_code = 'FIN_ROIC'            AND roic_v.reference_date = '{ref_date}'
+                LEFT JOIN indicator_values mg_v   ON mg_v.asset_id   = a.asset_id AND mg_v.indicator_code   = 'FIN_NET_MARGIN'      AND mg_v.reference_date   = '{ref_date}'
+                LEFT JOIN indicator_values rg_v   ON rg_v.asset_id   = a.asset_id AND rg_v.indicator_code   = 'FIN_REVENUE_GROWTH'  AND rg_v.reference_date   = '{ref_date}'
+                LEFT JOIN indicator_values pe_v   ON pe_v.asset_id   = a.asset_id AND pe_v.indicator_code   = 'VAL_PE'              AND pe_v.reference_date   = '{ref_date}'
+                LEFT JOIN indicator_values pvp_v  ON pvp_v.asset_id  = a.asset_id AND pvp_v.indicator_code  = 'VAL_PVP'             AND pvp_v.reference_date  = '{ref_date}'
+                LEFT JOIN indicator_values ev_v   ON ev_v.asset_id   = a.asset_id AND ev_v.indicator_code   = 'VAL_EV_EBITDA'       AND ev_v.reference_date   = '{ref_date}'
                 WHERE {where}
                 ORDER BY {order_sql}
                 LIMIT %s
