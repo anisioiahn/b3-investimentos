@@ -4616,10 +4616,44 @@ async function executarBuilder(){
   }
 }
 
+// Seleção do Builder
+let _builderSelecionados = new Set();
+
+function _toggleBuilderTicker(ticker, checked){
+  if(checked) _builderSelecionados.add(ticker);
+  else _builderSelecionados.delete(ticker);
+  _atualizarBarraSelecao();
+  // Sincroniza checkboxes em todas as abas
+  document.querySelectorAll(`.builder-check-${ticker}`).forEach(cb => cb.checked = checked);
+}
+
+function _atualizarBarraSelecao(){
+  const barra = document.getElementById('builder-barra-selecao');
+  const cnt   = document.getElementById('builder-selecao-cnt');
+  if(!barra) return;
+  const n = _builderSelecionados.size;
+  if(n > 0){
+    barra.style.display = 'flex';
+    cnt.textContent = `${n} ativo${n>1?'s':''} selecionado${n>1?'s':''}`;
+  } else {
+    barra.style.display = 'none';
+  }
+}
+
+function _builderSelecionarTodos(checked){
+  _builderResultado?.candidatos?.forEach(c=>{
+    if(checked) _builderSelecionados.add(c.ticker);
+    else _builderSelecionados.delete(c.ticker);
+    document.querySelectorAll(`.builder-check-${c.ticker}`).forEach(cb=>cb.checked=checked);
+  });
+  _atualizarBarraSelecao();
+}
+
 function _renderBuilderResultado(d){
   const resEl = document.getElementById('builder-resultado');
   const candidatos = d.candidatos || [];
   const capital = d.criterios?.capital || 0;
+  _builderSelecionados = new Set(); // reseta seleção
 
   if(!candidatos.length){
     resEl.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--text3)">
@@ -4630,135 +4664,149 @@ function _renderBuilderResultado(d){
     return;
   }
 
+  // Gera linhas reutilizáveis para cada aba
+  const linhasGeral = candidatos.map(c=>{
+    const score = parseFloat(c.score||0);
+    const corScore = score>=80?'#16a34a':score>=60?'#f59e0b':'#e53935';
+    const dy = parseFloat(c.dy_12m||0);
+    return `<tr class="builder-row-${c.ticker}" style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+      <td style="padding:8px 4px;text-align:center">
+        <input type="checkbox" class="builder-check-${c.ticker}" onchange="_toggleBuilderTicker('${c.ticker}',this.checked)"
+          style="width:15px;height:15px;accent-color:var(--green);cursor:pointer">
+      </td>
+      <td style="padding:8px"><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></td>
+      <td style="padding:8px;color:var(--text2);max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome||'—'}</td>
+      <td style="padding:8px;color:var(--text3);font-size:11px">${c.setor||'—'}</td>
+      <td style="padding:8px;text-align:center">
+        <div style="width:30px;height:30px;border-radius:50%;border:2px solid ${corScore};display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${corScore}">${score>0?score.toFixed(0):'—'}</div>
+      </td>
+      <td style="padding:8px;text-align:right;color:${dy>=6?'#16a34a':dy>=3?'#f59e0b':'var(--text2)'};font-weight:${dy>=3?'700':'400'}">${dy>0?dy.toFixed(1)+'%':'—'}</td>
+      <td style="padding:8px;text-align:right">${c.dividend_score>0?`<span style="font-weight:700;color:${c.dividend_score>=70?'#16a34a':c.dividend_score>=50?'#f59e0b':'var(--text3)'}">${parseFloat(c.dividend_score).toFixed(0)}</span>`:'—'}</td>
+      ${capital>0?`<td style="padding:8px;text-align:right">${c.peso_pct||0}%</td><td style="padding:8px;text-align:right;font-weight:600">R$ ${(c.valor_sugerido||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>`:''}
+    </tr>`;
+  }).join('');
+
+  const linhasFund = candidatos.map(c=>{
+    const fmt  = v => v!=null&&v!=0 ? `${(parseFloat(v)*100).toFixed(1)}%` : '—';
+    const fmtB = v => v!=null&&v!=0 ? parseFloat(v).toFixed(2) : '—';
+    const fmtM = v => v!=null&&v>0  ? `R$ ${(v/1e9).toFixed(1)}B` : '—';
+    const roe  = parseFloat(c.roe||0);
+    return `<tr class="builder-row-${c.ticker}" style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+      <td style="padding:8px 4px;text-align:center">
+        <input type="checkbox" class="builder-check-${c.ticker}" onchange="_toggleBuilderTicker('${c.ticker}',this.checked)"
+          style="width:15px;height:15px;accent-color:var(--green);cursor:pointer">
+      </td>
+      <td style="padding:8px"><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></td>
+      <td style="padding:8px;text-align:right;font-weight:${roe>=0.15?'700':'400'};color:${roe>=0.15?'#16a34a':roe>=0.05?'#f59e0b':'var(--text2)'}">${fmt(c.roe)}</td>
+      <td style="padding:8px;text-align:right">${fmt(c.roic)}</td>
+      <td style="padding:8px;text-align:right;color:${parseFloat(c.margem_liquida||0)>=0.1?'#16a34a':'var(--text2)'}">${fmt(c.margem_liquida)}</td>
+      <td style="padding:8px;text-align:right;color:${parseFloat(c.crescimento_receita||0)>=0?'#16a34a':'#e53935'}">${fmt(c.crescimento_receita)}</td>
+      <td style="padding:8px;text-align:right">${fmtM(c.market_cap)}</td>
+      <td style="padding:8px;text-align:right">${fmtB(c.beta)}</td>
+    </tr>`;
+  }).join('');
+
+  const linhasVal = candidatos.map(c=>{
+    const fmtX = v => v!=null&&parseFloat(v)>0 ? `${parseFloat(v).toFixed(1)}x` : '—';
+    const fmtR = v => v!=null&&parseFloat(v)>0  ? `R$ ${(parseFloat(v)/1e9).toFixed(1)}B` : '—';
+    const pl   = parseFloat(c.pl||0);
+    return `<tr class="builder-row-${c.ticker}" style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+      <td style="padding:8px 4px;text-align:center">
+        <input type="checkbox" class="builder-check-${c.ticker}" onchange="_toggleBuilderTicker('${c.ticker}',this.checked)"
+          style="width:15px;height:15px;accent-color:var(--green);cursor:pointer">
+      </td>
+      <td style="padding:8px"><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></td>
+      <td style="padding:8px;text-align:right;font-weight:600">${c.preco!=null&&c.preco>0?`R$ ${parseFloat(c.preco).toFixed(2)}`:'—'}</td>
+      <td style="padding:8px;text-align:right;color:${pl>0&&pl<15?'#16a34a':pl>30?'#e53935':'var(--text2)'}">${fmtX(c.pl)}</td>
+      <td style="padding:8px;text-align:right;color:${parseFloat(c.pvp||0)<1?'#16a34a':'var(--text2)'}">${fmtX(c.pvp)}</td>
+      <td style="padding:8px;text-align:right">${fmtX(c.ev_ebitda)}</td>
+      <td style="padding:8px;text-align:right;color:var(--text3)">${fmtR(c.divida_total)}</td>
+      <td style="padding:8px;text-align:right">${fmtR(c.patrimonio)}</td>
+    </tr>`;
+  }).join('');
+
   resEl.innerHTML = `
-    <div class="cockpit-card" style="margin-bottom:1rem">
+    <!-- Barra de seleção -->
+    <div id="builder-barra-selecao" style="display:none;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(22,163,74,0.1);border:1px solid var(--green);border-radius:10px;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--green)" id="builder-selecao-cnt">0 selecionados</div>
+      <div style="display:flex;gap:6px">
+        <button onclick="enviarBuilderParaBacktest()" class="btn" style="font-size:12px;padding:6px 12px">🔬 Backtesting</button>
+        <button onclick="enviarBuilderParaCarteira()" class="btn" style="font-size:12px;padding:6px 12px;background:var(--green);color:#fff;border-color:var(--green)">➕ Carteira</button>
+        <button onclick="_builderSelecionarTodos(false)" class="btn" style="font-size:11px;padding:5px 8px;color:#e53935;border-color:#e53935">✕ Limpar</button>
+      </div>
+    </div>
+
+    <div class="cockpit-card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
         <div>
           <div style="font-size:15px;font-weight:700">${candidatos.length} candidatos encontrados</div>
-          <div style="font-size:12px;color:var(--text3)">Referência: ${d.reference_date} · Score mín: ${d.criterios?.score_min} · Score máx: ${d.criterios?.score_max}</div>
+          <div style="font-size:12px;color:var(--text3)">Referência: ${d.reference_date} · Selecione os ativos desejados</div>
         </div>
-        <div style="display:flex;gap:6px">
-          <button onclick="enviarBuilderParaCarteira()" class="btn" style="font-size:12px;padding:6px 12px;border-color:var(--green);color:var(--green)">➕ Carteira</button>
-          <button onclick="enviarBuilderParaBacktest()" class="btn" style="font-size:12px;padding:6px 12px">🔬 Backtesting</button>
-        </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+          <input type="checkbox" onchange="_builderSelecionarTodos(this.checked)" style="accent-color:var(--green)">
+          Selecionar todos
+        </label>
       </div>
 
-      <!-- Abas de visualização -->
+      <!-- Abas -->
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:1rem">
-        ${[
-          ['visao-geral','📊 Visão Geral'],
-          ['fundamentos','📈 Fundamentos'],
-          ['valuation','💰 Valuation'],
-        ].map(([id,lbl],i)=>`
-          <button onclick="trocarAbaBuilder('${id}',this)"
-            id="builder-aba-btn-${id}"
+        ${[['visao-geral','📊 Visão Geral'],['fundamentos','📈 Fundamentos'],['valuation','💰 Valuation']].map(([id,lbl],i)=>`
+          <button onclick="trocarAbaBuilder('${id}',this)" id="builder-aba-btn-${id}"
             style="padding:8px 12px;font-size:11px;font-weight:600;background:none;border:none;cursor:pointer;border-bottom:2px solid ${i===0?'var(--green)':'transparent'};color:${i===0?'var(--green)':'var(--text3)'};font-family:inherit;white-space:nowrap">
             ${lbl}
           </button>`).join('')}
       </div>
 
-      <!-- ABA: Visão Geral -->
+      <!-- Visão Geral -->
       <div id="builder-tab-visao-geral" style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead>
-            <tr style="color:var(--text3);font-size:10px;border-bottom:2px solid var(--border)">
-              <th style="padding:6px 8px;text-align:left">Ativo</th>
-              <th style="padding:6px 8px;text-align:left">Empresa</th>
-              <th style="padding:6px 8px;text-align:left">Setor</th>
-              <th style="padding:6px 8px;text-align:center">Janus Score</th>
-              <th style="padding:6px 8px;text-align:right">DY 12m</th>
-              <th style="padding:6px 8px;text-align:right">Div. Score</th>
-              ${capital>0?'<th style="padding:6px 8px;text-align:right">Peso</th><th style="padding:6px 8px;text-align:right">Valor</th>':''}
-            </tr>
-          </thead>
-          <tbody>
-            ${candidatos.map(c=>{
-              const score = parseFloat(c.score||0);
-              const corScore = score>=80?'#16a34a':score>=60?'#f59e0b':'#e53935';
-              const dy = parseFloat(c.dy_12m||0);
-              return `<tr style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
-                <td style="padding:8px"><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></td>
-                <td style="padding:8px;color:var(--text2);max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome||'—'}</td>
-                <td style="padding:8px;color:var(--text3);font-size:11px">${c.setor||'—'}</td>
-                <td style="padding:8px;text-align:center">
-                  <div style="width:32px;height:32px;border-radius:50%;border:2px solid ${corScore};display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${corScore}">${score>0?score.toFixed(0):'—'}</div>
-                </td>
-                <td style="padding:8px;text-align:right;color:${dy>=6?'#16a34a':dy>=3?'#f59e0b':'var(--text2)'};font-weight:${dy>=3?'700':'400'}">${dy>0?dy.toFixed(1)+'%':'—'}</td>
-                <td style="padding:8px;text-align:right">${c.dividend_score>0?`<span style="font-weight:700;color:${c.dividend_score>=70?'#16a34a':c.dividend_score>=50?'#f59e0b':'var(--text3)'}">${parseFloat(c.dividend_score).toFixed(0)}</span>`:'—'}</td>
-                ${capital>0?`<td style="padding:8px;text-align:right">${c.peso_pct||0}%</td><td style="padding:8px;text-align:right;font-weight:600">R$ ${(c.valor_sugerido||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>`:''}
-              </tr>`;
-            }).join('')}
-          </tbody>
+          <thead><tr style="color:var(--text3);font-size:10px;border-bottom:2px solid var(--border)">
+            <th style="padding:6px 4px;width:30px"></th>
+            <th style="padding:6px 8px;text-align:left">Ativo</th>
+            <th style="padding:6px 8px;text-align:left">Empresa</th>
+            <th style="padding:6px 8px;text-align:left">Setor</th>
+            <th style="padding:6px 8px;text-align:center">Score</th>
+            <th style="padding:6px 8px;text-align:right">DY 12m</th>
+            <th style="padding:6px 8px;text-align:right">Div. Score</th>
+            ${capital>0?'<th style="padding:6px 8px;text-align:right">Peso</th><th style="padding:6px 8px;text-align:right">Valor</th>':''}
+          </tr></thead>
+          <tbody>${linhasGeral}</tbody>
         </table>
       </div>
 
-      <!-- ABA: Fundamentos -->
+      <!-- Fundamentos -->
       <div id="builder-tab-fundamentos" style="display:none;overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead>
-            <tr style="color:var(--text3);font-size:10px;border-bottom:2px solid var(--border)">
-              <th style="padding:6px 8px;text-align:left">Ativo</th>
-              <th style="padding:6px 8px;text-align:right">ROE</th>
-              <th style="padding:6px 8px;text-align:right">ROIC</th>
-              <th style="padding:6px 8px;text-align:right">Margem Liq.</th>
-              <th style="padding:6px 8px;text-align:right">Cresc. Receita</th>
-              <th style="padding:6px 8px;text-align:right">Market Cap</th>
-              <th style="padding:6px 8px;text-align:right">Beta</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${candidatos.map(c=>{
-              const fmt = (v,suffix='%') => v!=null&&v!=0 ? `${(parseFloat(v)*100).toFixed(1)}${suffix}` : '—';
-              const fmtB = (v,suffix='') => v!=null&&v!=0 ? `${parseFloat(v).toFixed(2)}${suffix}` : '—';
-              const fmtM = v => v!=null&&v>0 ? `R$ ${(v/1e9).toFixed(1)}B` : '—';
-              const roe = parseFloat(c.roe||0);
-              return `<tr style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
-                <td style="padding:8px"><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></td>
-                <td style="padding:8px;text-align:right;color:${roe>=0.15?'#16a34a':roe>=0.05?'#f59e0b':'var(--text2)'}font-weight:${roe>=0.1?'700':'400'}">${fmt(c.roe)}</td>
-                <td style="padding:8px;text-align:right">${fmt(c.roic)}</td>
-                <td style="padding:8px;text-align:right;color:${parseFloat(c.margem_liquida||0)>=0.1?'#16a34a':'var(--text2)'}">${fmt(c.margem_liquida)}</td>
-                <td style="padding:8px;text-align:right;color:${parseFloat(c.crescimento_receita||0)>=0?'#16a34a':'#e53935'}">${fmt(c.crescimento_receita)}</td>
-                <td style="padding:8px;text-align:right;color:var(--text2)">${fmtM(c.market_cap)}</td>
-                <td style="padding:8px;text-align:right">${fmtB(c.beta)}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
+          <thead><tr style="color:var(--text3);font-size:10px;border-bottom:2px solid var(--border)">
+            <th style="padding:6px 4px;width:30px"></th>
+            <th style="padding:6px 8px;text-align:left">Ativo</th>
+            <th style="padding:6px 8px;text-align:right">ROE</th>
+            <th style="padding:6px 8px;text-align:right">ROIC</th>
+            <th style="padding:6px 8px;text-align:right">Margem Liq.</th>
+            <th style="padding:6px 8px;text-align:right">Cresc. Receita</th>
+            <th style="padding:6px 8px;text-align:right">Market Cap</th>
+            <th style="padding:6px 8px;text-align:right">Beta</th>
+          </tr></thead>
+          <tbody>${linhasFund}</tbody>
         </table>
       </div>
 
-      <!-- ABA: Valuation -->
+      <!-- Valuation -->
       <div id="builder-tab-valuation" style="display:none;overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead>
-            <tr style="color:var(--text3);font-size:10px;border-bottom:2px solid var(--border)">
-              <th style="padding:6px 8px;text-align:left">Ativo</th>
-              <th style="padding:6px 8px;text-align:right">Preço</th>
-              <th style="padding:6px 8px;text-align:right">P/L</th>
-              <th style="padding:6px 8px;text-align:right">P/VP</th>
-              <th style="padding:6px 8px;text-align:right">EV/EBITDA</th>
-              <th style="padding:6px 8px;text-align:right">Dívida Total</th>
-              <th style="padding:6px 8px;text-align:right">Patrimônio</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${candidatos.map(c=>{
-              const fmtX = v => v!=null&&parseFloat(v)>0 ? `${parseFloat(v).toFixed(1)}x` : '—';
-              const fmtR = v => v!=null&&parseFloat(v)>0 ? `R$ ${(parseFloat(v)/1e9).toFixed(1)}B` : '—';
-              const pl = parseFloat(c.pl||0);
-              return `<tr style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
-                <td style="padding:8px"><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></td>
-                <td style="padding:8px;text-align:right;font-weight:600">${c.preco!=null&&c.preco>0?`R$ ${parseFloat(c.preco).toFixed(2)}`:'—'}</td>
-                <td style="padding:8px;text-align:right;color:${pl>0&&pl<15?'#16a34a':pl>30?'#e53935':'var(--text2)'}">${fmtX(c.pl)}</td>
-                <td style="padding:8px;text-align:right;color:${parseFloat(c.pvp||0)<1?'#16a34a':'var(--text2)'}">${fmtX(c.pvp)}</td>
-                <td style="padding:8px;text-align:right">${fmtX(c.ev_ebitda)}</td>
-                <td style="padding:8px;text-align:right;color:var(--text3)">${fmtR(c.divida_total)}</td>
-                <td style="padding:8px;text-align:right">${fmtR(c.patrimonio)}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
+          <thead><tr style="color:var(--text3);font-size:10px;border-bottom:2px solid var(--border)">
+            <th style="padding:6px 4px;width:30px"></th>
+            <th style="padding:6px 8px;text-align:left">Ativo</th>
+            <th style="padding:6px 8px;text-align:right">Preço</th>
+            <th style="padding:6px 8px;text-align:right">P/L</th>
+            <th style="padding:6px 8px;text-align:right">P/VP</th>
+            <th style="padding:6px 8px;text-align:right">EV/EBITDA</th>
+            <th style="padding:6px 8px;text-align:right">Dívida</th>
+            <th style="padding:6px 8px;text-align:right">Patrimônio</th>
+          </tr></thead>
+          <tbody>${linhasVal}</tbody>
         </table>
       </div>
-
     </div>`;
 }
 
@@ -4775,22 +4823,66 @@ function trocarAbaBuilder(aba, btn){
 }
 
 function enviarBuilderParaBacktest(){
-  if(!_builderResultado?.candidatos?.length) return;
-  const tickers = _builderResultado.candidatos.slice(0,10).map(c=>c.ticker);
-  // Adiciona tickers na lista do backtesting
+  const tickers = _builderSelecionados.size > 0
+    ? [..._builderSelecionados]
+    : (_builderResultado?.candidatos||[]).slice(0,10).map(c=>c.ticker);
+  if(!tickers.length){ alert('Selecione ao menos um ativo'); return; }
   _btTickers = tickers;
   _renderBtTickers();
   goPage('backtesting', document.querySelector('.tab[onclick*="backtesting"]'));
-  // Toast
   const toast = document.createElement('div');
   toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:12px 24px;border-radius:24px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
-  toast.textContent = `🔬 ${tickers.length} ativos carregados no Backtesting!`;
+  toast.textContent = `🔬 ${tickers.length} ativo${tickers.length>1?'s':''} carregado${tickers.length>1?'s':''} no Backtesting!`;
   document.body.appendChild(toast);
   setTimeout(()=>toast.remove(), 3000);
 }
 
-function enviarBuilderParaCarteira(){
-  alert('Em breve: adicionar ativos do Builder diretamente à sua Carteira Janus!');
+async function enviarBuilderParaCarteira(){
+  const tickers = _builderSelecionados.size > 0
+    ? [..._builderSelecionados]
+    : (_builderResultado?.candidatos||[]).map(c=>c.ticker);
+  if(!tickers.length){ alert('Selecione ao menos um ativo'); return; }
+
+  const capital = _builderResultado?.criterios?.capital || 0;
+  const candidatos = _builderResultado?.candidatos || [];
+
+  const confirmMsg = `Adicionar ${tickers.length} ativo${tickers.length>1?'s':''} à carteira?\n\n${tickers.join(', ')}\n\n${capital>0?'Os valores sugeridos serão usados como preço médio de referência.':'Quantidade e preço médio serão 0 — edite depois na Carteira.'}`;
+  if(!confirm(confirmMsg)) return;
+
+  let ok = 0, erros = [];
+  for(const ticker of tickers){
+    const c = candidatos.find(x=>x.ticker===ticker) || {};
+    try{
+      const r = await fetch('/api/carteira', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          ticker,
+          preco_medio: c.preco || 0,
+          quantidade:  0,
+          data_compra: '',
+          corretora:   'Builder Janus'
+        })
+      });
+      const d = await r.json();
+      if(d.ok || !d.erro) ok++;
+      else erros.push(`${ticker}: ${d.erro}`);
+    }catch(e){ erros.push(ticker); }
+  }
+
+  const toast = document.createElement('div');
+  toast.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:${ok>0?'#16a34a':'#e53935'};color:#fff;padding:12px 24px;border-radius:24px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);max-width:80vw;text-align:center`;
+  toast.textContent = ok > 0
+    ? `✅ ${ok} ativo${ok>1?'s':''} adicionado${ok>1?'s':''} à carteira!${erros.length?` (${erros.length} erro${erros.length>1?'s':''})`:''}`
+    : `❌ Erro ao adicionar ativos`;
+  document.body.appendChild(toast);
+  setTimeout(()=>toast.remove(), 4000);
+
+  if(ok > 0){
+    // Navega para a carteira após 1s
+    setTimeout(()=>{
+      goPage('carteira', document.querySelector('.tab[onclick*="carteira"]'));
+    }, 1000);
+  }
 }
 
 function toggleMenuSec(){
