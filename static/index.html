@@ -1022,19 +1022,36 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
             <div class="cockpit-card">
               <div class="cockpit-card-title">4️⃣ Fundamentos <span style="font-size:10px;font-weight:400;color:var(--text3)">(opcional)</span></div>
               <div style="display:flex;flex-direction:column;gap:8px">
-                ${[
-                  ['builder-roe-min',   'ROE mínimo (%)', '0'],
-                  ['builder-roic-min',  'ROIC mínimo (%)', '0'],
-                  ['builder-margem-min','Margem Líquida mínima (%)', '0'],
-                  ['builder-pl-max',   'P/L máximo (x)', ''],
-                  ['builder-pvp-max',  'P/VP máximo (x)', ''],
-                  ['builder-ev-max',   'EV/EBITDA máximo (x)', ''],
-                ].map(([id, lbl, val])=>`
-                  <div>
-                    <label style="font-size:11px;color:var(--text2)">${lbl}</label>
-                    <input type="number" id="${id}" value="${val}" min="0" step="0.5" placeholder="Sem filtro"
-                      style="width:100%;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--text);margin-top:3px">
-                  </div>`).join('')}
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">ROE mínimo (%)</label>
+                  <input type="number" id="builder-roe-min" value="0" min="0" step="0.5" placeholder="Sem filtro"
+                    style="width:100%;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--text);margin-top:3px">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">ROIC mínimo (%)</label>
+                  <input type="number" id="builder-roic-min" value="0" min="0" step="0.5" placeholder="Sem filtro"
+                    style="width:100%;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--text);margin-top:3px">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">Margem Líquida mínima (%)</label>
+                  <input type="number" id="builder-margem-min" value="0" min="0" step="0.5" placeholder="Sem filtro"
+                    style="width:100%;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--text);margin-top:3px">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">P/L máximo (x)</label>
+                  <input type="number" id="builder-pl-max" value="" min="0" step="0.5" placeholder="Sem filtro"
+                    style="width:100%;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--text);margin-top:3px">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">P/VP máximo (x)</label>
+                  <input type="number" id="builder-pvp-max" value="" min="0" step="0.5" placeholder="Sem filtro"
+                    style="width:100%;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--text);margin-top:3px">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text2)">EV/EBITDA máximo (x)</label>
+                  <input type="number" id="builder-ev-max" value="" min="0" step="0.5" placeholder="Sem filtro"
+                    style="width:100%;padding:6px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--card);color:var(--text);margin-top:3px">
+                </div>
               </div>
             </div>
 
