@@ -4674,8 +4674,14 @@ function _renderBuilderResultado(d){
         <input type="checkbox" class="builder-check-${c.ticker}" onchange="_toggleBuilderTicker('${c.ticker}',this.checked)"
           style="width:15px;height:15px;accent-color:var(--green);cursor:pointer">
       </td>
-      <td style="padding:8px"><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></td>
-      <td style="padding:8px;color:var(--text2);max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome||'—'}</td>
+      <td style="padding:8px">
+        <div style="display:flex;align-items:center;gap:7px">
+          <div style="width:28px;height:28px;border-radius:6px;overflow:hidden;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--text3)">
+            <img src="https://icons.brapi.dev/icons/${c.ticker}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent='${c.ticker.substring(0,4)}'">
+          </div>
+          <div><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></div>
+        </div>
+      </td>
       <td style="padding:8px;color:var(--text3);font-size:11px">${c.setor||'—'}</td>
       <td style="padding:8px;text-align:center">
         <div style="width:30px;height:30px;border-radius:50%;border:2px solid ${corScore};display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${corScore}">${score>0?score.toFixed(0):'—'}</div>
@@ -4696,7 +4702,14 @@ function _renderBuilderResultado(d){
         <input type="checkbox" class="builder-check-${c.ticker}" onchange="_toggleBuilderTicker('${c.ticker}',this.checked)"
           style="width:15px;height:15px;accent-color:var(--green);cursor:pointer">
       </td>
-      <td style="padding:8px"><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></td>
+      <td style="padding:8px">
+        <div style="display:flex;align-items:center;gap:7px">
+          <div style="width:28px;height:28px;border-radius:6px;overflow:hidden;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--text3)">
+            <img src="https://icons.brapi.dev/icons/${c.ticker}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent='${c.ticker.substring(0,4)}'">
+          </div>
+          <div><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></div>
+        </div>
+      </td>
       <td style="padding:8px;text-align:right;font-weight:${roe>=0.15?'700':'400'};color:${roe>=0.15?'#16a34a':roe>=0.05?'#f59e0b':'var(--text2)'}">${fmt(c.roe)}</td>
       <td style="padding:8px;text-align:right">${fmt(c.roic)}</td>
       <td style="padding:8px;text-align:right;color:${parseFloat(c.margem_liquida||0)>=0.1?'#16a34a':'var(--text2)'}">${fmt(c.margem_liquida)}</td>
@@ -4715,7 +4728,14 @@ function _renderBuilderResultado(d){
         <input type="checkbox" class="builder-check-${c.ticker}" onchange="_toggleBuilderTicker('${c.ticker}',this.checked)"
           style="width:15px;height:15px;accent-color:var(--green);cursor:pointer">
       </td>
-      <td style="padding:8px"><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></td>
+      <td style="padding:8px">
+        <div style="display:flex;align-items:center;gap:7px">
+          <div style="width:28px;height:28px;border-radius:6px;overflow:hidden;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--text3)">
+            <img src="https://icons.brapi.dev/icons/${c.ticker}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent='${c.ticker.substring(0,4)}'">
+          </div>
+          <div><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></div>
+        </div>
+      </td>
       <td style="padding:8px;text-align:right;font-weight:600">${c.preco!=null&&c.preco>0?`R$ ${parseFloat(c.preco).toFixed(2)}`:'—'}</td>
       <td style="padding:8px;text-align:right;color:${pl>0&&pl<15?'#16a34a':pl>30?'#e53935':'var(--text2)'}">${fmtX(c.pl)}</td>
       <td style="padding:8px;text-align:right;color:${parseFloat(c.pvp||0)<1?'#16a34a':'var(--text2)'}">${fmtX(c.pvp)}</td>
