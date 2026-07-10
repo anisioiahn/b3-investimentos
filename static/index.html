@@ -5103,6 +5103,9 @@ function _renderBuilderResultado(d){
     const score = parseFloat(c.score||0);
     const corScore = score>=80?'#16a34a':score>=60?'#f59e0b':'#e53935';
     const dy = parseFloat(c.dy_12m||0);
+    const setor = _setorPtBR[c.setor] || c.setor || '—';
+    const risco = parseFloat(c.risk_score||0);
+    const corRisco = risco<=20?'#16a34a':risco<=40?'#22c55e':risco<=60?'#f59e0b':risco<=80?'#f97316':'#e53935';
     return `<tr class="builder-row-${c.ticker}" style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
       <td style="padding:8px 4px;text-align:center">
         <input type="checkbox" class="builder-check-${c.ticker}" onchange="_toggleBuilderTicker('${c.ticker}',this.checked)"
@@ -5116,9 +5119,15 @@ function _renderBuilderResultado(d){
           <div><div style="font-weight:700">${c.ticker}</div><div style="font-size:10px;color:var(--text3)">${c.asset_type}</div></div>
         </div>
       </td>
-      <td style="padding:8px;color:var(--text3);font-size:11px">${c.setor||'—'}</td>
+      <td style="padding:8px;color:var(--text2);font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nome||'—'}</td>
+      <td style="padding:8px;color:var(--text3);font-size:11px;white-space:nowrap">${setor}</td>
       <td style="padding:8px;text-align:center">
         <div style="width:30px;height:30px;border-radius:50%;border:2px solid ${corScore};display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${corScore}">${score>0?score.toFixed(0):'—'}</div>
+      </td>
+      <td style="padding:8px;text-align:center">
+        ${risco>0?`<span onclick="abrirDetalheRisco('${c.ticker}')" title="Score de Risco — clique para detalhes"
+          style="font-size:11px;font-weight:700;color:${corRisco};cursor:pointer;padding:2px 6px;border-radius:10px;background:${corRisco}18">
+          🛡️${risco.toFixed(0)}</span>`:'—'}
       </td>
       <td style="padding:8px;text-align:right;color:${dy>=6?'#16a34a':dy>=3?'#f59e0b':'var(--text2)'};font-weight:${dy>=3?'700':'400'}">${dy>0?dy.toFixed(1)+'%':'—'}</td>
       <td style="padding:8px;text-align:right">${c.dividend_score>0?`<span style="font-weight:700;color:${c.dividend_score>=70?'#16a34a':c.dividend_score>=50?'#f59e0b':'var(--text3)'}">${parseFloat(c.dividend_score).toFixed(0)}</span>`:'—'}</td>
@@ -5220,6 +5229,7 @@ function _renderBuilderResultado(d){
             <th style="padding:6px 8px;text-align:left">Empresa</th>
             <th style="padding:6px 8px;text-align:left">Setor</th>
             <th style="padding:6px 8px;text-align:center">Score</th>
+            <th style="padding:6px 8px;text-align:center">Risco</th>
             <th style="padding:6px 8px;text-align:right">DY 12m</th>
             <th style="padding:6px 8px;text-align:right">Div. Score</th>
             ${capital>0?'<th style="padding:6px 8px;text-align:right">Peso</th><th style="padding:6px 8px;text-align:right">Valor</th>':''}
