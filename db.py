@@ -2314,89 +2314,92 @@ def db_risk_score_ativo(ticker):
             if not ref or not ref['dt']: return None
             ref_date = ref['dt']
 
+            # Busca asset_id
+            cur.execute("SELECT asset_id FROM assets WHERE ticker=%s LIMIT 1", (ticker,))
+            asset = cur.fetchone()
+            if not asset: return None
+            asset_id = asset['asset_id']
+
+            # Busca dados de mercado e financeiros
             cur.execute("""
-                WITH
-                volatilidade AS (
-                    SELECT ticker,
-                        STDDEV(
-                            (close - LAG(close) OVER (PARTITION BY ticker ORDER BY data))
-                            / NULLIF(LAG(close) OVER (PARTITION BY ticker ORDER BY data), 0)
-                        ) * 100 as vol_diaria
-                    FROM historico_precos
-                    WHERE intervalo = '1d' AND ticker = %s
-                      AND data >= CURRENT_DATE - INTERVAL '30 days'
-                    GROUP BY ticker
-                ),
-                drawdown AS (
-                    SELECT ticker,
-                        MIN(
-                            (close - MAX(close) OVER (PARTITION BY ticker ORDER BY data
-                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW))
-                            / NULLIF(MAX(close) OVER (PARTITION BY ticker ORDER BY data
-                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW), 0)
-                        ) * 100 as drawdown_max
-                    FROM historico_precos
-                    WHERE intervalo = '1d' AND ticker = %s
-                      AND data >= CURRENT_DATE - INTERVAL '2 years'
-                    GROUP BY ticker
-                )
-                SELECT
-                    COALESCE(v.vol_diaria, 3) as volatilidade,
-                    COALESCE(ms.beta, 1) as beta,
-                    fs.total_debt, fs.ebitda,
-                    COALESCE(fs.total_debt / NULLIF(fs.ebitda, 0), 0) as divida_ebitda,
-                    ABS(COALESCE(d.drawdown_max, 0)) as drawdown,
-                    ms.volume
-                FROM ranking_snapshots r
-                JOIN assets a ON a.asset_id = r.asset_id
+                SELECT ms.beta, ms.volume,
+                       fs.total_debt, fs.ebitda
+                FROM assets a
                 LEFT JOIN market_snapshots ms ON ms.asset_id = a.asset_id
-                    AND ms.reference_date = r.reference_date
+                    AND ms.reference_date = %s
                 LEFT JOIN financial_snapshots fs ON fs.asset_id = a.asset_id
-                    AND fs.reference_date = r.reference_date
-                LEFT JOIN volatilidade v ON v.ticker = a.ticker
-                LEFT JOIN drawdown d ON d.ticker = a.ticker
-                WHERE r.reference_date = %s AND a.ticker = %s
+                    AND fs.reference_date = %s
+                WHERE a.asset_id = %s
                 LIMIT 1
-            """, (ticker, ticker, ref_date, ticker))
-            row = cur.fetchone()
-            if not row: return None
-            row = dict(row)
+            """, (ref_date, ref_date, asset_id))
+            dados = cur.fetchone()
 
-            # Calcula score e pontos por componente
-            vol   = float(row['volatilidade'] or 3)
-            beta  = float(row['beta'] or 1)
-            div_e = float(row['divida_ebitda'] or 0)
-            dd    = float(row['drawdown'] or 0)
-            vol_m = float(row['volume'] or 0)
+            # Volatilidade 30 dias
+            cur.execute("""
+                SELECT STDDEV(
+                    (close - LAG(close) OVER (ORDER BY data))
+                    / NULLIF(LAG(close) OVER (ORDER BY data), 0)
+                ) * 100 as vol_diaria
+                FROM historico_precos
+                WHERE ticker=%s AND intervalo='1d'
+                  AND data >= CURRENT_DATE - INTERVAL '30 days'
+            """, (ticker,))
+            vol_row = cur.fetchone()
 
-            pts_vol   = min(25, vol / 3 * 25)
-            pts_beta  = min(20, max(0, beta) / 2 * 20)
-            pts_divid = min(20, max(0, div_e) / 5 * 20)
-            pts_dd    = min(20, dd / 60 * 20)
-            pts_liq   = max(0, 15 - min(15, vol_m / 5000000 * 15))
+            # Drawdown máximo 2 anos
+            cur.execute("""
+                SELECT MIN(
+                    (close - MAX(close) OVER (ORDER BY data
+                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW))
+                    / NULLIF(MAX(close) OVER (ORDER BY data
+                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT_ROW), 0)
+                ) * 100 as drawdown_max
+                FROM historico_precos
+                WHERE ticker=%s AND intervalo='1d'
+                  AND data >= CURRENT_DATE - INTERVAL '2 years'
+            """, (ticker,))
+            dd_row = cur.fetchone()
 
-            risk_score = round(min(100, max(0,
-                pts_vol + pts_beta + pts_divid + pts_dd + pts_liq)), 1)
+        conn.close()
 
-            label = ('🟢 Muito Baixo' if risk_score <= 20 else
-                     '🟢 Baixo'       if risk_score <= 40 else
-                     '🟡 Moderado'    if risk_score <= 60 else
-                     '🟠 Alto'        if risk_score <= 80 else
-                     '🔴 Muito Alto')
+        d = dados or {}
+        vol   = float(vol_row['vol_diaria'] or 3) if vol_row and vol_row['vol_diaria'] else 3.0
+        beta  = float(d.get('beta') or 1)
+        total_debt = float(d.get('total_debt') or 0)
+        ebitda_val = float(d.get('ebitda') or 0)
+        div_e = (total_debt / ebitda_val) if ebitda_val > 0 else 0
+        dd    = abs(float(dd_row['drawdown_max'] or 0)) if dd_row and dd_row['drawdown_max'] else 20.0
+        vol_m = float(d.get('volume') or 0)
 
-            return {
-                'risk_score': risk_score,
-                'label': label,
-                'detalhes': {
-                    'volatilidade':  {'valor': round(vol, 2),   'pts': round(pts_vol, 1),   'max': 25, 'unidade': '%/dia'},
-                    'beta':          {'valor': round(beta, 2),  'pts': round(pts_beta, 1),  'max': 20, 'unidade': 'x'},
-                    'divida_ebitda': {'valor': round(div_e, 2), 'pts': round(pts_divid, 1), 'max': 20, 'unidade': 'x'},
-                    'drawdown':      {'valor': round(dd, 1),    'pts': round(pts_dd, 1),    'max': 20, 'unidade': '%'},
-                    'liquidez':      {'valor': round(vol_m/1e6, 1), 'pts': round(pts_liq, 1), 'max': 15, 'unidade': 'M/dia'},
-                }
+        pts_vol   = min(25, vol / 3 * 25)
+        pts_beta  = min(20, max(0, beta) / 2 * 20)
+        pts_divid = min(20, max(0, div_e) / 5 * 20)
+        pts_dd    = min(20, dd / 60 * 20)
+        pts_liq   = max(0, 15 - min(15, vol_m / 5000000 * 15))
+
+        risk_score = round(min(100, max(0,
+            pts_vol + pts_beta + pts_divid + pts_dd + pts_liq)), 1)
+
+        label = ('🟢 Muito Baixo' if risk_score <= 20 else
+                 '🟢 Baixo'       if risk_score <= 40 else
+                 '🟡 Moderado'    if risk_score <= 60 else
+                 '🟠 Alto'        if risk_score <= 80 else
+                 '🔴 Muito Alto')
+
+        return {
+            'risk_score': risk_score,
+            'label': label,
+            'detalhes': {
+                'volatilidade':  {'valor': round(vol, 2),   'pts': round(pts_vol, 1),   'max': 25, 'unidade': '%/dia'},
+                'beta':          {'valor': round(beta, 2),  'pts': round(pts_beta, 1),  'max': 20, 'unidade': 'x'},
+                'divida_ebitda': {'valor': round(div_e, 2), 'pts': round(pts_divid, 1), 'max': 20, 'unidade': 'x'},
+                'drawdown':      {'valor': round(dd, 1),    'pts': round(pts_dd, 1),    'max': 20, 'unidade': '%'},
+                'liquidez':      {'valor': round(vol_m/1e6, 1), 'pts': round(pts_liq, 1), 'max': 15, 'unidade': 'M/dia'},
             }
+        }
     except Exception as e:
         print(f"[DB] Erro risk ativo: {e}", flush=True)
         return None
     finally:
-        conn.close()
+        try: conn.close()
+        except: pass
