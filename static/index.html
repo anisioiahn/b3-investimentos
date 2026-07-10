@@ -2807,22 +2807,25 @@ function calcularJanusPulse(){
   const setores = Object.values(DADOS.setores||{});
   if(!setores.length) return;
 
-  const todasEmpresas = setores.flatMap(s=>s.empresas||[]).filter(e=>e.preco!=null);
+  // Usa APENAS ativos com cotação real (não fallback D-1)
+  const todasEmpresas = setores.flatMap(s=>s.empresas||[]).filter(e=>e.preco!=null && !e.fallback);
   if(!todasEmpresas.length) return;
 
-  // 1. Força setorial (30%) — % de ativos em alta por setor, média entre setores
+  // 1. Força setorial (30%) — % de ativos em alta por setor (só cotação real)
   const forcaSetorial = setores.map(s=>{
-    const emps = s.empresas?.filter(e=>e.preco!=null)||[];
-    if(!emps.length) return 0;
+    const emps = s.empresas?.filter(e=>e.preco!=null && !e.fallback)||[];
+    if(!emps.length) return null; // ignora setor sem cotação real
     return emps.filter(e=>(e.variacao||0)>0).length / emps.length * 100;
-  });
-  const mediaForca = forcaSetorial.reduce((a,b)=>a+b,0) / forcaSetorial.length;
+  }).filter(v=>v!==null);
+  const mediaForca = forcaSetorial.length > 0
+    ? forcaSetorial.reduce((a,b)=>a+b,0) / forcaSetorial.length
+    : 50;
 
-  // 2. Amplitude (20%) — % de todos os ativos em alta
+  // 2. Amplitude (20%) — % de todos os ativos em alta (só cotação real)
   const emAlta = todasEmpresas.filter(e=>(e.variacao||0)>0).length;
   const amplitude = emAlta / todasEmpresas.length * 100;
 
-  // 3. Momentum (20%) — variação média ponderada pelo volume/preço
+  // 3. Momentum (20%) — variação média (só cotação real)
   const variacoes = todasEmpresas.map(e=>e.variacao||0).filter(v=>!isNaN(v));
   const momentum = variacoes.length > 0
     ? variacoes.reduce((a,b)=>a+b,0) / variacoes.length
@@ -2835,7 +2838,7 @@ function calcularJanusPulse(){
   const scoreMedio = scores.length > 0
     ? scores.reduce((a,b)=>a+b,0) / scores.length
     : null;
-  const scoreNorm = scoreMedio !== null ? scoreMedio : 50; // já é 0-100
+  const scoreNorm = scoreMedio !== null ? scoreMedio : 50;
 
   // Pulse final ponderado
   const pulse = Math.round(
