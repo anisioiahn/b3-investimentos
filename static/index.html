@@ -4102,6 +4102,11 @@ async function carregarBtHistorico(){
                   style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3);margin-right:4px"
                   onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'"
                   onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">📊</button>
+                <button onclick="adicionarSimulacaoCarteira(${b.id})"
+                  title="Adicionar ativos à carteira"
+                  style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3);margin-right:4px"
+                  onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'"
+                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">➕</button>
                 <button onclick="publicarSimulacao(${b.id},'${b.estrategia}','${ticker}')"
                   title="${publicada ? 'Já publicada' : 'Publicar na comunidade'}"
                   ${publicada ? 'disabled style="opacity:.4;cursor:not-allowed;' : 'style="'}background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3);margin-right:4px"
@@ -4333,6 +4338,97 @@ async function excluirDaComunidade(eid){
   } else {
     alert('❌ Erro ao remover da comunidade');
   }
+}
+
+async function adicionarSimulacaoCarteira(btId){
+  // Busca resultado da simulação
+  const r = await fetch(`/api/backtesting/resultado/${btId}`);
+  const resultado = await r.json();
+  if(resultado.erro){ alert('❌ Erro ao carregar simulação'); return; }
+
+  // Extrai tickers
+  const tickers = resultado.tickers || (resultado.ticker ? [resultado.ticker] : []);
+  if(!tickers.length){ alert('Nenhum ativo encontrado nesta simulação'); return; }
+
+  // Busca categorias disponíveis
+  const rc = await fetch('/api/carteira/categorias');
+  const cats = await rc.json();
+
+  // Monta modal
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;width:100%;max-width:440px;padding:1.5rem;box-shadow:0 16px 48px rgba(0,0,0,.3)" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <div style="font-size:15px;font-weight:700">➕ Adicionar à Carteira</div>
+        <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text3)">✕</button>
+      </div>
+
+      <!-- Ativos -->
+      <div style="margin-bottom:1rem">
+        <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">Ativos da simulação</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${tickers.map(t=>`
+            <label style="display:flex;align-items:center;gap:4px;padding:4px 10px;background:var(--bg);border-radius:20px;cursor:pointer;font-size:12px">
+              <input type="checkbox" class="bt-add-ticker" value="${t}" checked style="accent-color:var(--green)">
+              <div class="ji-logo" style="background:#0066cc;width:20px;height:20px;font-size:7px">${ji_logoHtml(t)}</div>
+              ${t}
+            </label>`).join('')}
+        </div>
+      </div>
+
+      <!-- Categoria -->
+      <div style="margin-bottom:1.25rem">
+        <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:6px">Categoria de destino</label>
+        <select id="bt-add-categoria" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;font-size:13px;background:var(--card);color:var(--text)">
+          <option value="">📁 Geral (padrão)</option>
+          ${(cats||[]).map(c=>`<option value="${c.id}">${c.icone||'📁'} ${c.nome}</option>`).join('')}
+        </select>
+      </div>
+
+      <button onclick="confirmarAdicionarSimulacao(this)"
+        style="width:100%;padding:12px;border:none;border-radius:10px;background:var(--green);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">
+        ➕ Adicionar Selecionados
+      </button>
+    </div>`;
+  modal.onclick = ()=>modal.remove();
+  document.body.appendChild(modal);
+}
+
+async function confirmarAdicionarSimulacao(btn){
+  const modal = btn.closest('[style*=fixed]');
+  const tickers = [...modal.querySelectorAll('.bt-add-ticker:checked')].map(c=>c.value);
+  if(!tickers.length){ alert('Selecione pelo menos um ativo'); return; }
+
+  const catId = modal.querySelector('#bt-add-categoria').value || null;
+  btn.disabled = true; btn.textContent = '⏳ Adicionando...';
+
+  let ok = 0, ignorados = 0;
+  for(const ticker of tickers){
+    try{
+      const r = await fetch('/api/carteira', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          ticker,
+          preco_medio:  0,
+          quantidade:   0,
+          data_compra:  new Date().toISOString().split('T')[0],
+          corretora:    'Backtesting Janus',
+          categoria_id: catId ? parseInt(catId) : null,
+        })
+      });
+      const d = await r.json();
+      if(d.ok || !d.erro) ok++;
+      else ignorados++;
+    }catch(e){ ignorados++; }
+  }
+
+  modal.remove();
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:12px 24px;border-radius:24px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+  toast.textContent = `✅ ${ok} ativo${ok>1?'s':''} adicionado${ok>1?'s':''} à carteira${ignorados>0?` (${ignorados} ignorado${ignorados>1?'s':''})`:''}.`;
+  document.body.appendChild(toast);
+  setTimeout(()=>toast.remove(), 4000);
 }
 
 async function verResultadoSimulacao(btId){
