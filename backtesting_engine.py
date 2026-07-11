@@ -744,21 +744,14 @@ def executar_backtest_multiplos(params):
 
         resultados_individuais[ticker] = resultado
 
-        # Consolida curva de patrimônio
+        # Consolida curva de patrimônio — guarda por ticker para alinhar depois
         curva = resultado.get('curva_patrimonio', {})
         valores = curva.get('valores', [])
         datas   = curva.get('datas',   [])
 
-        if patrimonio_consolidado is None:
-            patrimonio_consolidado = valores.copy()
-            datas_ref = datas
-        else:
-            # Soma alinhando por data
-            for i, (d, v) in enumerate(zip(datas, valores)):
-                if i < len(patrimonio_consolidado):
-                    patrimonio_consolidado[i] += v
-                else:
-                    patrimonio_consolidado.append(v)
+        if datas:
+            resultados_individuais[ticker]['_datas']   = datas
+            resultados_individuais[ticker]['_valores']  = valores
 
         # Adiciona operações com ticker identificado
         for op in resultado.get('operacoes', []):
@@ -767,6 +760,30 @@ def executar_backtest_multiplos(params):
 
     if not resultados_individuais:
         return {'erro': 'Nenhum ativo retornou dados para o período'}
+
+    # Consolida patrimônio alinhando por data
+    # Usa union de todas as datas e interpola (forward fill) valores faltantes
+    from collections import defaultdict
+    todas_datas = sorted(set(
+        d for r in resultados_individuais.values()
+        for d in r.get('_datas', [])
+    ))
+
+    # Para cada ativo, cria dict data→valor com forward fill
+    patrimonio_por_data = defaultdict(float)
+    for ticker, res in resultados_individuais.items():
+        datas_t  = res.get('_datas', [])
+        valores_t= res.get('_valores', [])
+        if not datas_t: continue
+        data_val = dict(zip(datas_t, valores_t))
+        ultimo_val = valores_t[0] if valores_t else 0
+        for d in todas_datas:
+            if d in data_val:
+                ultimo_val = data_val[d]
+            patrimonio_por_data[d] += ultimo_val
+
+    datas_ref = todas_datas
+    patrimonio_consolidado = [round(patrimonio_por_data[d], 2) for d in todas_datas]
 
     # Métricas consolidadas
     metricas = calcular_metricas(
