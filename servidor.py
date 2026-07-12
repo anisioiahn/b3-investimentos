@@ -2392,7 +2392,8 @@ def api_carteira_post():
             setor_id,setor_nome = sid,s["nome"]; break
     db.db_salvar_posicao(uid(), ticker, nome, cor, setor_id, setor_nome,
         float(d.get("preco_medio",0)), float(d.get("quantidade",0)),
-        d.get("data_compra",""), d.get("corretora",""))
+        d.get("data_compra",""), d.get("corretora",""),
+        d.get("categoria_id") or None)
     return jsonify({"ok":True})
 
 @app.route("/api/carteira/<ticker>", methods=["DELETE"])
