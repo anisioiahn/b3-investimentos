@@ -5826,6 +5826,10 @@ async function carregarVersao(){
     const r = await fetch('/api/versao');
     const d = await r.json();
     const txt = `v${d.versao} · build ${d.build}`;
+    // Header logado
+    const av = document.getElementById('app-version');
+    if(av) av.textContent = `v${d.versao} · ${d.build}`;
+    // One-page header e footer
     const h = document.getElementById('versao-header');
     const f = document.getElementById('versao-footer');
     if(h) h.textContent = txt + ' · B3 Intelligence';
