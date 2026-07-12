@@ -8,6 +8,9 @@ from buscar_cotacoes import buscar_noticias_rss, SETOR_MAP, cor_para_ticker
 import db, auth
 
 VERSION = "3.1.0"
+import os
+BUILD_HASH = os.environ.get('RENDER_GIT_COMMIT', 'local')[:7]
+BUILD_INFO = f"{VERSION}·{BUILD_HASH}"
 TZ_BRASILIA = timezone(timedelta(hours=-3))
 def agora(): return datetime.now(TZ_BRASILIA)
 
@@ -2758,6 +2761,10 @@ def api_admin_config_post():
     for chave, valor in (request.json or {}).items():
         db.db_set_config(chave, valor)
     return jsonify({"ok":True})
+
+@app.route("/api/versao")
+def api_versao():
+    return jsonify({"versao": VERSION, "build": BUILD_HASH, "info": BUILD_INFO})
 
 @app.route("/api/ping", methods=["POST"])
 @requer_auth
