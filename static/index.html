@@ -3007,13 +3007,18 @@ async function gerarAjiaCockpit(btn){
 
 // Mudanças do Dia
 async function carregarMudancasDia(){
+  const frame = document.getElementById('cockpit-mudancas-frame');
+  // Verifica se mercado está aberto (seg-sex, 10h-18h, horário de Brasília)
+  const horaBR = new Date(new Date().toLocaleString('en-US', {timeZone:'America/Sao_Paulo'}));
+  const diaSemana = horaBR.getDay(); // 0=dom, 6=sab
+  const hora = horaBR.getHours();
+  const mercadoAberto = diaSemana >= 1 && diaSemana <= 5 && hora >= 10 && hora < 18;
+  if(!mercadoAberto){ if(frame) frame.style.display='none'; return; }
   try{
     const r = await fetch('/api/cockpit/mudancas');
     const mudancas = await r.json();
-    const frame = document.getElementById('cockpit-mudancas-frame');
-    const el    = document.getElementById('cockpit-mudancas');
+    const el = document.getElementById('cockpit-mudancas');
     if(!mudancas?.length || !el){ if(frame) frame.style.display='none'; return; }
-
     frame.style.display = 'block';
     const cores = {alta:'#16a34a', baixa:'#e53935', janus:'#7c3aed', dividendo:'#f59e0b', alerta:'#e53935'};
     el.innerHTML = mudancas.map(m=>{
@@ -5815,6 +5820,19 @@ function _atualizarMenuAtivo(pagina){
   }
 }
 
+// Busca versão do servidor e atualiza UI
+async function carregarVersao(){
+  try{
+    const r = await fetch('/api/versao');
+    const d = await r.json();
+    const txt = `v${d.versao} · build ${d.build}`;
+    const h = document.getElementById('versao-header');
+    const f = document.getElementById('versao-footer');
+    if(h) h.textContent = txt + ' · B3 Intelligence';
+    if(f) f.textContent = `Janus ${txt} · B3 Investment Intelligence Platform · 2026`;
+  }catch(e){}
+}
+
 function toggleMenuSec(){
   const m = document.getElementById('menu-sec');
   const o = document.getElementById('menu-sec-overlay');
@@ -8427,11 +8445,36 @@ function editarPosicao(ticker){
 
 async function removerPosicao(ticker){
   if(!confirm(`Remover ${ticker} da carteira?`)) return;
+
+  // Feedback visual no botão
+  const btn = document.querySelector(`button[onclick="removerPosicao('${ticker}')"]`);
+  const textoOriginal = btn?.innerHTML;
+  if(btn){ btn.disabled=true; btn.innerHTML='⏳'; btn.style.opacity='.5'; }
+
+  // Toast de aguarde
+  const toast = document.createElement('div');
+  toast.id = 'toast-removendo';
+  toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);color:var(--text2);padding:10px 20px;border-radius:24px;font-size:13px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.15)';
+  toast.textContent = `⏳ Removendo ${ticker}...`;
+  document.body.appendChild(toast);
+
   try{
     await fetch(`/api/carteira/${ticker}`, {method:'DELETE'});
-    await carregarCarteira();
-    renderCarteira();
-  }catch(e){}
+    // Salva categoria atual para voltar à mesma tela
+    const catAtual = _categoriaAtiva;
+    await carregarCarteira(true); // silencioso
+    if(catAtual !== undefined && catAtual !== null){
+      renderCarteiraPorCategoria(catAtual);
+    } else {
+      renderCarteira();
+    }
+    toast.style.background='#16a34a'; toast.style.color='#fff'; toast.textContent=`✅ ${ticker} removido`;
+    setTimeout(()=>toast.remove(), 2500);
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.innerHTML=textoOriginal; btn.style.opacity='1'; }
+    toast.style.background='#e53935'; toast.style.color='#fff'; toast.textContent=`❌ Erro ao remover ${ticker}`;
+    setTimeout(()=>toast.remove(), 3000);
+  }
 }
 
 // ============================================================
@@ -9066,6 +9109,7 @@ carregarLogsIniciais();
 carregarFontes();
 carregarStatus();
 carregarAlertas();
+carregarVersao();
 conectarLog();
 initPush();
 setInterval(atualizarCountdown, 1000);
@@ -9284,7 +9328,7 @@ const _pollDados=setInterval(async()=>{
           </div>
           <div>
             <div style="font-family:system-ui;font-size:2.75rem;font-weight:800;letter-spacing:-1.5px;line-height:1;background:linear-gradient(135deg,#fff,#8b9bc8);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Janus</div>
-            <div style="font-size:11px;color:#8b9bc8;letter-spacing:1px;margin-top:2px">v3.1.0 · B3 Intelligence</div>
+            <div style="font-size:11px;color:#8b9bc8;letter-spacing:1px;margin-top:2px" id="versao-header">v3.1.0 · B3 Intelligence</div>
           </div>
         </div>
         <h1 style="font-family:system-ui;font-size:clamp(1.5rem,4vw,2.25rem);font-weight:700;line-height:1.2;letter-spacing:-0.5px;margin-bottom:1.25rem;max-width:600px;color:#e8ecf8">
@@ -9429,7 +9473,7 @@ const _pollDados=setInterval(async()=>{
 
     <!-- RODAPÉ -->
     <div style="padding:1.5rem 3rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">
-      <div style="font-size:.8rem;color:#8b9bc8;font-weight:300">Janus v3.1.0 · B3 Investment Intelligence Platform · 2026</div>
+      <div style="font-size:.8rem;color:#8b9bc8;font-weight:300" id="versao-footer">Janus v3.1.0 · B3 Investment Intelligence Platform · 2026</div>
       <button onclick="fecharOnePage()" style="font-size:.85rem;font-weight:600;padding:.6rem 1.5rem;border-radius:10px;border:1px solid #16c97d;background:rgba(22,201,125,0.1);color:#16c97d;cursor:pointer;transition:all .2s;font-family:inherit" onmouseover="this.style.background='#16c97d';this.style.color='#07080f'" onmouseout="this.style.background='rgba(22,201,125,0.1)';this.style.color='#16c97d'">Voltar ao Janus →</button>
     </div>
 
