@@ -4065,7 +4065,7 @@ async function carregarBtHistorico(){
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead>
           <tr style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border)">
-            <th style="padding:6px 8px;text-align:left;font-weight:600">Ativo</th>
+            <th style="padding:6px 8px;text-align:left;font-weight:600;max-width:200px">Ativo</th>
             <th style="padding:6px 8px;text-align:left;font-weight:600">Estratégia</th>
             <th style="padding:6px 8px;text-align:left;font-weight:600">De</th>
             <th style="padding:6px 8px;text-align:left;font-weight:600">Até</th>
@@ -4073,7 +4073,7 @@ async function carregarBtHistorico(){
             <th style="padding:6px 8px;text-align:right;font-weight:600">vs IBOV</th>
             <th style="padding:6px 8px;text-align:right;font-weight:600">Sharpe</th>
             <th style="padding:6px 8px;text-align:right;font-weight:600">Drawdown</th>
-            <th style="padding:6px 8px;text-align:center;font-weight:600">Ação</th>
+            <th style="padding:6px 8px;text-align:center;font-weight:600;white-space:nowrap">Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -4085,18 +4085,18 @@ async function carregarBtHistorico(){
             const ticker = b.ticker || '—';
             const publicada = b.publica === true;
             return `<tr style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
-              <td style="padding:8px 8px;font-weight:700">
-                ${ticker}
-                ${publicada ? `<span title="Publicada na comunidade" style="margin-left:4px;font-size:9px;padding:1px 6px;background:rgba(22,163,74,0.1);color:#16a34a;border-radius:10px;font-weight:600">🌐 Publicada</span>` : ''}
+              <td style="padding:8px;font-weight:700;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                <span title="${ticker}">${ticker}</span>
+                ${publicada ? `<span style="margin-left:4px;font-size:9px;padding:1px 6px;background:rgba(22,163,74,0.1);color:#16a34a;border-radius:10px;font-weight:600">🌐</span>` : ''}
               </td>
-              <td style="padding:8px 8px;color:var(--text2)">${nomeEst[b.estrategia]||b.estrategia}</td>
-              <td style="padding:8px 8px;color:var(--text3)">${fmtData(b.data_inicio)}</td>
-              <td style="padding:8px 8px;color:var(--text3)">${fmtData(b.data_fim)}</td>
-              <td style="padding:8px 8px;text-align:right;font-weight:700;color:${corRet}">${fmtPct(b.retorno_pct)}</td>
-              <td style="padding:8px 8px;text-align:right;color:${corAlpha}">${fmtPct(b.alpha)}</td>
-              <td style="padding:8px 8px;text-align:right">${b.sharpe!=null&&!isNaN(b.sharpe)?parseFloat(b.sharpe).toFixed(2):'—'}</td>
-              <td style="padding:8px 8px;text-align:right;color:#e53935">${b.drawdown_max!=null&&!isNaN(b.drawdown_max)?parseFloat(b.drawdown_max).toFixed(1)+'%':'—'}</td>
-              <td style="padding:8px 8px;text-align:center;white-space:nowrap">
+              <td style="padding:8px;color:var(--text2);white-space:nowrap">${nomeEst[b.estrategia]||b.estrategia}</td>
+              <td style="padding:8px;color:var(--text3);white-space:nowrap">${fmtData(b.data_inicio)}</td>
+              <td style="padding:8px;color:var(--text3);white-space:nowrap">${fmtData(b.data_fim)}</td>
+              <td style="padding:8px;text-align:right;font-weight:700;color:${corRet}">${fmtPct(b.retorno_pct)}</td>
+              <td style="padding:8px;text-align:right;color:${corAlpha}">${fmtPct(b.alpha)}</td>
+              <td style="padding:8px;text-align:right">${b.sharpe!=null&&!isNaN(b.sharpe)?parseFloat(b.sharpe).toFixed(2):'—'}</td>
+              <td style="padding:8px;text-align:right;color:#e53935">${b.drawdown_max!=null&&!isNaN(b.drawdown_max)?parseFloat(b.drawdown_max).toFixed(1)+'%':'—'}</td>
+              <td style="padding:8px;text-align:center;white-space:nowrap">
                 <button onclick="verResultadoSimulacao(${b.id})"
                   title="Ver resultado completo"
                   style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:3px 8px;font-size:11px;color:var(--text3);margin-right:4px"
