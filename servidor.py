@@ -9,7 +9,9 @@ import db, auth
 
 VERSION = "3.1.0"
 import os
-BUILD_HASH = os.environ.get('RENDER_GIT_COMMIT', 'local')[:7]
+from datetime import datetime, timezone, timedelta
+_startup = datetime.now(timezone(timedelta(hours=-3)))
+BUILD_HASH = os.environ.get('RENDER_GIT_COMMIT', '')[:7] or os.environ.get('BUILD_HASH', '') or _startup.strftime('%d%m·%H%M')
 BUILD_INFO = f"{VERSION}·{BUILD_HASH}"
 TZ_BRASILIA = timezone(timedelta(hours=-3))
 def agora(): return datetime.now(TZ_BRASILIA)
