@@ -519,18 +519,19 @@ def db_listar_carteira(uid):
         print(f"[DB] Erro listar carteira: {e}", flush=True)
         return []
 
-def db_salvar_posicao(uid, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora):
+def db_salvar_posicao(uid, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora, categoria_id=None):
     """Salva/atualiza posição como CONFIRMADA (fluxo manual normal)."""
     try:
         conn = get_conn()
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO carteira (usuario_id, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora, adicionado_em, status, origem)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'confirmada','manual')
+                INSERT INTO carteira (usuario_id, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora, adicionado_em, status, origem, categoria_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'confirmada','manual',%s)
                 ON CONFLICT (usuario_id, ticker) DO UPDATE SET
-                nome=%s, cor=%s, setor_id=%s, setor_nome=%s, preco_medio=%s, quantidade=%s, data_compra=%s, corretora=%s, adicionado_em=%s, status='confirmada'
-            """, (uid, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora, agora_str(),
-                  nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora, agora_str()))
+                nome=%s, cor=%s, setor_id=%s, setor_nome=%s, preco_medio=%s, quantidade=%s, data_compra=%s, corretora=%s, adicionado_em=%s, status='confirmada',
+                categoria_id=COALESCE(%s, carteira.categoria_id)
+            """, (uid, ticker, nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora, agora_str(), categoria_id,
+                  nome, cor, setor_id, setor_nome, preco_medio, quantidade, data_compra, corretora, agora_str(), categoria_id))
         conn.commit(); conn.close()
         return True
     except Exception as e:
