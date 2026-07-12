@@ -2389,6 +2389,11 @@ def api_carteira_post():
     tickers_atuais = [p['ticker'] for p in carteira_atual]
     if max_cart > 0 and ticker not in tickers_atuais and len(carteira_atual) >= max_cart:
         return jsonify({"erro":f"Limite de {max_cart} ativos na carteira. Faça upgrade para o plano Pró.","limite":True}),403
+    # Opção A — ignora se já existe na carteira (não sobrescreve)
+    origem = d.get("corretora","")
+    eh_importacao = origem in ('Backtesting Janus', 'Comunidade Janus', 'Builder Janus')
+    if eh_importacao and ticker in tickers_atuais:
+        return jsonify({"ok": True, "ignorado": True, "msg": f"{ticker} já está na carteira"}), 200
     nome = next((e["nome"] for s in _cache.get("setores",{}).values() for e in s["empresas"] if e["ticker"]==ticker),ticker)
     cor = next((e["cor"] for s in _cache.get("setores",{}).values() for e in s["empresas"] if e["ticker"]==ticker),"#0066cc")
     setor_id,setor_nome = "",""
