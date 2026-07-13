@@ -2487,23 +2487,26 @@ def api_alertas_post():
     valor = float(d.get("valor",0))
     direcao = d.get("direcao","acima")
     if not ticker or valor<=0: return jsonify({"erro":"dados inválidos"}),400
-    # Verifica limite do plano
+    # Verifica limite do plano — COUNT leve em vez de buscar todos os alertas só pra contar
     plano_nome = request.usuario.get('plano','free')
     planos = {p['nome']:p for p in db.db_listar_planos()}
     plano = planos.get(plano_nome,{})
     max_alt = plano.get('max_alertas',-1)
-    if max_alt > 0 and len(db.db_listar_alertas(uid())) >= max_alt:
+    if max_alt > 0 and db.db_contar_alertas(uid()) >= max_alt:
         return jsonify({"erro":f"Limite de {max_alt} alertas atingido. Faça upgrade para o plano Pró.","limite":True}),403
     nome = next((e["nome"] for s in _cache.get("setores",{}).values() for e in s["empresas"] if e["ticker"]==ticker),ticker)
     cor = next((e["cor"] for s in _cache.get("setores",{}).values() for e in s["empresas"] if e["ticker"]==ticker),"#0066cc")
     db.db_salvar_alerta(uid(), ticker, nome, cor, valor, direcao)
-    return jsonify({"ok":True})
+    # Devolve a lista já atualizada na mesma resposta — evita o frontend precisar
+    # fazer um segundo GET /api/alertas logo em seguida (metade das viagens ao servidor)
+    return jsonify({"ok":True, "alertas":db.db_listar_alertas(uid()), "disparados":db.db_listar_disparados(uid())})
 
 @app.route("/api/alertas/<ticker>", methods=["DELETE"])
 @requer_auth
 def api_alertas_delete(ticker):
     db.db_remover_alerta(uid(), ticker.upper(), request.args.get("direcao"))
-    return jsonify({"ok":True})
+    # Idem: devolve a lista atualizada junto, sem exigir um GET separado do frontend
+    return jsonify({"ok":True, "alertas":db.db_listar_alertas(uid()), "disparados":db.db_listar_disparados(uid())})
 
 @app.route("/api/alertas/disparados/limpar", methods=["POST"])
 @requer_auth
