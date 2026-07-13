@@ -3243,7 +3243,7 @@ function _atualizarDataDividendosHeader(){
         hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
     }catch{ return '—'; }
   };
-  const ref = _dividendRanking?.[0]?.reference_date;
+  const ref = _dividendUltimaAtualizacao;
   const fmtDiv = ref ? fmtData(ref + 'T12:00:00') : '—';
   ['ck-att-dividendos','mob-att-dividendos','desk-att-dividendos'].forEach(id=>{
     const el = document.getElementById(id);
@@ -3450,6 +3450,7 @@ function _renderCockpitCarteira(){
 
 // ── DIVIDENDOS ───────────────────────────────────────────────
 let _dividendRanking = [];
+let _dividendUltimaAtualizacao = null; // MAX(reference_date) global — não depende de qual ativo é #1 do ranking
 let _dividendGaugeAtivo = false;
 
 async function carregarDividendosRanking(){
@@ -3457,8 +3458,13 @@ async function carregarDividendosRanking(){
     const r = await fetch('/api/dividend/ranking?limit=500');
     _dividendRanking = await r.json();
     if(_paginaAtiva === 'cockpit') _renderCockpitDividendos();
-    _atualizarDataDividendosHeader();
   }catch(e){ _dividendRanking = []; }
+  try{
+    const rp = await fetch('/api/dividend/progresso');
+    const p = await rp.json();
+    _dividendUltimaAtualizacao = p.ultima_atualizacao || null;
+  }catch(e){}
+  _atualizarDataDividendosHeader();
 }
 
 async function carregarDividendos(){
@@ -3468,6 +3474,8 @@ async function carregarDividendos(){
     // Status
     const r2 = await fetch('/api/dividend/progresso');
     const p = await r2.json();
+    _dividendUltimaAtualizacao = p.ultima_atualizacao || _dividendUltimaAtualizacao;
+    _atualizarDataDividendosHeader();
     const statusEl = document.getElementById('div-status-txt');
     if(statusEl){
       if(p.rodando) statusEl.textContent = `⚡ Atualizando... ${p.pct}%`;
