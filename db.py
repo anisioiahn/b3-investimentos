@@ -1152,14 +1152,98 @@ def db_init_historico_table(conn):
                 close NUMERIC NOT NULL,
                 volume BIGINT,
                 intervalo TEXT NOT NULL DEFAULT '1d',
+                fechamento BOOLEAN NOT NULL DEFAULT FALSE,
+                variacao_pct NUMERIC,
                 PRIMARY KEY (ticker, data, intervalo)
             );
+            -- Migration: adiciona colunas se não existirem
+            ALTER TABLE historico_precos ADD COLUMN IF NOT EXISTS fechamento BOOLEAN NOT NULL DEFAULT FALSE;
+            ALTER TABLE historico_precos ADD COLUMN IF NOT EXISTS variacao_pct NUMERIC;
             CREATE INDEX IF NOT EXISTS idx_hist_ticker_data
                 ON historico_precos(ticker, data DESC);
             CREATE INDEX IF NOT EXISTS idx_hist_ticker_intervalo
                 ON historico_precos(ticker, intervalo, data DESC);
         """)
     conn.commit()
+
+def db_gravar_cotacoes_dia(cotacoes, fechamento=False):
+    """
+    Grava cotações do dia na tabela historico_precos.
+    cotacoes = [{'ticker': 'BBAS3', 'preco': 20.35, 'variacao_pct': 1.75,
+                 'open': 20.0, 'high': 20.5, 'low': 19.9, 'volume': 1234567}]
+    fechamento=True quando chamado às 18h com preço de fechamento definitivo.
+    """
+    if not cotacoes: return 0
+    from datetime import date
+    hoje = date.today()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            args = [(
+                c['ticker'], hoje, '1d',
+                c.get('open'), c.get('high'), c.get('low'),
+                c['preco'], c.get('volume'),
+                fechamento, c.get('variacao_pct')
+            ) for c in cotacoes if c.get('preco')]
+            if not args:
+                conn.close()
+                return 0
+            psycopg2.extras.execute_values(cur, """
+                INSERT INTO historico_precos
+                    (ticker, data, intervalo, open, high, low, close, volume, fechamento, variacao_pct)
+                VALUES %s
+                ON CONFLICT (ticker, data, intervalo) DO UPDATE SET
+                    close        = EXCLUDED.close,
+                    open         = COALESCE(EXCLUDED.open, historico_precos.open),
+                    high         = COALESCE(EXCLUDED.high, historico_precos.high),
+                    low          = COALESCE(EXCLUDED.low,  historico_precos.low),
+                    volume       = COALESCE(EXCLUDED.volume, historico_precos.volume),
+                    variacao_pct = EXCLUDED.variacao_pct,
+                    fechamento   = EXCLUDED.fechamento
+            """, args, template="(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)")
+        conn.commit()
+        conn.close()
+        return len(args)
+    except Exception as e:
+        print(f"[DB] Erro gravar cotações dia: {e}", flush=True)
+        return 0
+
+def db_buscar_cotacao_atual(ticker):
+    """Busca cotação mais recente do banco (hoje ou último dia disponível)."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT close as preco, variacao_pct, fechamento, data
+                FROM historico_precos
+                WHERE ticker=%s AND intervalo='1d'
+                ORDER BY data DESC LIMIT 1
+            """, (ticker,))
+            row = cur.fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        print(f"[DB] Erro buscar cotação {ticker}: {e}", flush=True)
+        return None
+
+def db_buscar_cotacoes_dia():
+    """Retorna cotações de hoje (ou último dia disponível) para todos os ativos."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT DISTINCT ON (ticker)
+                    ticker, close as preco, variacao_pct, fechamento, data
+                FROM historico_precos
+                WHERE intervalo='1d'
+                ORDER BY ticker, data DESC
+            """)
+            rows = {r['ticker']: dict(r) for r in cur.fetchall()}
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[DB] Erro buscar cotações dia: {e}", flush=True)
+        return {}
 
 def db_salvar_historico_lote(conn, ticker, registros, intervalo='1d'):
     """Salva lote de registros de histórico. registros = [{date, open, high, low, close, volume}]"""
