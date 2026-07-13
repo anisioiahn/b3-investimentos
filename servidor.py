@@ -300,6 +300,8 @@ def atualizar_cache():
         if cotacoes_dia:
             n = db.db_gravar_cotacoes_dia(cotacoes_dia, fechamento=eh_fechamento)
             log(f"💾 {n} cotações gravadas no histórico {'(fechamento)' if eh_fechamento else '(intraday)'}", "info")
+            # Push silencioso para todos os clientes atualizarem
+            threading.Thread(target=enviar_push_atualizacao, args=(n, eh_fechamento), daemon=True).start()
 
         total_com_preco = sum(1 for s in novo["setores"].values() for e in s["empresas"] if e.get("preco"))
         log(f"✅ {total_com_preco}/{total_tickers} ativos atualizados em {len(novo['setores'])} setores", "sucesso")
@@ -367,7 +369,33 @@ def enviar_push_para(subs, titulo, corpo):
     except Exception as e:
         print(f"[PUSH] ❌ Erro geral: {e}", flush=True)
 
-def loop_auto():
+def enviar_push_atualizacao(total_ativos, eh_fechamento=False):
+    """Envia push silencioso para todos os usuários atualizarem cotações."""
+    try:
+        subs = db.db_listar_todas_subscriptions()
+        if not subs: return
+        from pywebpush import webpush, WebPushException
+        label = 'fechamento' if eh_fechamento else 'intraday'
+        payload = json.dumps({
+            "type":   "cotacao_atualizada",
+            "title":  "Janus B3 — Cotações atualizadas",
+            "body":   f"{total_ativos} ativos atualizados ({label})",
+            "tag":    "janus-cotacao",
+            "silent": True,
+        })
+        enviados = 0
+        for sub in subs:
+            try:
+                webpush(subscription_info=sub, data=payload,
+                        vapid_private_key=VAPID_PRIVATE_KEY,
+                        vapid_claims={"sub": VAPID_EMAIL})
+                enviados += 1
+            except Exception: pass
+        print(f"[PUSH] 📡 Push de atualização enviado para {enviados} dispositivos", flush=True)
+    except ImportError:
+        print("[PUSH] ❌ pywebpush não instalado", flush=True)
+    except Exception as e:
+        print(f"[PUSH] ❌ Erro push atualização: {e}", flush=True)
     time.sleep(10)
     while True:
         if _proximo_update and agora().timestamp() >= _proximo_update and not _atualizando:
@@ -652,8 +680,48 @@ def reset_senha_page(): return send_from_directory("static", "reset-senha.html")
 
 @app.route("/sw.js")
 def sw():
-    r = send_from_directory("static","sw.js")
-    r.headers["Cache-Control"]="no-cache"; r.headers["Service-Worker-Allowed"]="/"
+    sw_content = """
+self.addEventListener('push', function(event) {
+    if (!event.data) return;
+    let data = {};
+    try { data = event.data.json(); } catch(e) { return; }
+
+    // Push silencioso de atualização de cotações
+    if (data.type === 'cotacao_atualizada') {
+        // Notifica todos os clientes para recarregar dados
+        event.waitUntil(
+            self.clients.matchAll({type:'window', includeUncontrolled:true}).then(clients => {
+                clients.forEach(client => client.postMessage({
+                    type: 'cotacao_atualizada',
+                    total: data.body
+                }));
+            })
+        );
+        return; // Não mostra notificação visual
+    }
+
+    // Push normal de alerta de preço
+    const options = {
+        body: data.body || '',
+        icon: '/icon-192.png',
+        badge: '/icon-72.png',
+        tag: data.tag || 'janus',
+        data: { url: data.url || '/' }
+    };
+    event.waitUntil(self.registration.showNotification(data.title || 'Janus B3', options));
+});
+
+self.addEventListener('notificationclick', function(event) {
+    event.notification.close();
+    event.waitUntil(clients.openWindow(event.notification.data?.url || '/'));
+});
+
+self.addEventListener('fetch', function(event) {});
+"""
+    from flask import Response
+    r = Response(sw_content, mimetype='application/javascript')
+    r.headers["Cache-Control"] = "no-cache"
+    r.headers["Service-Worker-Allowed"] = "/"
     return r
 
 @app.route("/manifest.json")
