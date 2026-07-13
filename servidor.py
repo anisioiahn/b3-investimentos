@@ -22,7 +22,13 @@ ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 QUOTE_URL = "https://brapi.dev/api/quote"
 VAPID_PUBLIC_KEY  = os.getenv("VAPID_PUBLIC_KEY",  "BGj1V_-3OXoV8pKBwAiMYeeB6x9puemJlK3KUT_qlXiBLiUwzJUU3AMx55lxCfn4MhDpmgw3SnOUnREVZLSir_Q")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgQ8Bz9ldEae2wkEujDtHyxmtbBSd4-4fArPDGXRx-nPGhRANCAARo9Vf_tzl6FfKSgcAIjGHngesfabnpiZStylE_6pV4gS4lMMyVFNwDMeeZcQn5-DIQ6ZoMN0pzlJ0RFWS0oq_0")
-VAPID_EMAIL = os.getenv("VAPID_EMAIL", "mailto:b3app@investimentos.com")
+VAPID_EMAIL       = os.getenv("VAPID_EMAIL", "mailto:b3app@investimentos.com")
+
+# Twilio WhatsApp
+TWILIO_SID      = os.getenv("TWILIO_SID", "")
+TWILIO_TOKEN    = os.getenv("TWILIO_TOKEN", "")
+TWILIO_WA_FROM  = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
+TWILIO_WA_CODE  = os.getenv("TWILIO_SANDBOX_CODE", "join janus-b3")  # código do sandbox
 
 _log_entries = []
 _atualizando = False
@@ -339,13 +345,28 @@ def verificar_alertas_todos(cache):
             if uid_u not in disparados_por_usuario:
                 disparados_por_usuario[uid_u] = []
             disparados_por_usuario[uid_u].append((alerta, preco_atual))
-    # Envia push por usuário
+    # Envia push + WhatsApp por usuário
     for uid_u, itens in disparados_por_usuario.items():
         subs = db.db_listar_push(uid_u)
+        wa   = db.db_buscar_whatsapp_usuario(uid_u)
         for alerta, preco in itens:
             seta = "▲" if alerta['direcao']=="acima" else "▼"
-            enviar_push_para(subs, f"🚨 Janus: {alerta['ticker']}",
-                f"{alerta.get('nome',alerta['ticker'])}\n{seta} R$ {preco:.2f}")
+            titulo = f"🚨 Janus: {alerta['ticker']}"
+            corpo  = f"{alerta.get('nome',alerta['ticker'])}\n{seta} R$ {preco:.2f}"
+            # Push notification
+            enviar_push_para(subs, titulo, corpo)
+            # WhatsApp
+            if wa and wa.get('ativo') and wa.get('opt_in') and wa.get('numero'):
+                direcao_txt = "acima de" if alerta['direcao']=="acima" else "abaixo de"
+                msg = (
+                    f"🔔 *Janus B3 — Alerta Disparado!*\n\n"
+                    f"*{alerta['ticker']}* atingiu *R$ {preco:.2f}*\n"
+                    f"{seta} Meta: {direcao_txt} R$ {float(alerta['valor']):.2f} ✅\n\n"
+                    f"📊 Abra o Janus para ver a análise completa."
+                )
+                threading.Thread(
+                    target=enviar_whatsapp, args=(wa['numero'], msg), daemon=True
+                ).start()
 
 def enviar_push_para(subs, titulo, corpo):
     if not subs:
@@ -368,6 +389,31 @@ def enviar_push_para(subs, titulo, corpo):
         print("[PUSH] ❌ pywebpush não instalado", flush=True)
     except Exception as e:
         print(f"[PUSH] ❌ Erro geral: {e}", flush=True)
+
+def enviar_whatsapp(numero, mensagem):
+    """Envia mensagem WhatsApp via Twilio Sandbox."""
+    if not TWILIO_SID or not TWILIO_TOKEN:
+        print("[WHATSAPP] ⚠️ Twilio não configurado", flush=True)
+        return False
+    try:
+        # Formata número para WhatsApp
+        num = numero.replace(" ","").replace("-","").replace("(","").replace(")","")
+        if not num.startswith("+"): num = "+55" + num.lstrip("0")
+        r = requests.post(
+            f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json",
+            auth=(TWILIO_SID, TWILIO_TOKEN),
+            data={"From": TWILIO_WA_FROM, "To": f"whatsapp:{num}", "Body": mensagem},
+            timeout=10
+        )
+        if r.status_code in (200, 201):
+            print(f"[WHATSAPP] ✅ Mensagem enviada para {num}", flush=True)
+            return True
+        else:
+            print(f"[WHATSAPP] ❌ Erro {r.status_code}: {r.text[:200]}", flush=True)
+            return False
+    except Exception as e:
+        print(f"[WHATSAPP] ❌ Exceção: {e}", flush=True)
+        return False
 
 def enviar_push_atualizacao(total_ativos, eh_fechamento=False):
     """Envia push silencioso para todos os usuários atualizarem cotações."""
@@ -2880,6 +2926,60 @@ def api_buscar_ticker():
         except: pass
     return jsonify(matches[:8])
 
+@app.route("/api/whatsapp/config", methods=["GET"])
+@requer_auth
+def api_whatsapp_config():
+    """Retorna configuração WhatsApp do usuário."""
+    wa = db.db_buscar_whatsapp_usuario(uid())
+    return jsonify({
+        "configurado": wa is not None,
+        "numero": wa.get('numero','') if wa else '',
+        "ativo": wa.get('ativo', False) if wa else False,
+        "opt_in": wa.get('opt_in', False) if wa else False,
+        "sandbox_numero": "+14155238886",
+        "sandbox_code": TWILIO_WA_CODE,
+    })
+
+@app.route("/api/whatsapp/config", methods=["POST"])
+@requer_auth
+def api_whatsapp_salvar():
+    """Salva número e ativa WhatsApp."""
+    d = request.json or {}
+    numero = d.get('numero','').strip()
+    ativo  = d.get('ativo', True)
+    if not numero:
+        return jsonify({"erro": "Número obrigatório"}), 400
+    db.db_salvar_whatsapp(uid(), numero, ativo)
+    return jsonify({"ok": True, "sandbox_code": TWILIO_WA_CODE})
+
+@app.route("/api/whatsapp/confirmar-optin", methods=["POST"])
+@requer_auth
+def api_whatsapp_confirmar():
+    """Usuário confirma que enviou o opt-in para o Twilio."""
+    db.db_confirmar_whatsapp_optin(uid())
+    return jsonify({"ok": True})
+
+@app.route("/api/whatsapp/desativar", methods=["POST"])
+@requer_auth
+def api_whatsapp_desativar():
+    db.db_salvar_whatsapp(uid(), '', False)
+    return jsonify({"ok": True})
+
+@app.route("/api/whatsapp/testar", methods=["POST"])
+@requer_auth
+def api_whatsapp_testar():
+    """Envia mensagem de teste para o usuário."""
+    wa = db.db_buscar_whatsapp_usuario(uid())
+    if not wa or not wa.get('opt_in'):
+        return jsonify({"erro": "Configure e confirme o opt-in primeiro"}), 400
+    msg = (
+        "✅ *Janus B3 — Teste de conexão*\n\n"
+        "Seus alertas de preço serão enviados aqui.\n"
+        "Tudo funcionando perfeitamente! 🎯"
+    )
+    ok = enviar_whatsapp(wa['numero'], msg)
+    return jsonify({"ok": ok, "erro": None if ok else "Falha ao enviar — verifique o número e o opt-in"})
+
 @app.route("/api/versao")
 def api_versao():
     return jsonify({"versao": VERSION, "build": BUILD_HASH, "info": BUILD_INFO})
@@ -2974,6 +3074,7 @@ if _db_ok:
             db.db_init_presenca_table,
             db.db_init_cockpit_fase3_tables,
             db.db_init_carteiras_comunidade,
+            db.db_init_whatsapp,
         ]
         for fn in inits:
             try:
@@ -3021,6 +3122,13 @@ if _db_ok:
     except Exception as e:
         print(f"[STARTUP] ⚠️ Erro ao verificar tabelas: {e}", flush=True)
 _proximo_update = agora().timestamp() + INTERVALO_INICIAL
+def loop_auto():
+    time.sleep(10)
+    while True:
+        if _proximo_update and agora().timestamp() >= _proximo_update and not _atualizando:
+            atualizar_cache()
+        time.sleep(10)
+
 threading.Thread(target=loop_auto, daemon=True).start()
 
 if __name__ == "__main__":
