@@ -7295,6 +7295,16 @@ function _atualizarAlertasBuscaCard(ticker){
   return true;
 }
 
+// Aplica localmente os dados de alertas/disparados já recebidos na resposta
+// do POST/DELETE — evita um segundo round-trip (GET /api/alertas) que antes
+// rodava sempre em seguida, dobrando o tempo de espera de cada ação.
+function _aplicarAlertasRecebidos(d){
+  if(!d || !Array.isArray(d.alertas)) return;
+  _alertasServidor = d.alertas;
+  _disparadosServidor = d.disparados || [];
+  updateAltCnt();
+}
+
 async function salvarAlerta(ticker, valor, direcao){
   if(!valor||parseFloat(valor)<=0) return false;
   try{
@@ -7306,7 +7316,7 @@ async function salvarAlerta(ticker, valor, direcao){
       else alert(`Erro: ${d.erro||'Não foi possível salvar o alerta'}`);
       return false;
     }
-    await carregarAlertas();
+    _aplicarAlertasRecebidos(d);
     // Atualiza a tela onde o usuário está — sempre local/leve, nunca recarrega a página inteira
     if(_paginaAtiva === 'carteira') renderCarteira();
     if(_paginaAtiva === 'empresas' && currentSector) renderEmpresas(true);
@@ -7328,8 +7338,9 @@ async function removerAlerta(ticker, direcao, btnEl){
     const url=direcao?`/api/alertas/${ticker}?direcao=${direcao}`:`/api/alertas/${ticker}`;
     const r = await fetch(url,{method:'DELETE'});
     if(!r.ok){ throw new Error('Falha ao remover alerta'); }
+    const d = await r.json();
 
-    await carregarAlertas();
+    _aplicarAlertasRecebidos(d);
 
     // Atualiza a tela onde o usuário está — sempre local/leve, nunca recarrega a página inteira
     if(_paginaAtiva === 'carteira') renderCarteira();
