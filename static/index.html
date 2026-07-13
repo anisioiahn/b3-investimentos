@@ -2344,7 +2344,7 @@ async function abrirAtivoDaBusca(ticker){
           <div class="co-chg ${cls}">${arrow} ${sign}${vr.toFixed(2)} (${vp>=0?'+':''}${vp.toFixed(2)}%)</div>
           <div class="co-range" style="font-size:10px">Min: ${co.minima_dia?.toFixed(2)||'—'} · Máx: ${co.maxima_dia?.toFixed(2)||'—'}</div>
         </div>
-        <div class="co-target-blk" onclick="event.stopPropagation()">${alertasHtml}</div>
+        <div class="co-target-blk" id="busca-alertas-blk" onclick="event.stopPropagation()">${alertasHtml}</div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:center;flex-shrink:0" onclick="event.stopPropagation()">
           <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:8px 12px;font-size:13px" onclick="abrirGrafico('${ticker}')">📊</button>
         </div>
@@ -2427,9 +2427,9 @@ function toggleDirAlertaBusca(ticker, direcao, btn){
         style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:700">
     </div>
     <div style="display:flex;gap:8px">
-      <button onclick="this.closest('.alerta-modal-inline').remove()"
+      <button id="alerta-modal-btn-cancelar" onclick="this.closest('.alerta-modal-inline').remove()"
         style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-size:13px">Cancelar</button>
-      <button onclick="confirmarAlertaBusca('${ticker}','${direcao}')"
+      <button id="alerta-modal-btn-confirmar" onclick="confirmarAlertaBusca('${ticker}','${direcao}')"
         style="flex:1;padding:9px;border:none;border-radius:8px;background:${dirCor};color:#fff;cursor:pointer;font-size:13px;font-weight:600">Confirmar</button>
     </div>`;
   document.body.appendChild(modal);
@@ -2437,11 +2437,23 @@ function toggleDirAlertaBusca(ticker, direcao, btn){
 
 async function confirmarAlertaBusca(ticker, direcao){
   const val = parseFloat(document.getElementById('alerta-val-busca')?.value);
-  document.querySelectorAll('.alerta-modal-inline').forEach(el=>el.remove());
   if(!val || val <= 0) return;
-  await salvarAlerta(ticker, val, direcao);
-  // Re-abre a página para atualizar os botões
-  await abrirAtivoDaBusca(ticker);
+
+  // Feedback visual imediato — trava o modal e mostra "Salvando..."
+  const modal = document.querySelector('.alerta-modal-inline');
+  const btnConfirmar = modal?.querySelector('#alerta-modal-btn-confirmar');
+  const btnCancelar  = modal?.querySelector('#alerta-modal-btn-cancelar');
+  if(btnConfirmar){ btnConfirmar.disabled = true; btnConfirmar.textContent = '⏳ Salvando...'; btnConfirmar.style.opacity = '.7'; }
+  if(btnCancelar) btnCancelar.disabled = true;
+
+  const ok = await salvarAlerta(ticker, val, direcao);
+  if(ok){
+    document.querySelectorAll('.alerta-modal-inline').forEach(el=>el.remove());
+  } else {
+    // Erro já foi avisado dentro de salvarAlerta — reabilita o modal para nova tentativa
+    if(btnConfirmar){ btnConfirmar.disabled = false; btnConfirmar.textContent = 'Confirmar'; btnConfirmar.style.opacity = '1'; }
+    if(btnCancelar) btnCancelar.disabled = false;
+  }
 }
 
 function abrirModalBusca(){
@@ -6286,9 +6298,9 @@ function toggleDirAlerta(ticker, direcao, btn){
         onkeydown="if(event.key==='Enter') confirmarAlerta()">
     </div>
     <div style="display:flex;gap:8px">
-      <button onclick="this.closest('.alerta-modal-inline').remove()" 
+      <button id="alerta-modal-btn-cancelar" onclick="this.closest('.alerta-modal-inline').remove()" 
         style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-size:13px">Cancelar</button>
-      <button onclick="confirmarAlerta()" 
+      <button id="alerta-modal-btn-confirmar" onclick="confirmarAlerta()" 
         style="flex:1;padding:8px;border:none;border-radius:8px;background:${dirCor};color:#fff;cursor:pointer;font-size:13px;font-weight:600">Salvar alerta</button>
     </div>`;
   document.body.appendChild(modal);
@@ -6306,8 +6318,23 @@ async function confirmarAlerta(){
   const val = document.getElementById('alerta-modal-val')?.value;
   const ticker = _alertaModalTicker;
   const direcao = _alertaModalDirecao;
-  document.querySelectorAll('.alerta-modal-inline').forEach(el=>el.remove());
-  if(val && ticker) await salvarAlerta(ticker, val, direcao);
+  if(!val || !ticker) return;
+
+  // Feedback visual imediato — trava o modal e mostra "Salvando..."
+  const modal = document.querySelector('.alerta-modal-inline');
+  const btnConfirmar = modal?.querySelector('#alerta-modal-btn-confirmar');
+  const btnCancelar  = modal?.querySelector('#alerta-modal-btn-cancelar');
+  if(btnConfirmar){ btnConfirmar.disabled = true; btnConfirmar.textContent = '⏳ Salvando...'; btnConfirmar.style.opacity = '.7'; }
+  if(btnCancelar) btnCancelar.disabled = true;
+
+  const ok = await salvarAlerta(ticker, val, direcao);
+  if(ok){
+    document.querySelectorAll('.alerta-modal-inline').forEach(el=>el.remove());
+  } else {
+    // Erro já foi avisado dentro de salvarAlerta — reabilita o modal para nova tentativa
+    if(btnConfirmar){ btnConfirmar.disabled = false; btnConfirmar.textContent = 'Salvar alerta'; btnConfirmar.style.opacity = '1'; }
+    if(btnCancelar) btnCancelar.disabled = false;
+  }
 }
 function checkTriggered(s){
   const hits=alerts.filter(a=>{const co=s.empresas.find(e=>e.ticker===a.ticker);return co&&co.preco!=null&&co.preco>=a.target;});
@@ -7250,8 +7277,26 @@ async function carregarAlertas(){
   }catch(e){}
 }
 
+// Atualização leve do bloco de alertas na página de busca (lupa) — evita recarregar
+// gráfico, notícias e AJIA só para atualizar dois botões de alerta.
+function _atualizarAlertasBuscaCard(ticker){
+  const blk = document.getElementById('busca-alertas-blk');
+  if(!blk) return false;
+  const altAcima  = _alertasServidor?.find(a=>a.ticker===ticker&&a.direcao==='acima');
+  const altAbaixo = _alertasServidor?.find(a=>a.ticker===ticker&&a.direcao==='abaixo');
+  blk.innerHTML = `
+      <div class="tgt-lbl">Alertas de preço</div>
+      <div class="alerta-inline">
+        <button class="alerta-dir-btn acima ${altAcima?'ativo':''}" onclick="event.stopPropagation();toggleDirAlertaBusca('${ticker}','acima',this)" title="Alerta quando subir">▲ Acima</button>
+        <button class="alerta-dir-btn abaixo ${altAbaixo?'ativo':''}" onclick="event.stopPropagation();toggleDirAlertaBusca('${ticker}','abaixo',this)" title="Alerta quando cair">▼ Abaixo</button>
+      </div>
+      ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${ticker}','acima',this)">✕</button></div>`:''}
+      ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${ticker}','abaixo',this)">✕</button></div>`:''}`;
+  return true;
+}
+
 async function salvarAlerta(ticker, valor, direcao){
-  if(!valor||parseFloat(valor)<=0) return;
+  if(!valor||parseFloat(valor)<=0) return false;
   try{
     const r = await fetch('/api/alertas',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({ticker,valor:parseFloat(valor),direcao})});
@@ -7259,13 +7304,20 @@ async function salvarAlerta(ticker, valor, direcao){
     if(!r.ok){
       if(d.limite) alert(`⚠️ ${d.erro}`);
       else alert(`Erro: ${d.erro||'Não foi possível salvar o alerta'}`);
-      return;
+      return false;
     }
     await carregarAlertas();
-    // Atualiza tela atual
+    // Atualiza a tela onde o usuário está — sempre local/leve, nunca recarrega a página inteira
     if(_paginaAtiva === 'carteira') renderCarteira();
-    if(currentSector) renderEmpresas(true);
-  }catch(e){ alert('Erro de conexão ao salvar alerta'); }
+    if(_paginaAtiva === 'empresas' && currentSector) renderEmpresas(true);
+    if(_paginaAtiva === 'busca') _atualizarAlertasBuscaCard(ticker);
+    if(_paginaAtiva === 'alertas') renderAlerts();
+    return true;
+  }catch(e){
+    console.error('[Janus] Erro ao salvar alerta:', e);
+    alert('Erro de conexão ao salvar alerta');
+    return false;
+  }
 }
 
 async function removerAlerta(ticker, direcao, btnEl){
@@ -7279,13 +7331,14 @@ async function removerAlerta(ticker, direcao, btnEl){
 
     await carregarAlertas();
 
-    // Atualiza a tela onde o usuário está
+    // Atualiza a tela onde o usuário está — sempre local/leve, nunca recarrega a página inteira
     if(_paginaAtiva === 'carteira') renderCarteira();
     if(_paginaAtiva === 'empresas' && currentSector) renderEmpresas(true);
-    if(_paginaAtiva === 'busca' && _buscaTickerAtual) await abrirAtivoDaBusca(_buscaTickerAtual);
+    if(_paginaAtiva === 'busca' && _buscaTickerAtual) _atualizarAlertasBuscaCard(_buscaTickerAtual);
     if(_paginaAtiva === 'alertas') renderAlerts();
   }catch(e){
     if(btnEl){ btnEl.disabled = false; btnEl.style.opacity = '1'; btnEl.textContent = '✕'; }
+    console.error('[Janus] Erro ao remover alerta:', e);
     alert('❌ Erro ao remover o alerta. Tente novamente.');
   }
 }
