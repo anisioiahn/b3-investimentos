@@ -1,12 +1,13 @@
 # ============================================================
-# JANUS INDEX – ROTAS FLASK v1.1
-# Segue o padrão do projeto: psycopg2 + get_conn()
+# JANUS INDEX – ROTAS FLASK v1.2
+# Usa db.get_conn() (com connection pooling) em vez de abrir conexão nova a cada chamada
 # Chame no servidor.py:
 #   from janus_routes import registrar_rotas_janus
 #   registrar_rotas_janus(app, requer_auth)
 # ============================================================
 
-import psycopg2, psycopg2.extras, os, threading
+import psycopg2.extras, os, threading
+import db
 from flask import jsonify, request
 from datetime import datetime, timezone, timedelta
 
@@ -15,9 +16,10 @@ def agora():    return datetime.now(TZ_BRASILIA)
 def hoje():     return agora().strftime("%Y-%m-%d")
 
 def get_conn():
-    url = os.getenv("DATABASE_URL", "")
-    if not url: raise Exception("DATABASE_URL não configurada")
-    return psycopg2.connect(url, sslmode="require")
+    """Mantido por compatibilidade — agora delega ao pool de conexões do db.py
+    em vez de abrir uma conexão nova a cada chamada (era o mesmo problema já
+    corrigido em alertas/dividendos: cada rota aqui abria conexão própria)."""
+    return db.get_conn()
 
 # Estado da coleta — simples e direto
 _janus_lock    = threading.Lock()
