@@ -3231,6 +3231,26 @@ function _renderCockpitSaudacao(){
   });
 }
 
+// Atualiza a data de "Dividendos" no header/menu ⚙️ — extraída para função própria
+// para poder ser chamada sempre que _dividendRanking mudar, não só quando a
+// página Cockpit é (re)aberta (ex: depois de rodar o Dividend Engine em outra aba).
+function _atualizarDataDividendosHeader(){
+  const fmtData = iso => {
+    if(!iso) return '—';
+    try{
+      const d = new Date(iso);
+      return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',
+        hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
+    }catch{ return '—'; }
+  };
+  const ref = _dividendRanking?.[0]?.reference_date;
+  const fmtDiv = ref ? fmtData(ref + 'T12:00:00') : '—';
+  ['ck-att-dividendos','mob-att-dividendos','desk-att-dividendos'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.textContent = fmtDiv;
+  });
+}
+
 function _renderCockpitHeatmap(){
   const el = document.getElementById('cockpit-heatmap');
   const setores = Object.values(DADOS.setores||{});
@@ -3437,6 +3457,7 @@ async function carregarDividendosRanking(){
     const r = await fetch('/api/dividend/ranking?limit=500');
     _dividendRanking = await r.json();
     if(_paginaAtiva === 'cockpit') _renderCockpitDividendos();
+    _atualizarDataDividendosHeader();
   }catch(e){ _dividendRanking = []; }
 }
 
