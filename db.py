@@ -2460,44 +2460,24 @@ def db_init_carteiras_comunidade(conn):
     conn.commit()
 
 def db_publicar_carteira(uid, nome, descricao, composicao, capital_total, retorno_12m):
-    """Publica ou atualiza a carteira do usuário na comunidade."""
+    """Publica uma carteira na comunidade — sempre cria nova entrada independente."""
     import json
     from datetime import datetime, timezone, timedelta
     now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
     try:
         conn = get_conn()
         with conn.cursor() as cur:
-            # Verifica se já tem carteira publicada
             cur.execute("""
-                SELECT id FROM carteiras_publicas
-                WHERE usuario_id=%s AND publica=TRUE
-                ORDER BY created_at DESC LIMIT 1
-            """, (uid,))
-            existente = cur.fetchone()
-            if existente:
-                cur.execute("""
-                    UPDATE carteiras_publicas
-                    SET nome=%s, descricao=%s, composicao=%s,
-                        capital_total=%s, retorno_12m=%s,
-                        n_ativos=%s, updated_at=%s
-                    WHERE id=%s
-                    RETURNING id
-                """, (nome, descricao, json.dumps(composicao),
-                      capital_total, retorno_12m,
-                      len(composicao), now, existente[0]))
-                cid = cur.fetchone()[0]
-            else:
-                cur.execute("""
-                    INSERT INTO carteiras_publicas
-                        (usuario_id, nome, descricao, composicao,
-                         capital_total, retorno_12m, n_ativos,
-                         publica, created_at, updated_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,TRUE,%s,%s)
-                    RETURNING id
-                """, (uid, nome, descricao, json.dumps(composicao),
-                      capital_total, retorno_12m,
-                      len(composicao), now, now))
-                cid = cur.fetchone()[0]
+                INSERT INTO carteiras_publicas
+                    (usuario_id, nome, descricao, composicao,
+                     capital_total, retorno_12m, n_ativos,
+                     publica, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,TRUE,%s,%s)
+                RETURNING id
+            """, (uid, nome, descricao, json.dumps(composicao),
+                  capital_total, retorno_12m,
+                  len(composicao), now, now))
+            cid = cur.fetchone()[0]
         conn.commit(); conn.close()
         return cid
     except Exception as e:
