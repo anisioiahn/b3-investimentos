@@ -632,6 +632,22 @@ def db_remover_push(uid, sub_json):
         return True
     except: return False
 
+def db_listar_todas_subscriptions():
+    """Retorna todas as subscriptions de push de todos os usuários."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT subscription_json FROM push_subscriptions")
+            subs = []
+            for row in cur.fetchall():
+                try: subs.append(json.loads(row[0]))
+                except: pass
+        conn.close()
+        return subs
+    except Exception as e:
+        print(f"[DB] Erro listar subscriptions: {e}", flush=True)
+        return []
+
 # ── CACHE COTAÇÕES ────────────────────────────────────────────
 def db_salvar_cache(dados):
     try:
