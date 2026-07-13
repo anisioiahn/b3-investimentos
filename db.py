@@ -977,6 +977,23 @@ def db_salvar_dividend_history(conn, asset_id, ticker, pagamentos):
                 pass
     conn.commit()
 
+def db_dividend_ultima_atualizacao():
+    """
+    Data da última coleta do Dividend Engine — MAX(reference_date) global da tabela,
+    não o reference_date de um ativo específico. Usar o ativo #1 do ranking (por score)
+    como referência de data é errado: se aquele ativo em particular não foi tocado na
+    última rodada (erro pontual, sem dado novo, etc.), a data ficava presa no passado
+    mesmo com o resto da tabela já atualizado.
+    """
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT MAX(reference_date) FROM dividend_profile")
+            row = cur.fetchone()
+        conn.close()
+        return row[0] if row else None
+    except: return None
+
 def db_listar_dividend_ranking(limit=50):
     """Retorna ranking de ativos por Janus Dividend Score."""
     try:
