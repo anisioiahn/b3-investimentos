@@ -6936,6 +6936,20 @@ async function initPush(){
   }
   try{
     _swRegistration = await navigator.serviceWorker.register('/sw.js');
+
+    // Ouve mensagens do Service Worker (ex: cotação atualizada)
+    navigator.serviceWorker.addEventListener('message', async (event) => {
+      if(event.data?.type === 'cotacao_atualizada'){
+        console.log('[Janus] 📡 Push recebido — recarregando cotações...');
+        await carregarDados();
+        // Toast discreto
+        const t = document.createElement('div');
+        t.style.cssText = 'position:fixed;bottom:80px;right:16px;background:var(--card);border:1px solid var(--border);color:var(--text2);padding:8px 14px;border-radius:12px;font-size:12px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.1)';
+        t.textContent = '📡 Cotações atualizadas';
+        document.body.appendChild(t);
+        setTimeout(()=>t.remove(), 3000);
+      }
+    });
     await navigator.serviceWorker.ready;
     _pushSubscription = await _swRegistration.pushManager.getSubscription();
     atualizarBtnPush();
@@ -8372,11 +8386,13 @@ function fecharModalPosicao(e){
   }
 }
 
-function buscarTickerCarteira(val){
+async function buscarTickerCarteira(val){
   const res = document.getElementById('pos-ticker-results');
   if(!val || val.length < 1){ res.style.display='none'; return; }
   const upper = val.toUpperCase();
   const matches = [];
+
+  // 1. Busca no cache de setores
   for(const s of Object.values(DADOS.setores||{})){
     for(const e of s.empresas){
       if(e.ticker.startsWith(upper) || e.nome.toUpperCase().includes(upper)){
@@ -8386,12 +8402,22 @@ function buscarTickerCarteira(val){
     }
     if(matches.length >= 8) break;
   }
+
+  // 2. Se não achou e tem 4+ chars, tenta buscar na Brapi diretamente
+  if(!matches.length && upper.length >= 4){
+    try{
+      const r = await fetch(`/api/buscar-ticker?q=${upper}`);
+      const d = await r.json();
+      if(d?.length) matches.push(...d.slice(0,5));
+    }catch(e){}
+  }
+
   if(!matches.length){ res.style.display='none'; return; }
   res.innerHTML = matches.map(m=>`
-    <div class="pos-ticker-result-item" onclick="selecionarTickerCarteira('${m.ticker}','${m.nome}')">
-      <div class="ct-logo" style="background:${m.cor};width:26px;height:26px;font-size:8px">${m.ticker.substring(0,4)}</div>
-      <div><div style="font-weight:600">${m.ticker}</div><div style="font-size:11px;color:var(--text2)">${m.nome}</div></div>
-      ${m.preco?`<div style="margin-left:auto;font-size:12px;font-family:monospace">R$ ${m.preco.toFixed(2)}</div>`:''}
+    <div class="pos-ticker-result-item" onclick="selecionarTickerCarteira('${m.ticker}','${m.nome||m.ticker}')">
+      <div class="ct-logo" style="background:${m.cor||'#0066cc'};width:26px;height:26px;font-size:8px">${m.ticker.substring(0,4)}</div>
+      <div><div style="font-weight:600">${m.ticker}</div><div style="font-size:11px;color:var(--text2)">${m.nome||''}</div></div>
+      ${m.preco?`<div style="margin-left:auto;font-size:12px;font-family:monospace">R$ ${parseFloat(m.preco).toFixed(2)}</div>`:''}
     </div>`).join('');
   res.style.display = 'block';
 }
