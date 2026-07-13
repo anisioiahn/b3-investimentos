@@ -2854,6 +2854,7 @@ def api_dividend_progresso():
         "msg":     _dividend_estado["msg"],
         "atual":   _dividend_estado["atual"],
         "total":   _dividend_estado["total"],
+        "ultima_atualizacao": db.db_dividend_ultima_atualizacao(),
     })
 
 @app.route("/api/dividend/ranking")
