@@ -396,9 +396,21 @@ def enviar_whatsapp(numero, mensagem):
         print("[WHATSAPP] ⚠️ Twilio não configurado", flush=True)
         return False
     try:
-        # Formata número para WhatsApp
-        num = numero.replace(" ","").replace("-","").replace("(","").replace(")","")
-        if not num.startswith("+"): num = "+55" + num.lstrip("0")
+        # Normaliza número — remove tudo que não é dígito ou +
+        num = ''.join(c for c in numero if c.isdigit() or c=='+')
+        # Remove + do início para trabalhar só com dígitos
+        num = num.lstrip('+')
+        # Remove zeros do início
+        num = num.lstrip('0')
+        # Se já começa com 55 e tem 12-13 dígitos = já tem código Brasil
+        if num.startswith('55') and len(num) >= 12:
+            num = '+' + num
+        # Se tem 10-11 dígitos = número brasileiro sem código
+        elif len(num) >= 10:
+            num = '+55' + num
+        else:
+            num = '+' + num
+        print(f"[WHATSAPP] 📱 Enviando para {num}", flush=True)
         r = requests.post(
             f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json",
             auth=(TWILIO_SID, TWILIO_TOKEN),
@@ -409,7 +421,7 @@ def enviar_whatsapp(numero, mensagem):
             print(f"[WHATSAPP] ✅ Mensagem enviada para {num}", flush=True)
             return True
         else:
-            print(f"[WHATSAPP] ❌ Erro {r.status_code}: {r.text[:200]}", flush=True)
+            print(f"[WHATSAPP] ❌ Erro {r.status_code}: {r.text[:300]}", flush=True)
             return False
     except Exception as e:
         print(f"[WHATSAPP] ❌ Exceção: {e}", flush=True)
