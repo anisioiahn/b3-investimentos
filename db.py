@@ -3,16 +3,88 @@ Módulo de banco de dados — Supabase/PostgreSQL
 Versão 3.0 — Multi-tenant com autenticação
 """
 import os, json, psycopg2, psycopg2.extras
+import threading
+from psycopg2 import pool as psycopg2_pool
 from datetime import datetime, timezone, timedelta
 
 TZ_BRASILIA = timezone(timedelta(hours=-3))
 def agora_str(): return datetime.now(TZ_BRASILIA).isoformat()
 def agora_utc(): return datetime.now(timezone.utc).isoformat()
 
+# ── POOL DE CONEXÕES ────────────────────────────────────────────
+# Antes, get_conn() abria uma conexão TCP/TLS nova ao Postgres a cada
+# chamada (handshake completo toda vez — 100-300ms+ por chamada). Como
+# várias ações do usuário disparam 2-5 chamadas ao banco em sequência,
+# isso somava segundos de espera perceptível. O pool mantém um punhado
+# de conexões já abertas e prontas para reuso.
+_pool = None
+_pool_lock = threading.Lock()
+_POOL_MIN = int(os.getenv("DB_POOL_MIN", "2"))
+_POOL_MAX = int(os.getenv("DB_POOL_MAX", "10"))
+
+def _obter_pool():
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                url = os.getenv("DATABASE_URL", "")
+                if not url: raise Exception("DATABASE_URL não configurada")
+                _pool = psycopg2_pool.ThreadedConnectionPool(
+                    _POOL_MIN, _POOL_MAX, dsn=url, sslmode="require"
+                )
+    return _pool
+
+class _PooledConn:
+    """
+    Encapsula uma conexão vinda do pool. O resto do código continua
+    chamando conn.cursor()/conn.commit()/conn.close() exatamente como antes —
+    só que conn.close() devolve a conexão ao pool em vez de fechá-la de fato.
+
+    Rede de segurança: muitas funções do arquivo não fecham a conexão se a
+    query lançar exceção (só fazem "except: return ..."). O __del__ abaixo
+    garante que a conexão volte ao pool mesmo nesses casos, fazendo rollback
+    de qualquer transação pendente/quebrada antes de devolvê-la — sem
+    precisar alterar cada uma dessas funções individualmente.
+    """
+    __slots__ = ('_conn', '_released')
+
+    def __init__(self, conn):
+        self._conn = conn
+        self._released = False
+
+    def close(self):
+        if self._released:
+            return
+        self._released = True
+        pool = _obter_pool()
+        conn = self._conn
+        try:
+            if conn.closed:
+                pool.putconn(conn, close=True)
+            else:
+                try: conn.rollback()  # limpa transação pendente/quebrada, se houver
+                except Exception: pass
+                pool.putconn(conn)
+        except Exception:
+            try: conn.close()
+            except Exception: pass
+
+    def __del__(self):
+        try: self.close()
+        except Exception: pass
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
 def get_conn():
-    url = os.getenv("DATABASE_URL", "")
-    if not url: raise Exception("DATABASE_URL não configurada")
-    return psycopg2.connect(url, sslmode="require")
+    pool = _obter_pool()
+    conn = pool.getconn()
+    if conn.closed:
+        # Conexão morta (ex: fechada pelo Supabase por ociosidade) — descarta e pega outra
+        try: pool.putconn(conn, close=True)
+        except Exception: pass
+        conn = pool.getconn()
+    return _PooledConn(conn)
 
 def init_db():
     sql = """
@@ -402,6 +474,17 @@ def db_listar_alertas(uid):
         conn.close()
         return rows
     except: return []
+
+def db_contar_alertas(uid):
+    """COUNT leve — usado na checagem de limite do plano, sem buscar todas as linhas."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM alertas WHERE usuario_id=%s", (uid,))
+            total = cur.fetchone()[0]
+        conn.close()
+        return total
+    except: return 0
 
 def db_salvar_alerta(uid, ticker, nome, cor, valor, direcao):
     try:
@@ -2461,8 +2544,6 @@ def db_risk_score_ativo(ticker):
             """, (ticker,))
             dd_row = cur.fetchone()
 
-        conn.close()
-
         d = dados or {}
         vol   = float(vol_row['vol_diaria'] or 3) if vol_row and vol_row['vol_diaria'] else 3.0
         beta  = float(d.get('beta') or 1)
@@ -2682,7 +2763,6 @@ def db_detalhe_carteira_publica(cid, uid_atual=None):
                 cur.execute("SELECT 1 FROM carteiras_seguidores WHERE autor_id=%s AND seguidor_id=%s", (cart['usuario_id'], uid_atual))
                 cart['sigo'] = bool(cur.fetchone())
                 cart['minha'] = (cart['usuario_id'] == uid_atual)
-        conn.close()
         return cart
     except Exception as e:
         print(f"[DB] Erro detalhe carteira: {e}", flush=True)
