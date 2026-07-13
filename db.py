@@ -2724,3 +2724,93 @@ def db_calcular_ranking_carteira(cid):
     except Exception as e:
         print(f"[DB] Erro ranking carteira: {e}", flush=True)
         return 0
+
+# ── WHATSAPP / TWILIO ─────────────────────────────────────────
+
+def db_init_whatsapp(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS whatsapp_usuarios (
+                usuario_id  INTEGER PRIMARY KEY,
+                numero      TEXT NOT NULL,
+                ativo       BOOLEAN DEFAULT FALSE,
+                opt_in      BOOLEAN DEFAULT FALSE,
+                criado_em   TEXT,
+                updated_at  TEXT
+            );
+        """)
+    conn.commit()
+
+def db_salvar_whatsapp(uid, numero, ativo=True):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO whatsapp_usuarios (usuario_id, numero, ativo, opt_in, criado_em, updated_at)
+                VALUES (%s, %s, %s, FALSE, %s, %s)
+                ON CONFLICT (usuario_id) DO UPDATE SET
+                    numero=EXCLUDED.numero, ativo=EXCLUDED.ativo, updated_at=EXCLUDED.updated_at
+            """, (uid, numero, ativo, now, now))
+        conn.commit(); conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erro salvar whatsapp: {e}", flush=True)
+        return False
+
+def db_confirmar_whatsapp_optin(uid):
+    """Marca opt-in como confirmado após usuário enviar msg para o Twilio."""
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE whatsapp_usuarios SET opt_in=TRUE, updated_at=%s
+                WHERE usuario_id=%s
+            """, (now, uid))
+        conn.commit(); conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erro confirmar opt-in: {e}", flush=True)
+        return False
+
+def db_buscar_whatsapp(uid):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM whatsapp_usuarios WHERE usuario_id=%s", (uid,))
+            row = cur.fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except: return None
+
+def db_listar_whatsapp_ativos():
+    """Retorna todos os usuários com WhatsApp ativo e opt-in confirmado."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT w.usuario_id, w.numero, u.nome
+                FROM whatsapp_usuarios w
+                JOIN usuarios u ON u.id = w.usuario_id
+                WHERE w.ativo=TRUE AND w.opt_in=TRUE
+            """)
+            rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[DB] Erro listar whatsapp: {e}", flush=True)
+        return []
+
+def db_buscar_whatsapp_usuario(uid):
+    """Retorna número e status do usuário específico."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM whatsapp_usuarios WHERE usuario_id=%s", (uid,))
+            row = cur.fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except: return None
