@@ -2272,6 +2272,7 @@ function _renderBuscaDropdown(resultados, q){
 
 async function abrirAtivoDaBusca(ticker){
   fecharModalBusca();
+  _buscaTickerAtual = ticker;
 
   let co = null;
   let setorNome = '';
@@ -2322,8 +2323,8 @@ async function abrirAtivoDaBusca(ticker){
         <button class="alerta-dir-btn acima ${altAcima?'ativo':''}" onclick="event.stopPropagation();toggleDirAlertaBusca('${ticker}','acima',this)" title="Alerta quando subir">▲ Acima</button>
         <button class="alerta-dir-btn abaixo ${altAbaixo?'ativo':''}" onclick="event.stopPropagation();toggleDirAlertaBusca('${ticker}','abaixo',this)" title="Alerta quando cair">▼ Abaixo</button>
       </div>
-      ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${ticker}','acima')">✕</button></div>`:''}
-      ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${ticker}','abaixo')">✕</button></div>`:''}`;
+      ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${ticker}','acima',this)">✕</button></div>`:''}
+      ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${ticker}','abaixo',this)">✕</button></div>`:''}`;
 
     if(co.preco){
       const vr=co.variacao||0, vp=co.variacao_pct||0;
@@ -6114,8 +6115,8 @@ function renderEmpresas(silencioso){
         <button class="alerta-dir-btn acima ${altAcima?'ativo':''}" onclick="event.stopPropagation();toggleDirAlerta('${c.ticker}','acima',this)" title="Alerta quando subir">▲ Acima</button>
         <button class="alerta-dir-btn abaixo ${altAbaixo?'ativo':''}" onclick="event.stopPropagation();toggleDirAlerta('${c.ticker}','abaixo',this)" title="Alerta quando cair">▼ Abaixo</button>
       </div>
-      ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${altAcima.valor.toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${c.ticker}','acima')">✕</button></div>`:''}
-      ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${altAbaixo.valor.toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${c.ticker}','abaixo')">✕</button></div>`:''}`;
+      ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${altAcima.valor.toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${c.ticker}','acima',this)">✕</button></div>`:''}
+      ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${altAbaixo.valor.toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${c.ticker}','abaixo',this)">✕</button></div>`:''}`;
     const ji=(_janusRanking||[]).find(j=>j.ticker===c.ticker);
     const jiBadge=ji?.score!=null?`<span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(ji.score))}" style="font-size:10px;padding:2px 7px">${ji.score.toFixed(1)}</span>`:'';
 
@@ -6154,8 +6155,8 @@ function renderEmpresas(silencioso){
           <button class="alerta-dir-btn acima ${altAcima?'ativo':''}" onclick="event.stopPropagation();toggleDirAlerta('${c.ticker}','acima',this)">▲ Acima</button>
           <button class="alerta-dir-btn abaixo ${altAbaixo?'ativo':''}" onclick="event.stopPropagation();toggleDirAlerta('${c.ticker}','abaixo',this)">▼ Abaixo</button>
         </div>
-        ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${altAcima.valor.toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${c.ticker}','acima')">✕</button></div>`:''}
-        ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${altAbaixo.valor.toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${c.ticker}','abaixo')">✕</button></div>`:''}`;
+        ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${altAcima.valor.toFixed(2)} <button class="alerta-ativo-tag acima" onclick="event.stopPropagation();removerAlerta('${c.ticker}','acima',this)">✕</button></div>`:''}
+        ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${altAbaixo.valor.toFixed(2)} <button class="alerta-ativo-tag abaixo" onclick="event.stopPropagation();removerAlerta('${c.ticker}','abaixo',this)">✕</button></div>`:''}`;
       const ji=(_janusRanking||[]).find(j=>j.ticker===c.ticker);
       const jiBadge=ji?.score!=null?`<span class="ji-score-badge ji-score-${ji_classSlug(janusClassificacaoPorScore(ji.score))}" style="font-size:10px;padding:2px 7px">${ji.score.toFixed(1)}</span>`:'';
       return `<div class="co-row" style="cursor:default">
@@ -6326,6 +6327,7 @@ async function fetchComTimeout(url, ms=25000){
 
 // Estado global do painel
 let _painelTicker = null;
+let _buscaTickerAtual = null; // ticker atualmente aberto na página de busca (lupa)
 let _painelCo = null;
 let _jaiaHistorico = []; // histórico de conversa da AJIA por sessão
 let _jaiaContexto = null; // contexto do ativo para a AJIA
@@ -7266,15 +7268,26 @@ async function salvarAlerta(ticker, valor, direcao){
   }catch(e){ alert('Erro de conexão ao salvar alerta'); }
 }
 
-async function removerAlerta(ticker, direcao){
+async function removerAlerta(ticker, direcao, btnEl){
+  // Feedback visual imediato — evita a sensação de "travado"
+  if(btnEl){ btnEl.disabled = true; btnEl.style.opacity = '.4'; btnEl.textContent = '⏳'; }
+
   try{
     const url=direcao?`/api/alertas/${ticker}?direcao=${direcao}`:`/api/alertas/${ticker}`;
-    await fetch(url,{method:'DELETE'});
+    const r = await fetch(url,{method:'DELETE'});
+    if(!r.ok){ throw new Error('Falha ao remover alerta'); }
+
     await carregarAlertas();
-    // Atualiza tela atual
+
+    // Atualiza a tela onde o usuário está
     if(_paginaAtiva === 'carteira') renderCarteira();
-    if(currentSector) renderEmpresas(true);
-  }catch(e){}
+    if(_paginaAtiva === 'empresas' && currentSector) renderEmpresas(true);
+    if(_paginaAtiva === 'busca' && _buscaTickerAtual) await abrirAtivoDaBusca(_buscaTickerAtual);
+    if(_paginaAtiva === 'alertas') renderAlerts();
+  }catch(e){
+    if(btnEl){ btnEl.disabled = false; btnEl.style.opacity = '1'; btnEl.textContent = '✕'; }
+    alert('❌ Erro ao remover o alerta. Tente novamente.');
+  }
 }
 
 function updateAltCnt(){
@@ -7325,7 +7338,7 @@ function renderAlerts(){
           ${precoAtual?`<div class="alt-preco-atual ${precoAtual>a.valor?'up':'dn'}">R$ ${precoAtual.toFixed(2)}</div>`:'<div style="color:var(--text3);font-size:12px">—</div>'}
           <div style="margin-top:4px"><span class="alt-badge alt-badge-ativo">✓ Ativo</span></div>
         </div>
-        <button class="alt-del" onclick="removerAlerta('${a.ticker}','${a.direcao}')" title="Remover">🗑</button>
+        <button class="alt-del" onclick="removerAlerta('${a.ticker}','${a.direcao}',this)" title="Remover">🗑</button>
       </div>`;
     }).join('');
   }
@@ -8017,8 +8030,8 @@ function _renderTabelaAtivos(ativos, catId){
           ? `<button onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','abaixo',this)" style="${btnStyle};background:#e53935;color:#fff;border:1px solid #e53935">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)}</button>`
           : `<button onclick="event.stopPropagation();toggleDirAlerta('${p.ticker}','abaixo',this)" style="${btnStyle};background:transparent;color:#e53935;border:1px solid #e53935">▼ Abaixo</button>`}
       </div>
-      ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)} <button onclick="event.stopPropagation();removerAlerta('${p.ticker}','acima')" style="background:none;border:none;cursor:pointer;color:#16a34a;font-size:11px">✕</button></div>`:''}
-      ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)} <button onclick="event.stopPropagation();removerAlerta('${p.ticker}','abaixo')" style="background:none;border:none;cursor:pointer;color:#e53935;font-size:11px">✕</button></div>`:''}`;    return `<tr>
+      ${altAcima?`<div style="font-size:10px;color:#16a34a">▲ R$ ${parseFloat(altAcima.valor).toFixed(2)} <button onclick="event.stopPropagation();removerAlerta('${p.ticker}','acima',this)" style="background:none;border:none;cursor:pointer;color:#16a34a;font-size:11px">✕</button></div>`:''}
+      ${altAbaixo?`<div style="font-size:10px;color:#e53935">▼ R$ ${parseFloat(altAbaixo.valor).toFixed(2)} <button onclick="event.stopPropagation();removerAlerta('${p.ticker}','abaixo',this)" style="background:none;border:none;cursor:pointer;color:#e53935;font-size:11px">✕</button></div>`:''}`;    return `<tr>
       <td><div style="display:flex;align-items:center;gap:8px">
         <div class="ct-logo" style="background:${p.cor};overflow:hidden">${logoHtml}</div>
         <div><div class="ct-ticker">${p.ticker}</div><div class="ct-nome">${p.nome}</div></div>
