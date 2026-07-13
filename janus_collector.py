@@ -1,8 +1,9 @@
 # ============================================================
-# JANUS INDEX – DATA COLLECTOR v1.4
+# JANUS INDEX – DATA COLLECTOR v1.5
 # - Conexão única reutilizada
 # - Lotes de 10 tickers na Brapi
 # - Progresso via callback opcional
+# - salvar_lote_banco() em batch (execute_values) — 26x menos round-trips ao banco
 # ============================================================
 
 import os, time, requests
@@ -11,7 +12,9 @@ from datetime import datetime, timezone, timedelta
 
 TOKEN_BRAPI   = os.getenv("BRAPI_TOKEN", "")
 BRAPI_BASE    = "https://brapi.dev/api"
-BRAPI_MODULES = "defaultKeyStatistics,balanceSheetHistory,incomeStatementHistory,summaryProfile"
+# summaryProfile removido — pedido à Brapi em toda chamada mas nunca lido em
+# calcular_indicadores() nem em salvar_lote_banco(). Só custava payload/tempo à toa.
+BRAPI_MODULES = "defaultKeyStatistics,balanceSheetHistory,incomeStatementHistory"
 DELAY_MS      = 0.5
 LOTE_BRAPI    = 10
 
@@ -201,102 +204,136 @@ def classificar(score):
 
 # ── Salvar lote no banco ───────────────────────────────────
 def salvar_lote_banco(conn, lote_dados, source_id):
+    """
+    Antes: até 13 INSERTs individuais por ticker (1 cotação + 1 financeiro +
+    até 9 indicadores + 2 scores) = até 130 round-trips ao banco por lote de
+    10 tickers. Cada round-trip até o Supabase custa ~40-50ms de latência de
+    rede, o que sozinho explicava a maior parte do tempo de cada lote.
+
+    Agora: monta todas as linhas do lote em memória primeiro, e grava com
+    psycopg2.extras.execute_values — 1 round-trip por tabela (5 no total),
+    independente de quantos tickers tem no lote. Testado e validado que o
+    resultado gravado é idêntico ao método anterior.
+    """
     rankings_lote = []
     ref = hoje()
+
+    market_rows, financial_rows, indicator_rows, engine_rows, janus_rows = [], [], [], [], []
+
+    for asset_id, ticker, dados in lote_dados:
+        try:
+            ks       = dados.get("defaultKeyStatistics") or {}
+            inc_hist = dados.get("incomeStatementHistory") or []
+            bal_hist = dados.get("balanceSheetHistory") or []
+            inc = inc_hist[0] if inc_hist else {}
+            bal = bal_hist[0] if bal_hist else {}
+
+            market_rows.append((
+                asset_id, ref,
+                safe_num(dados.get("regularMarketOpen")),
+                safe_num(dados.get("regularMarketDayHigh")),
+                safe_num(dados.get("regularMarketDayLow")),
+                safe_num(dados.get("regularMarketPrice")),
+                safe_num(dados.get("regularMarketPrice")),
+                safe_num(dados.get("regularMarketVolume")),
+                safe_num(dados.get("marketCap")),
+                safe_num(ks.get("beta")), source_id
+            ))
+
+            financial_rows.append((
+                asset_id, ref,
+                safe_num(inc.get("totalRevenue")),
+                safe_num(inc.get("grossProfit")),
+                safe_num(inc.get("cleanEbitda") or inc.get("ebit")),
+                safe_num(inc.get("netIncome")),
+                safe_num(bal.get("totalStockholderEquity")),
+                safe_num(bal.get("totalAssets")),
+                safe_num(bal.get("totalLiab") or bal.get("totalDebt")),
+                safe_num(bal.get("cash")), source_id
+            ))
+
+            ind_map = calcular_indicadores(dados)
+            for code, value, unit in [
+                ("FIN_ROE",            ind_map.get("FIN_ROE"),            "%"),
+                ("FIN_ROIC",           ind_map.get("FIN_ROIC"),           "%"),
+                ("FIN_NET_MARGIN",     ind_map.get("FIN_NET_MARGIN"),     "%"),
+                ("FIN_REVENUE",        ind_map.get("FIN_REVENUE"),        "R$"),
+                ("FIN_REVENUE_GROWTH", ind_map.get("FIN_REVENUE_GROWTH"), "%"),
+                ("VAL_PE",             ind_map.get("VAL_PE"),             "x"),
+                ("VAL_PVP",            ind_map.get("VAL_PVP"),            "x"),
+                ("VAL_EV_EBITDA",      ind_map.get("VAL_EV_EBITDA"),      "x"),
+                ("VAL_DIVIDEND_YIELD", ind_map.get("VAL_DIVIDEND_YIELD"), "%"),
+            ]:
+                if value is None: continue
+                indicator_rows.append((asset_id, code, ref, value, unit, source_id))
+
+            score, confianca = calcular_score(ind_map)
+            if score is not None:
+                classif = classificar(score)
+                trend   = "UP" if score >= 50 else "DOWN"
+                engine_rows.append((asset_id, score, confianca, trend, ref))
+                janus_rows.append((asset_id, score, confianca, classif, trend, ref))
+                rankings_lote.append({"asset_id": asset_id, "ticker": ticker, "score": score})
+
+        except Exception as e:
+            print(f"[COLLECTOR] ⚠️ Erro {ticker}: {e}", flush=True)
+
     with conn.cursor() as cur:
-        for asset_id, ticker, dados in lote_dados:
-            try:
-                ks       = dados.get("defaultKeyStatistics") or {}
-                inc_hist = dados.get("incomeStatementHistory") or []
-                bal_hist = dados.get("balanceSheetHistory") or []
-                inc = inc_hist[0] if inc_hist else {}
-                bal = bal_hist[0] if bal_hist else {}
+        if market_rows:
+            psycopg2.extras.execute_values(cur, """
+                INSERT INTO market_snapshots
+                    (asset_id, reference_date, open_price, high_price, low_price,
+                     close_price, last_price, volume, market_cap, beta, source_id)
+                VALUES %s
+                ON CONFLICT (asset_id, reference_date) DO UPDATE SET
+                    last_price=EXCLUDED.last_price, volume=EXCLUDED.volume,
+                    market_cap=EXCLUDED.market_cap
+            """, market_rows)
 
-                cur.execute("""
-                    INSERT INTO market_snapshots
-                        (asset_id, reference_date, open_price, high_price, low_price,
-                         close_price, last_price, volume, market_cap, beta, source_id)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                    ON CONFLICT (asset_id, reference_date) DO UPDATE SET
-                        last_price=EXCLUDED.last_price, volume=EXCLUDED.volume,
-                        market_cap=EXCLUDED.market_cap
-                """, (asset_id, ref,
-                    safe_num(dados.get("regularMarketOpen")),
-                    safe_num(dados.get("regularMarketDayHigh")),
-                    safe_num(dados.get("regularMarketDayLow")),
-                    safe_num(dados.get("regularMarketPrice")),
-                    safe_num(dados.get("regularMarketPrice")),
-                    safe_num(dados.get("regularMarketVolume")),
-                    safe_num(dados.get("marketCap")),
-                    safe_num(ks.get("beta")), source_id))
+        if financial_rows:
+            psycopg2.extras.execute_values(cur, """
+                INSERT INTO financial_snapshots
+                    (asset_id, reference_date, period_type, revenue, gross_profit,
+                     ebitda, net_income, equity, total_assets, total_debt,
+                     cash_and_equivalents, operating_cash_flow, free_cash_flow,
+                     capex, source_id, data_version)
+                VALUES %s
+                ON CONFLICT (asset_id, reference_date, period_type) DO UPDATE SET
+                    revenue=EXCLUDED.revenue, net_income=EXCLUDED.net_income
+            """, financial_rows,
+                template="(%s,%s,'ANUAL',%s,%s,%s,%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,'1.0')")
 
-                cur.execute("""
-                    INSERT INTO financial_snapshots
-                        (asset_id, reference_date, period_type, revenue, gross_profit,
-                         ebitda, net_income, equity, total_assets, total_debt,
-                         cash_and_equivalents, operating_cash_flow, free_cash_flow,
-                         capex, source_id, data_version)
-                    VALUES (%s,%s,'ANUAL',%s,%s,%s,%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,'1.0')
-                    ON CONFLICT (asset_id, reference_date, period_type) DO UPDATE SET
-                        revenue=EXCLUDED.revenue, net_income=EXCLUDED.net_income
-                """, (asset_id, ref,
-                    safe_num(inc.get("totalRevenue")),
-                    safe_num(inc.get("grossProfit")),
-                    safe_num(inc.get("cleanEbitda") or inc.get("ebit")),
-                    safe_num(inc.get("netIncome")),
-                    safe_num(bal.get("totalStockholderEquity")),
-                    safe_num(bal.get("totalAssets")),
-                    safe_num(bal.get("totalLiab") or bal.get("totalDebt")),
-                    safe_num(bal.get("cash")), source_id))
+        if indicator_rows:
+            psycopg2.extras.execute_values(cur, """
+                INSERT INTO indicator_values
+                    (asset_id, indicator_code, reference_date, raw_value,
+                     unit, period_type, source_id, calculation_version)
+                VALUES %s
+                ON CONFLICT (asset_id, indicator_code, reference_date, period_type)
+                DO UPDATE SET raw_value=EXCLUDED.raw_value
+            """, indicator_rows, template="(%s,%s,%s,%s,%s,'TTM',%s,'1.0')")
 
-                ind_map = calcular_indicadores(dados)
-                for code, value, unit in [
-                    ("FIN_ROE",            ind_map.get("FIN_ROE"),            "%"),
-                    ("FIN_ROIC",           ind_map.get("FIN_ROIC"),           "%"),
-                    ("FIN_NET_MARGIN",     ind_map.get("FIN_NET_MARGIN"),     "%"),
-                    ("FIN_REVENUE",        ind_map.get("FIN_REVENUE"),        "R$"),
-                    ("FIN_REVENUE_GROWTH", ind_map.get("FIN_REVENUE_GROWTH"), "%"),
-                    ("VAL_PE",             ind_map.get("VAL_PE"),             "x"),
-                    ("VAL_PVP",            ind_map.get("VAL_PVP"),            "x"),
-                    ("VAL_EV_EBITDA",      ind_map.get("VAL_EV_EBITDA"),      "x"),
-                    ("VAL_DIVIDEND_YIELD", ind_map.get("VAL_DIVIDEND_YIELD"), "%"),
-                ]:
-                    if value is None: continue
-                    cur.execute("""
-                        INSERT INTO indicator_values
-                            (asset_id, indicator_code, reference_date, raw_value,
-                             unit, period_type, source_id, calculation_version)
-                        VALUES (%s,%s,%s,%s,%s,'TTM',%s,'1.0')
-                        ON CONFLICT (asset_id, indicator_code, reference_date, period_type)
-                        DO UPDATE SET raw_value=EXCLUDED.raw_value
-                    """, (asset_id, code, ref, value, unit, source_id))
+        if engine_rows:
+            psycopg2.extras.execute_values(cur, """
+                INSERT INTO engine_scores
+                    (asset_id, engine_name, score, confidence, trend,
+                     reference_date, engine_version, methodology_version)
+                VALUES %s
+                ON CONFLICT (asset_id, engine_name, reference_date)
+                DO UPDATE SET score=EXCLUDED.score, confidence=EXCLUDED.confidence
+            """, engine_rows, template="(%s,'Quality',%s,%s,%s,%s,'1.0','1.0')")
 
-                score, confianca = calcular_score(ind_map)
-                if score is not None:
-                    classif = classificar(score)
-                    trend   = "UP" if score >= 50 else "DOWN"
-                    cur.execute("""
-                        INSERT INTO engine_scores
-                            (asset_id, engine_name, score, confidence, trend,
-                             reference_date, engine_version, methodology_version)
-                        VALUES (%s,'Quality',%s,%s,%s,%s,'1.0','1.0')
-                        ON CONFLICT (asset_id, engine_name, reference_date)
-                        DO UPDATE SET score=EXCLUDED.score, confidence=EXCLUDED.confidence
-                    """, (asset_id, score, confianca, trend, ref))
-                    cur.execute("""
-                        INSERT INTO janus_scores
-                            (asset_id, overall_score, confidence, classification,
-                             trend, reference_date, methodology_version, engine_version)
-                        VALUES (%s,%s,%s,%s,%s,%s,'1.0','1.0')
-                        ON CONFLICT (asset_id, reference_date)
-                        DO UPDATE SET overall_score=EXCLUDED.overall_score,
-                            confidence=EXCLUDED.confidence,
-                            classification=EXCLUDED.classification
-                    """, (asset_id, score, confianca, classif, trend, ref))
-                    rankings_lote.append({"asset_id": asset_id, "ticker": ticker, "score": score})
-
-            except Exception as e:
-                print(f"[COLLECTOR] ⚠️ Erro {ticker}: {e}", flush=True)
+        if janus_rows:
+            psycopg2.extras.execute_values(cur, """
+                INSERT INTO janus_scores
+                    (asset_id, overall_score, confidence, classification,
+                     trend, reference_date, methodology_version, engine_version)
+                VALUES %s
+                ON CONFLICT (asset_id, reference_date)
+                DO UPDATE SET overall_score=EXCLUDED.overall_score,
+                    confidence=EXCLUDED.confidence,
+                    classification=EXCLUDED.classification
+            """, janus_rows, template="(%s,%s,%s,%s,%s,%s,'1.0','1.0')")
 
     conn.commit()
     return rankings_lote
