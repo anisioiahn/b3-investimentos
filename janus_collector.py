@@ -92,38 +92,84 @@ def buscar_lista_ativos():
     return todos
 
 # ── Upsert em batch ────────────────────────────────────────
-def upsert_assets_batch(conn, lista):
+def upsert_assets_batch(conn, lista, on_progress=None):
+    """
+    Antes: até 2 INSERTs individuais por ativo (empresa + ativo, cada um com
+    RETURNING) = até 1578 round-trips ao banco para 789 ativos. Além de lento,
+    essa fase inteira rodava sem nenhuma atualização de progresso — o gauge
+    ficava travado no valor definido antes de chamar esta função, enquanto o
+    log bruto mostrava "Registrados X/Y" sem que isso chegasse até a tela.
+
+    Agora: upsert em lote por mini-lote de 50 (2 execute_values por mini-lote
+    em vez de até 100 execute() individuais), com o mapeamento company_id
+    feito por valor (trading_name), não por posição — importante porque
+    empresas com mais de uma classe de ação (ex: PETR3/PETR4) compartilham o
+    mesmo trading_name e não podem aparecer duas vezes no mesmo INSERT em
+    lote (Postgres rejeita "ON CONFLICT DO UPDATE... cannot affect row a
+    second time"), então as empresas são deduplicadas antes de cada lote.
+    Testado com 789 ativos simulando ~30% de empresas com 2 classes de ação:
+    1578 -> 32 round-trips, idempotente, mapeamento por ticker validado.
+
+    on_progress(atual, total), se informado, é chamado a cada mini-lote de 50
+    para o gauge poder refletir o progresso real durante esta fase.
+    """
     asset_map = {}
     total = len(lista)
     for i in range(0, total, 50):
         mini_lote = lista[i:i+50]
-        with conn.cursor() as cur:
-            for stock in mini_lote:
-                ticker = stock.get("stock") or stock.get("symbol")
-                if not ticker: continue
-                nome  = stock.get("name", ticker)
-                setor = stock.get("sector")
-                try:
-                    cur.execute("""
+
+        companies_rows, vistos, ticker_para_nome = [], set(), {}
+        for stock in mini_lote:
+            ticker = stock.get("stock") or stock.get("symbol")
+            if not ticker: continue
+            nome  = stock.get("name", ticker)
+            setor = stock.get("sector")
+            ticker_para_nome[ticker] = nome
+            if nome not in vistos:
+                vistos.add(nome)
+                companies_rows.append((nome, nome, setor, agora_str()))
+
+        if companies_rows:
+            try:
+                with conn.cursor() as cur:
+                    resultado_companies = psycopg2.extras.execute_values(cur, """
                         INSERT INTO companies (corporate_name, trading_name, sector, updated_at)
-                        VALUES (%s, %s, %s, %s)
+                        VALUES %s
                         ON CONFLICT (trading_name) DO UPDATE SET
                             sector=EXCLUDED.sector, updated_at=EXCLUDED.updated_at
-                        RETURNING company_id
-                    """, (nome, nome, setor, agora_str()))
-                    company_id = cur.fetchone()[0]
-                    cur.execute("""
-                        INSERT INTO assets (ticker, company_id, asset_type, currency, country, status, updated_at)
-                        VALUES (%s, %s, 'ACAO', 'BRL', 'BR', 'ATIVO', %s)
-                        ON CONFLICT (ticker) DO UPDATE SET
-                            company_id=EXCLUDED.company_id, updated_at=EXCLUDED.updated_at
-                        RETURNING asset_id
-                    """, (ticker, company_id, agora_str()))
-                    asset_map[ticker] = cur.fetchone()[0]
-                except Exception as e:
-                    print(f"[COLLECTOR] ⚠️ Upsert {ticker}: {e}", flush=True)
-        conn.commit()  # commit a cada 50
-        print(f"[COLLECTOR] 💾 Registrados {min(i+50, total)}/{total}", flush=True)
+                        RETURNING trading_name, company_id
+                    """, companies_rows, fetch=True)
+                    nome_para_company_id = {nome: cid for nome, cid in resultado_companies}
+
+                    assets_rows = []
+                    for stock in mini_lote:
+                        ticker = stock.get("stock") or stock.get("symbol")
+                        if not ticker: continue
+                        company_id = nome_para_company_id.get(ticker_para_nome[ticker])
+                        if company_id is None: continue
+                        assets_rows.append((ticker, company_id, agora_str()))
+
+                    if assets_rows:
+                        resultado_assets = psycopg2.extras.execute_values(cur, """
+                            INSERT INTO assets
+                                (ticker, company_id, asset_type, currency, country, status, updated_at)
+                            VALUES %s
+                            ON CONFLICT (ticker) DO UPDATE SET
+                                company_id=EXCLUDED.company_id, updated_at=EXCLUDED.updated_at
+                            RETURNING ticker, asset_id
+                        """, assets_rows, template="(%s,%s,'ACAO','BRL','BR','ATIVO',%s)", fetch=True)
+                        for ticker, aid in resultado_assets:
+                            asset_map[ticker] = aid
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                print(f"[COLLECTOR] ⚠️ Erro no mini-lote {i}-{i+50}: {e}", flush=True)
+
+        atual = min(i+50, total)
+        print(f"[COLLECTOR] 💾 Registrados {atual}/{total}", flush=True)
+        if on_progress:
+            try: on_progress(atual, total)
+            except: pass
     print(f"[COLLECTOR] 💾 {len(asset_map)} ativos no banco", flush=True)
     return asset_map
 
@@ -380,7 +426,13 @@ def run_collector(on_progress=None):
             conn.commit(); return
 
         prog(5, 0, len(lista), f"Registrando {len(lista)} ativos no banco...")
-        asset_map = upsert_assets_batch(conn, lista)
+        asset_map = upsert_assets_batch(
+            conn, lista,
+            on_progress=lambda atual, total_reg: prog(
+                5 + round(atual / total_reg * 5), atual, total_reg,
+                f"Registrando ativos: {atual}/{total_reg}"
+            )
+        )
 
         tickers   = list(asset_map.keys())
         total_l   = (len(tickers) + LOTE_BRAPI - 1) // LOTE_BRAPI
