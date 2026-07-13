@@ -280,6 +280,27 @@ def atualizar_cache():
         db.db_salvar_cache(novo)
         verificar_alertas_todos(novo)
 
+        # Grava cotações do dia na tabela historico_precos
+        from datetime import datetime, timezone, timedelta
+        hora_br = datetime.now(timezone(timedelta(hours=-3))).hour
+        eh_fechamento = hora_br >= 18  # após fechamento do mercado
+        cotacoes_dia = []
+        for s in novo["setores"].values():
+            for e in s["empresas"]:
+                if e.get("preco") and not e.get("fallback"):
+                    cotacoes_dia.append({
+                        'ticker':       e['ticker'],
+                        'preco':        e['preco'],
+                        'variacao_pct': e.get('variacao_pct') or e.get('variacao'),
+                        'open':         e.get('abertura'),
+                        'high':         e.get('maxima_dia'),
+                        'low':          e.get('minima_dia'),
+                        'volume':       e.get('volume'),
+                    })
+        if cotacoes_dia:
+            n = db.db_gravar_cotacoes_dia(cotacoes_dia, fechamento=eh_fechamento)
+            log(f"💾 {n} cotações gravadas no histórico {'(fechamento)' if eh_fechamento else '(intraday)'}", "info")
+
         total_com_preco = sum(1 for s in novo["setores"].values() for e in s["empresas"] if e.get("preco"))
         log(f"✅ {total_com_preco}/{total_tickers} ativos atualizados em {len(novo['setores'])} setores", "sucesso")
         _proximo_update = agora().timestamp() + _intervalo_segundos
@@ -2768,6 +2789,28 @@ def api_admin_config_post():
     for chave, valor in (request.json or {}).items():
         db.db_set_config(chave, valor)
     return jsonify({"ok":True})
+
+@app.route("/api/buscar-ticker")
+@requer_auth
+def api_buscar_ticker():
+    q = request.args.get('q','').upper().strip()
+    if not q or len(q) < 2: return jsonify([])
+    matches = []
+    # Busca no cache
+    for s in _cache.get('setores',{}).values():
+        for e in s.get('empresas',[]):
+            if e['ticker'].startswith(q) or q in e.get('nome','').upper():
+                matches.append({'ticker':e['ticker'],'nome':e.get('nome',''),'cor':e.get('cor','#0066cc'),'preco':e.get('preco')})
+    # Se não achou, tenta buscar na Brapi
+    if not matches:
+        try:
+            r = requests.get(f"{QUOTE_URL}/{q}", headers={"Authorization":f"Bearer {TOKEN_BRAPI}"}, timeout=8)
+            if r.status_code == 200:
+                results = r.json().get('results',[])
+                for item in results:
+                    matches.append({'ticker':item.get('symbol',q),'nome':item.get('longName',item.get('shortName',q)),'cor':'#0066cc','preco':item.get('regularMarketPrice')})
+        except: pass
+    return jsonify(matches[:8])
 
 @app.route("/api/versao")
 def api_versao():
