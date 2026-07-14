@@ -1019,6 +1019,117 @@ def db_listar_dividend_ranking(limit=50):
     finally:
         conn.close()
 
+# ── OPERAÇÕES (livro-razão de compra/venda — Janus Performance) ──
+def db_init_operacoes_table(conn):
+    """Livro-razão de operações, separado da tabela `carteira` (que só
+    guarda a posição consolidada atual). É a fonte de verdade dos fluxos
+    de caixa datados que o motor de XIRR precisa — carteira/preço médio
+    não preserva QUANDO cada compra aconteceu."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS operacoes (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+                ticker TEXT NOT NULL,
+                tipo TEXT NOT NULL CHECK (tipo IN ('COMPRA','VENDA')),
+                data_operacao DATE NOT NULL,
+                quantidade NUMERIC NOT NULL,
+                preco_unitario NUMERIC NOT NULL,
+                valor_total NUMERIC NOT NULL,
+                corretora TEXT,
+                categoria_id INTEGER DEFAULT NULL,
+                observacao TEXT,
+                criado_em TEXT,
+                atualizado_em TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_operacoes_usuario ON operacoes(usuario_id, data_operacao);
+            CREATE INDEX IF NOT EXISTS idx_operacoes_ticker ON operacoes(usuario_id, ticker);
+        """)
+    conn.commit()
+
+def db_criar_operacao(uid, ticker, tipo, data_operacao, quantidade, preco_unitario,
+                       corretora=None, categoria_id=None, observacao=None):
+    if tipo not in ('COMPRA', 'VENDA'):
+        raise ValueError("tipo deve ser 'COMPRA' ou 'VENDA'")
+    valor_total = round(float(quantidade) * float(preco_unitario), 2)
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO operacoes
+                    (usuario_id, ticker, tipo, data_operacao, quantidade,
+                     preco_unitario, valor_total, corretora, categoria_id,
+                     observacao, criado_em, atualizado_em)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (uid, ticker.upper(), tipo, data_operacao, quantidade, preco_unitario,
+                  valor_total, corretora, categoria_id, observacao, agora_str(), agora_str()))
+            novo_id = cur.fetchone()[0]
+        conn.commit()
+        conn.close()
+        return novo_id
+    except Exception as e:
+        print(f"[DB] Erro ao criar operação: {e}")
+        return None
+
+def db_listar_operacoes(uid, ticker=None):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            if ticker:
+                cur.execute("""
+                    SELECT * FROM operacoes WHERE usuario_id=%s AND ticker=%s
+                    ORDER BY data_operacao ASC, id ASC
+                """, (uid, ticker.upper()))
+            else:
+                cur.execute("""
+                    SELECT * FROM operacoes WHERE usuario_id=%s
+                    ORDER BY data_operacao ASC, id ASC
+                """, (uid,))
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                for campo in ('quantidade', 'preco_unitario', 'valor_total'):
+                    if r.get(campo) is not None: r[campo] = float(r[campo])
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[DB] Erro ao listar operações: {e}")
+        return []
+
+def db_excluir_operacao(uid, operacao_id):
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM operacoes WHERE id=%s AND usuario_id=%s", (operacao_id, uid))
+            afetadas = cur.rowcount
+        conn.commit()
+        conn.close()
+        return afetadas > 0
+    except Exception as e:
+        print(f"[DB] Erro ao excluir operação: {e}")
+        return False
+
+
+# ── Fatores de benchmark (usado pelo motor de Performance) ────────
+def db_buscar_fatores_benchmark(codigo_benchmark, data_inicial, data_final):
+    """Devolve {data: fator_diario} para o benchmark pedido, no intervalo.
+    Usado por janus_performance.simular_saldo_benchmark()."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT data, fator_diario FROM benchmark_diario
+                WHERE codigo_benchmark=%s AND data BETWEEN %s AND %s
+                ORDER BY data ASC
+            """, (codigo_benchmark, data_inicial, data_final))
+            resultado = {row[0]: float(row[1]) for row in cur.fetchall()}
+        conn.close()
+        return resultado
+    except Exception as e:
+        print(f"[DB] Erro ao buscar fatores de benchmark: {e}")
+        return {}
+
+
 # ── CARTEIRA SNAPSHOT (histórico diário de performance) ───────
 def db_init_snapshot_tables(conn):
     """Cria tabela de snapshots se não existir."""
