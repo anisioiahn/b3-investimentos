@@ -46,11 +46,23 @@ def _serializar_resultado(resultado: jp.ResultadoPerformance) -> dict:
             "codigo": resultado.codigo_benchmark,
             "saldo_simulado": round(resultado.saldo_benchmark, 2) if resultado.saldo_benchmark is not None else None,
             "dias_sem_fator": resultado.dias_sem_fator,
+            "ganho_perda_absoluto": round(resultado.benchmark_ganho_perda_absoluto, 2) if resultado.benchmark_ganho_perda_absoluto is not None else None,
+            "ganho_perda_percentual": round(resultado.benchmark_ganho_perda_percentual * 100, 4) if resultado.benchmark_ganho_perda_percentual is not None else None,
         },
         "valor_atual_real": resultado.valor_atual_real,
         "diferenca_absoluta": round(resultado.diferenca_absoluta, 2) if resultado.diferenca_absoluta is not None else None,
         "diferenca_percentual": round(resultado.diferenca_percentual * 100, 4) if resultado.diferenca_percentual is not None else None,
         "bateu_benchmark": (resultado.diferenca_absoluta > 0) if resultado.diferenca_absoluta is not None else None,
+        # ── Auditoria: números crus, verificáveis sem entender XIRR ──
+        "auditoria": {
+            "data_inicial": resultado.data_inicial.isoformat() if resultado.data_inicial else None,
+            "data_final": resultado.data_final.isoformat() if resultado.data_final else None,
+            "valor_total_investido": round(resultado.valor_total_investido, 2) if resultado.valor_total_investido is not None else None,
+            "valor_total_recebido": round(resultado.valor_total_recebido, 2) if resultado.valor_total_recebido is not None else None,
+            "valor_atual": round(resultado.valor_atual_real, 2) if resultado.valor_atual_real is not None else None,
+            "ganho_perda_absoluto": round(resultado.ganho_perda_absoluto, 2) if resultado.ganho_perda_absoluto is not None else None,
+            "ganho_perda_percentual": round(resultado.ganho_perda_percentual * 100, 4) if resultado.ganho_perda_percentual is not None else None,
+        },
     }
 
 
