@@ -1072,7 +1072,57 @@ def db_criar_operacao(uid, ticker, tipo, data_operacao, quantidade, preco_unitar
         print(f"[DB] Erro ao criar operação: {e}")
         return None
 
-def db_listar_operacoes(uid, ticker=None):
+def db_sincronizar_operacoes_da_carteira(uid):
+    """
+    Recria o livro-razão de operações inteiro a partir do estado ATUAL da
+    Carteira — chamado sempre que o usuário clica "Atualizar Performance".
+    Cada posição confirmada vira uma operação de COMPRA sintética, datada
+    na data_compra da posição, herdando a categoria da posição (para o
+    drilldown por categoria funcionar).
+
+    Limitação conhecida e aceita por ora: a Carteira só guarda a posição
+    ATUAL, não histórico de vendas. Se um ativo foi vendido e removido da
+    Carteira, o ganho dele desaparece do XIRR aqui — isso será resolvido
+    por um módulo futuro e separado de vendas/IR, não por este.
+
+    Substitui tudo a cada chamada (DELETE + INSERT), não acumula — assim
+    fica sempre consistente com o estado atual da Carteira, mesmo que o
+    usuário tenha editado preço médio/quantidade/categoria depois.
+    """
+    try:
+        posicoes = db_listar_carteira(uid)
+        confirmadas = [p for p in posicoes if p.get('status') == 'confirmada' and p.get('data_compra')]
+
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM operacoes WHERE usuario_id=%s", (uid,))
+            if confirmadas:
+                rows = [
+                    (uid, p['ticker'], 'COMPRA', p['data_compra'],
+                     p['quantidade'], p['preco_medio'],
+                     round(p['quantidade'] * p['preco_medio'], 2),
+                     p.get('corretora'), p.get('categoria_id'),
+                     'Sincronizado automaticamente da Carteira', agora_str(), agora_str())
+                    for p in confirmadas
+                ]
+                psycopg2.extras.execute_values(cur, """
+                    INSERT INTO operacoes
+                        (usuario_id, ticker, tipo, data_operacao, quantidade,
+                         preco_unitario, valor_total, corretora, categoria_id,
+                         observacao, criado_em, atualizado_em)
+                    VALUES %s
+                """, rows)
+        conn.commit()
+        conn.close()
+        return len(confirmadas)
+    except Exception as e:
+        print(f"[DB] Erro ao sincronizar operações da carteira: {e}")
+        return 0
+
+def db_listar_operacoes(uid, ticker=None, categoria_id='TODAS'):
+    """categoria_id='TODAS' (default) não filtra; None filtra só as SEM
+    categoria (Geral); um id filtra só aquela categoria. ticker, quando
+    informado, tem prioridade sobre categoria_id."""
     try:
         conn = get_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -1081,6 +1131,16 @@ def db_listar_operacoes(uid, ticker=None):
                     SELECT * FROM operacoes WHERE usuario_id=%s AND ticker=%s
                     ORDER BY data_operacao ASC, id ASC
                 """, (uid, ticker.upper()))
+            elif categoria_id is None:
+                cur.execute("""
+                    SELECT * FROM operacoes WHERE usuario_id=%s AND categoria_id IS NULL
+                    ORDER BY data_operacao ASC, id ASC
+                """, (uid,))
+            elif categoria_id != 'TODAS':
+                cur.execute("""
+                    SELECT * FROM operacoes WHERE usuario_id=%s AND categoria_id=%s
+                    ORDER BY data_operacao ASC, id ASC
+                """, (uid, categoria_id))
             else:
                 cur.execute("""
                     SELECT * FROM operacoes WHERE usuario_id=%s
@@ -1094,6 +1154,52 @@ def db_listar_operacoes(uid, ticker=None):
         return rows
     except Exception as e:
         print(f"[DB] Erro ao listar operações: {e}")
+        return []
+
+def db_listar_categorias_com_operacoes(uid):
+    """Categorias (da Carteira) que têm ao menos 1 operação sincronizada —
+    usado para montar o primeiro nível de drilldown do Janus Performance.
+    Inclui também um marcador de categoria 'Geral' se houver operações
+    sem categoria."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT DISTINCT cc.id, cc.nome, cc.cor, cc.icone
+                FROM carteira_categorias cc
+                JOIN operacoes o ON o.categoria_id = cc.id AND o.usuario_id = cc.usuario_id
+                WHERE cc.usuario_id=%s
+                ORDER BY cc.nome
+            """, (uid,))
+            categorias = [dict(r) for r in cur.fetchall()]
+        with conn.cursor() as cur2:  # cursor comum — COUNT(*) acessado por posição, não por chave
+            cur2.execute("SELECT COUNT(*) FROM operacoes WHERE usuario_id=%s AND categoria_id IS NULL", (uid,))
+            tem_geral = cur2.fetchone()[0] > 0
+        conn.close()
+        if tem_geral:
+            categorias.append({"id": None, "nome": "Geral", "cor": "#64748b", "icone": "📁"})
+        return categorias
+    except Exception as e:
+        print(f"[DB] Erro ao listar categorias com operações: {e}")
+        return []
+
+def db_listar_tickers_com_operacoes(uid, categoria_id='TODAS'):
+    """Tickers distintos com operação, opcionalmente filtrado por categoria
+    (mesma convenção de categoria_id de db_listar_operacoes)."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            if categoria_id is None:
+                cur.execute("SELECT DISTINCT ticker FROM operacoes WHERE usuario_id=%s AND categoria_id IS NULL ORDER BY ticker", (uid,))
+            elif categoria_id != 'TODAS':
+                cur.execute("SELECT DISTINCT ticker FROM operacoes WHERE usuario_id=%s AND categoria_id=%s ORDER BY ticker", (uid, categoria_id))
+            else:
+                cur.execute("SELECT DISTINCT ticker FROM operacoes WHERE usuario_id=%s ORDER BY ticker", (uid,))
+            tickers = [r[0] for r in cur.fetchall()]
+        conn.close()
+        return tickers
+    except Exception as e:
+        print(f"[DB] Erro ao listar tickers com operações: {e}")
         return []
 
 def db_excluir_operacao(uid, operacao_id):
