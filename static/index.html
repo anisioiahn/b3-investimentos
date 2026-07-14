@@ -3697,6 +3697,54 @@ function renderResultadoPerformance(d){
         <span>Método: ${x.metodo_utilizado||'—'} · Motor v${x.versao_motor||'1.0'}</span>
         ${bm.dias_sem_fator>0?`<span style="color:#f59e0b">⚠️ ${bm.dias_sem_fator} dia(s) sem dado de CDI no período</span>`:''}
       </div>
+    </div>
+    ${_perfNivel === 'ativo' ? _perfTabelaAuditoria(d) : ''}`;
+}
+
+function _perfTabelaAuditoria(d){
+  const a = d.auditoria || {};
+  const bm = d.benchmark || {};
+  const fmtData = iso => iso ? new Date(iso+'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  const corGanho = (v) => (v||0) >= 0 ? '#16a34a' : '#e53935';
+  const linha = (label, valor, destaque) => `
+    <tr>
+      <td style="padding:8px 10px;color:var(--text2);font-size:12px">${label}</td>
+      <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:13px;font-weight:${destaque?'700':'400'};color:${destaque||'var(--text)'}">${valor}</td>
+    </tr>`;
+
+  return `
+    <div class="cockpit-card" style="margin-top:1rem">
+      <div class="cockpit-card-title">🔍 Auditoria — números brutos, verificáveis com uma calculadora</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:1rem">
+        Estes valores não passam pelo solver de XIRR — são a soma direta das operações e o valor de mercado atual, prontos pra conferência independente.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">📌 Este Ativo</div>
+          <table style="width:100%;border-collapse:collapse">
+            ${linha('Data inicial (1º aporte)', fmtData(a.data_inicial))}
+            ${linha('Data final (hoje, no cálculo)', fmtData(a.data_final))}
+            ${linha('Valor total investido', `R$ ${fmt(a.valor_total_investido)}`)}
+            ${a.valor_total_recebido>0 ? linha('Valor já recebido (vendas)', `R$ ${fmt(a.valor_total_recebido)}`) : ''}
+            ${linha('Valor atual (hoje)', `R$ ${fmt(a.valor_atual)}`)}
+            ${linha('Ganho/perda (R$)', `${a.ganho_perda_absoluto>=0?'+':''}R$ ${fmt(a.ganho_perda_absoluto)}`, corGanho(a.ganho_perda_absoluto))}
+            ${linha('Ganho/perda (%)', `${a.ganho_perda_percentual>=0?'+':''}${a.ganho_perda_percentual?.toFixed(2)}%`, corGanho(a.ganho_perda_percentual))}
+          </table>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">💰 Se Tivesse Ficado no CDI</div>
+          <table style="width:100%;border-collapse:collapse">
+            ${linha('Mesmo valor investido', `R$ ${fmt(a.valor_total_investido)}`)}
+            ${linha('Valor que teria hoje', `R$ ${fmt(bm.saldo_simulado)}`)}
+            ${linha('Ganho/perda (R$)', `${bm.ganho_perda_absoluto>=0?'+':''}R$ ${fmt(bm.ganho_perda_absoluto)}`, corGanho(bm.ganho_perda_absoluto))}
+            ${linha('Ganho/perda (%)', `${bm.ganho_perda_percentual>=0?'+':''}${bm.ganho_perda_percentual?.toFixed(2)}%`, corGanho(bm.ganho_perda_percentual))}
+          </table>
+        </div>
+      </div>
+      <div style="margin-top:1rem;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--text3)">
+        💡 Conferência rápida: Ganho % do ativo = (Valor atual − Valor investido) ÷ Valor investido. 
+        A taxa XIRR mostrada acima é a versão <strong>anualizada</strong> deste mesmo ganho — leva em conta a data exata de cada aporte, por isso normalmente não bate com uma "regra de três" simples sobre o número de anos.
+      </div>
     </div>`;
 }
 
