@@ -1038,17 +1038,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <!-- JANUS PERFORMANCE -->
     <div class="page" id="page-performance">
       <div style="max-width:900px;margin:0 auto">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1rem">
           <div>
             <div style="font-size:20px;font-weight:700">📈 Performance da Carteira</div>
             <div style="font-size:13px;color:var(--text2);margin-top:2px">Rentabilidade real (XIRR) comparada ao CDI, considerando cada aporte na data exata</div>
           </div>
-          <button onclick="abrirModalOperacao()" class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:10px 18px;font-size:13px;font-weight:600">
-            + Nova Operação
+          <button onclick="sincronizarPerformance()" id="perf-btn-sincronizar" class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:10px 18px;font-size:13px;font-weight:600">
+            🔄 Atualizar Performance
           </button>
         </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:1.25rem">
+          Sincroniza automaticamente a partir das posições confirmadas na sua Carteira — não precisa cadastrar operação manual.
+        </div>
 
-        <!-- Card de resultado -->
+        <!-- Breadcrumb de navegação (Carteira geral > Categoria > Ativo) -->
+        <div id="perf-breadcrumb" style="display:none;margin-bottom:1rem;font-size:13px"></div>
+
+        <!-- Card de resultado do nível atual -->
         <div id="perf-resultado-area" style="margin-bottom:1.5rem">
           <div class="cockpit-card" style="text-align:center;padding:3rem 2rem;color:var(--text3)">
             <div style="font-size:32px;margin-bottom:.75rem">⏳</div>
@@ -1056,67 +1062,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
           </div>
         </div>
 
-        <!-- Tabela de operações -->
-        <div class="cockpit-card">
-          <div class="cockpit-card-title">📋 Operações Registradas</div>
-          <div id="perf-operacoes-area">
-            <div style="text-align:center;padding:2rem;color:var(--text3)">Carregando...</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAL NOVA OPERAÇÃO (Janus Performance) -->
-    <div class="pos-modal-overlay" id="op-modal" onclick="fecharModalOperacao(event)">
-      <div class="pos-modal" onclick="event.stopPropagation()">
-        <div class="pos-modal-header">
-          <div class="pos-modal-title">➕ Nova Operação</div>
-          <button class="modal-close" onclick="fecharModalOperacao()">✕</button>
-        </div>
-        <div class="pos-modal-body">
-          <div class="pos-field">
-            <label>Tipo</label>
-            <div style="display:flex;gap:8px">
-              <button type="button" id="op-tipo-compra" onclick="selecionarTipoOperacao('COMPRA')"
-                style="flex:1;padding:10px;border:2px solid #16a34a;border-radius:8px;background:rgba(22,163,74,0.1);color:#16a34a;font-weight:700;cursor:pointer;font-family:inherit">
-                🟢 Compra
-              </button>
-              <button type="button" id="op-tipo-venda" onclick="selecionarTipoOperacao('VENDA')"
-                style="flex:1;padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--card);color:var(--text2);font-weight:700;cursor:pointer;font-family:inherit">
-                🔴 Venda
-              </button>
-            </div>
-          </div>
-          <div class="pos-field pos-ticker-search">
-            <label>Ativo (ticker)</label>
-            <input id="op-ticker" type="text" placeholder="Ex: PETR4, VALE3..." autocomplete="off"
-              oninput="buscarTickerOperacao(this.value)" style="text-transform:uppercase">
-            <div id="op-ticker-results" class="pos-ticker-results" style="display:none"></div>
-          </div>
-          <div class="pos-field-row">
-            <div class="pos-field">
-              <label>Quantidade</label>
-              <input id="op-quantidade" type="number" step="1" min="0" placeholder="0" oninput="atualizarPreviewOperacao()">
-            </div>
-            <div class="pos-field">
-              <label>Preço unitário (R$)</label>
-              <input id="op-preco" type="number" step="0.01" min="0" placeholder="0,00" oninput="atualizarPreviewOperacao()">
-            </div>
-          </div>
-          <div class="pos-field">
-            <label>Data da operação</label>
-            <input id="op-data" type="date">
-          </div>
-          <div class="pos-field">
-            <label>Corretora <span style="font-weight:400;color:var(--text3)">(opcional)</span></label>
-            <input id="op-corretora" type="text" placeholder="Ex: XP, Rico, Clear...">
-          </div>
-          <div id="op-preview" style="display:none;background:var(--bg);border-radius:8px;padding:10px;font-size:12px;color:var(--text2)"></div>
-        </div>
-        <div class="pos-modal-footer">
-          <button class="pos-btn-cancel" onclick="fecharModalOperacao()">Cancelar</button>
-          <button class="pos-btn-save" id="op-btn-salvar" onclick="salvarOperacao()">💾 Salvar operação</button>
-        </div>
+        <!-- Lista de itens pra descer o drilldown (categorias, ou ativos dentro de uma categoria) -->
+        <div id="perf-drilldown-area"></div>
       </div>
     </div>
     <!-- PÁGINA OPORTUNIDADES -->
@@ -3532,39 +3479,170 @@ function _renderCockpitCarteira(){
 }
 
 // ── JANUS PERFORMANCE ──────────────────────────────────────────
-let _perfOperacoes = [];
-let _perfTipoSelecionado = 'COMPRA';
+// Estado da navegação em drilldown: 'geral' -> 'categoria' -> 'ativo'
+let _perfNivel = 'geral';
+let _perfCategoriaAtual = null;   // id numérico, ou 'geral' (sem categoria), ou null (nenhuma selecionada)
+let _perfCategoriaNome = '';
+let _perfAtivoAtual = null;
 
 async function carregarPerformance(){
-  await Promise.all([carregarResultadoPerformance(), carregarOperacoesPerformance()]);
+  _perfNivel = 'geral';
+  _perfCategoriaAtual = null;
+  _perfAtivoAtual = null;
+  await _perfCarregarNivelAtual();
 }
 
-async function carregarResultadoPerformance(){
-  const area = document.getElementById('perf-resultado-area');
-  if(!area) return;
+async function sincronizarPerformance(){
+  const btn = document.getElementById('perf-btn-sincronizar');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Sincronizando...'; }
   try{
-    const r = await fetch('/api/performance/carteira');
+    const r = await fetch('/api/performance/sincronizar', {method:'POST'});
     const d = await r.json();
-    renderResultadoPerformance(d);
+    if(btn){ btn.disabled = false; btn.textContent = '🔄 Atualizar Performance'; }
+    if(!d.ok){ alert('Não foi possível sincronizar. Tente novamente.'); return; }
+    await _perfCarregarNivelAtual();
   }catch(e){
-    area.innerHTML = `<div class="cockpit-card" style="text-align:center;padding:2rem;color:#e53935">
-      ❌ Erro ao carregar performance. Tente novamente.</div>`;
+    if(btn){ btn.disabled = false; btn.textContent = '🔄 Atualizar Performance'; }
+    alert('Erro de conexão ao sincronizar performance');
   }
+}
+
+async function _perfCarregarNivelAtual(){
+  _renderPerfBreadcrumb();
+  const resArea = document.getElementById('perf-resultado-area');
+  const drillArea = document.getElementById('perf-drilldown-area');
+  if(resArea) resArea.innerHTML = `<div class="cockpit-card" style="text-align:center;padding:3rem 2rem;color:var(--text3)"><div style="font-size:32px;margin-bottom:.75rem">⏳</div>Carregando...</div>`;
+  if(drillArea) drillArea.innerHTML = '';
+
+  try{
+    if(_perfNivel === 'geral'){
+      const r = await fetch('/api/performance/carteira');
+      const d = await r.json();
+      renderResultadoPerformance(d);
+      await _perfCarregarListaCategorias();
+    } else if(_perfNivel === 'categoria'){
+      const id = _perfCategoriaAtual === 'geral' ? 'geral' : _perfCategoriaAtual;
+      const r = await fetch(`/api/performance/categoria/${id}`);
+      const d = await r.json();
+      renderResultadoPerformance(d);
+      _renderPerfListaAtivos(d.ativos || []);
+    } else if(_perfNivel === 'ativo'){
+      const r = await fetch(`/api/performance/ativo/${_perfAtivoAtual}`);
+      const d = await r.json();
+      renderResultadoPerformance(d);
+    }
+  }catch(e){
+    if(resArea) resArea.innerHTML = `<div class="cockpit-card" style="text-align:center;padding:2rem;color:#e53935">❌ Erro ao carregar performance</div>`;
+  }
+}
+
+async function _perfCarregarListaCategorias(){
+  const drillArea = document.getElementById('perf-drilldown-area');
+  if(!drillArea) return;
+  try{
+    const r = await fetch('/api/performance/categorias');
+    const categorias = await r.json();
+    if(!categorias.length){ drillArea.innerHTML = ''; return; }
+    drillArea.innerHTML = `
+      <div style="font-size:13px;font-weight:700;margin-bottom:.75rem">📂 Ver por categoria</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${categorias.map(cat => _perfCardDrilldown({
+          titulo: `${cat.icone} ${cat.nome}`,
+          onclick: `abrirCategoriaPerformance(${cat.id===null?"'geral'":cat.id}, '${cat.nome.replace(/'/g,"\\'")}')`,
+          resultado: cat.resultado,
+        })).join('')}
+      </div>`;
+  }catch(e){ drillArea.innerHTML = ''; }
+}
+
+function _renderPerfListaAtivos(ativos){
+  const drillArea = document.getElementById('perf-drilldown-area');
+  if(!drillArea) return;
+  if(!ativos.length){ drillArea.innerHTML = ''; return; }
+  drillArea.innerHTML = `
+    <div style="font-size:13px;font-weight:700;margin-bottom:.75rem">📊 Ativos nesta categoria</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${ativos.map(a => _perfCardDrilldown({
+        titulo: a.ticker,
+        onclick: `abrirAtivoPerformance('${a.ticker}')`,
+        resultado: a.resultado,
+      })).join('')}
+    </div>`;
+}
+
+function _perfCardDrilldown({titulo, onclick, resultado}){
+  const temTaxa = resultado && resultado.xirr && resultado.xirr.taxa_pct !== null && resultado.xirr.taxa_pct !== undefined;
+  const positivo = temTaxa && resultado.xirr.taxa_pct >= 0;
+  const corTaxa = positivo ? '#16a34a' : '#e53935';
+  return `<div onclick="${onclick}"
+    style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .15s"
+    onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+    <span style="font-size:14px;font-weight:600">${titulo}</span>
+    <div style="display:flex;align-items:center;gap:10px">
+      ${temTaxa
+        ? `<span style="font-size:15px;font-weight:800;color:${corTaxa}">${positivo?'+':''}${resultado.xirr.taxa_pct.toFixed(2)}%</span>`
+        : `<span style="font-size:11px;color:var(--text3)">sem dados</span>`}
+      <span style="color:var(--text3);font-size:16px">›</span>
+    </div>
+  </div>`;
+}
+
+function abrirCategoriaPerformance(id, nome){
+  _perfNivel = 'categoria';
+  _perfCategoriaAtual = id;
+  _perfCategoriaNome = nome;
+  _perfCarregarNivelAtual();
+}
+
+function abrirAtivoPerformance(ticker){
+  _perfNivel = 'ativo';
+  _perfAtivoAtual = ticker;
+  _perfCarregarNivelAtual();
+}
+
+function voltarPerformanceGeral(){
+  _perfNivel = 'geral';
+  _perfCategoriaAtual = null;
+  _perfAtivoAtual = null;
+  _perfCarregarNivelAtual();
+}
+
+function voltarPerformanceCategoria(){
+  _perfNivel = 'categoria';
+  _perfAtivoAtual = null;
+  _perfCarregarNivelAtual();
+}
+
+function _renderPerfBreadcrumb(){
+  const el = document.getElementById('perf-breadcrumb');
+  if(!el) return;
+  if(_perfNivel === 'geral'){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  const partes = [`<span onclick="voltarPerformanceGeral()" style="cursor:pointer;color:var(--green);font-weight:600">💼 Carteira Geral</span>`];
+  if(_perfNivel === 'categoria' || _perfNivel === 'ativo'){
+    const nomeCategoria = _perfCategoriaAtual === 'geral' ? '📁 Geral' : _perfCategoriaNome;
+    partes.push(_perfNivel === 'categoria'
+      ? `<span style="color:var(--text)">${nomeCategoria}</span>`
+      : `<span onclick="voltarPerformanceCategoria()" style="cursor:pointer;color:var(--green);font-weight:600">${nomeCategoria}</span>`);
+  }
+  if(_perfNivel === 'ativo'){
+    partes.push(`<span style="color:var(--text)">${_perfAtivoAtual}</span>`);
+  }
+  el.innerHTML = partes.join(' <span style="color:var(--text3)">›</span> ');
 }
 
 function renderResultadoPerformance(d){
   const area = document.getElementById('perf-resultado-area');
   if(!area) return;
 
-  // Sem nenhuma operação registrada ainda
   if(d.erro === 'sem_operacoes'){
     area.innerHTML = `<div class="cockpit-card" style="text-align:center;padding:3rem 2rem">
       <div style="font-size:40px;margin-bottom:1rem">📈</div>
-      <div style="font-size:15px;font-weight:600;margin-bottom:.5rem">Nenhuma operação registrada ainda</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:.5rem">${_perfNivel==='geral' ? 'Nenhuma operação sincronizada ainda' : 'Sem dados neste recorte'}</div>
       <div style="font-size:13px;color:var(--text2);margin-bottom:1.5rem">${d.mensagem||''}</div>
-      <button onclick="abrirModalOperacao()" class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:10px 20px">
-        + Registrar primeira operação
-      </button>
+      ${_perfNivel==='geral' ? `<button onclick="sincronizarPerformance()" class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:10px 20px">
+        🔄 Atualizar Performance
+      </button>` : ''}
     </div>`;
     return;
   }
@@ -3576,8 +3654,6 @@ function renderResultadoPerformance(d){
   const x = d.xirr || {};
   const bm = d.benchmark || {};
 
-  // Status sem taxa numérica exibível — mostra a mensagem de forma neutra,
-  // sem alarmar (segue a diretriz de nunca tratar isso como "erro")
   const statusSemNumero = ['INSUFFICIENT_CASH_FLOWS','NO_REAL_ROOT','MULTIPLE_ROOTS',
                             'NON_CONVERGENCE','OUT_OF_ALLOWED_RANGE','NUMERICAL_INSTABILITY'];
   if(statusSemNumero.includes(x.status)){
@@ -3601,7 +3677,7 @@ function renderResultadoPerformance(d){
 
       <div style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap;margin-bottom:1.5rem">
         <div style="text-align:center">
-          <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px">Sua Rentabilidade (XIRR)</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px">Rentabilidade (XIRR)</div>
           <div style="font-size:40px;font-weight:800;color:${corTaxa};line-height:1">${x.taxa_pct>=0?'+':''}${x.taxa_pct?.toFixed(2)}%</div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">ao ano · ${x.dias_periodo||0} dias de histórico</div>
         </div>
@@ -3612,7 +3688,7 @@ function renderResultadoPerformance(d){
             <span style="font-size:13px;color:${positivo?'#16a34a':'#e53935'};font-weight:600">(${positivo?'+':''}${d.diferenca_percentual?.toFixed(2)}%)</span>
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:4px">
-            ${positivo?'Você superou':'Você ficou abaixo de'} o CDI no período. Se tivesse investido no CDI: R$ ${fmt(bm.saldo_simulado||0)}
+            ${positivo?'Superou':'Ficou abaixo de'} o CDI no período. Se tivesse investido no CDI: R$ ${fmt(bm.saldo_simulado||0)}
           </div>
         </div>
       </div>
@@ -3623,188 +3699,6 @@ function renderResultadoPerformance(d){
       </div>
     </div>`;
 }
-
-async function carregarOperacoesPerformance(){
-  const area = document.getElementById('perf-operacoes-area');
-  if(!area) return;
-  try{
-    const r = await fetch('/api/performance/operacoes');
-    _perfOperacoes = await r.json();
-    renderOperacoesPerformance();
-  }catch(e){
-    area.innerHTML = `<div style="text-align:center;padding:2rem;color:#e53935">❌ Erro ao carregar operações</div>`;
-  }
-}
-
-function renderOperacoesPerformance(){
-  const area = document.getElementById('perf-operacoes-area');
-  if(!area) return;
-  if(!_perfOperacoes.length){
-    area.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">Nenhuma operação registrada ainda</div>`;
-    return;
-  }
-  const ordenadas = [..._perfOperacoes].sort((a,b)=> b.data_operacao.localeCompare(a.data_operacao));
-  area.innerHTML = `<div style="overflow-x:auto"><table class="ct-table">
-    <thead><tr>
-      <th style="text-align:left">Tipo</th><th style="text-align:left">Ativo</th>
-      <th style="text-align:left">Data</th><th class="num">Qtd</th>
-      <th class="num">Preço</th><th class="num">Total</th><th></th>
-    </tr></thead><tbody>
-    ${ordenadas.map(op=>{
-      const tipoCor = op.tipo==='COMPRA' ? '#16a34a' : '#e53935';
-      const dataFmt = new Date(op.data_operacao+'T12:00:00').toLocaleDateString('pt-BR');
-      return `<tr>
-        <td><span style="font-size:11px;font-weight:700;color:${tipoCor};background:${tipoCor}1a;padding:3px 8px;border-radius:10px">${op.tipo}</span></td>
-        <td style="font-weight:700">${op.ticker}</td>
-        <td style="color:var(--text2)">${dataFmt}${op.corretora?` · ${op.corretora}`:''}</td>
-        <td class="num">${op.quantidade}</td>
-        <td class="num">R$ ${fmt(op.preco_unitario)}</td>
-        <td class="num" style="font-weight:600">R$ ${fmt(op.valor_total)}</td>
-        <td><button class="ct-del" onclick="excluirOperacaoPerformance(${op.id})" title="Excluir">🗑</button></td>
-      </tr>`;
-    }).join('')}
-    </tbody></table></div>`;
-}
-
-async function excluirOperacaoPerformance(id){
-  if(!confirm('Excluir esta operação? Isso vai recalcular sua rentabilidade.')) return;
-  try{
-    await fetch(`/api/performance/operacoes/${id}`, {method:'DELETE'});
-    await carregarPerformance();
-  }catch(e){ alert('Erro ao excluir operação'); }
-}
-
-// ── Modal de nova operação ───────────────────────────────────
-function abrirModalOperacao(){
-  document.getElementById('op-ticker').value = '';
-  document.getElementById('op-quantidade').value = '';
-  document.getElementById('op-preco').value = '';
-  document.getElementById('op-corretora').value = '';
-  document.getElementById('op-data').value = new Date().toISOString().split('T')[0];
-  document.getElementById('op-preview').style.display = 'none';
-  document.getElementById('op-ticker-results').style.display = 'none';
-  selecionarTipoOperacao('COMPRA');
-  document.getElementById('op-modal').classList.add('open');
-  setTimeout(()=>document.getElementById('op-ticker')?.focus(), 100);
-}
-
-function fecharModalOperacao(e){
-  if(!e || e.target === document.getElementById('op-modal')){
-    document.getElementById('op-modal').classList.remove('open');
-  }
-}
-
-function selecionarTipoOperacao(tipo){
-  _perfTipoSelecionado = tipo;
-  const btnCompra = document.getElementById('op-tipo-compra');
-  const btnVenda = document.getElementById('op-tipo-venda');
-  if(tipo === 'COMPRA'){
-    btnCompra.style.borderColor = '#16a34a'; btnCompra.style.background = 'rgba(22,163,74,0.1)'; btnCompra.style.color = '#16a34a';
-    btnVenda.style.borderColor = 'var(--border)'; btnVenda.style.background = 'var(--card)'; btnVenda.style.color = 'var(--text2)';
-  } else {
-    btnVenda.style.borderColor = '#e53935'; btnVenda.style.background = 'rgba(229,57,53,0.1)'; btnVenda.style.color = '#e53935';
-    btnCompra.style.borderColor = 'var(--border)'; btnCompra.style.background = 'var(--card)'; btnCompra.style.color = 'var(--text2)';
-  }
-}
-
-async function buscarTickerOperacao(val){
-  const res = document.getElementById('op-ticker-results');
-  if(!val || val.length < 1){ res.style.display='none'; return; }
-  const upper = val.toUpperCase();
-  const matches = [];
-  for(const s of Object.values(DADOS.setores||{})){
-    for(const e of s.empresas){
-      if(e.ticker.startsWith(upper) || e.nome.toUpperCase().includes(upper)){
-        matches.push({ticker:e.ticker, nome:e.nome, cor:e.cor, preco:e.preco});
-        if(matches.length >= 8) break;
-      }
-    }
-    if(matches.length >= 8) break;
-  }
-  if(!matches.length && upper.length >= 4){
-    try{
-      const r = await fetch(`/api/buscar-ticker?q=${upper}`);
-      const d = await r.json();
-      if(d?.length) matches.push(...d.slice(0,5));
-    }catch(e){}
-  }
-  if(!matches.length){ res.style.display='none'; return; }
-  res.innerHTML = matches.map(m=>`
-    <div class="pos-ticker-result-item" onclick="selecionarTickerOperacao('${m.ticker}')">
-      <div class="ct-logo" style="background:${m.cor||'#0066cc'};width:26px;height:26px;font-size:8px">${m.ticker.substring(0,4)}</div>
-      <div><div style="font-weight:600">${m.ticker}</div><div style="font-size:11px;color:var(--text2)">${m.nome||''}</div></div>
-      ${m.preco?`<div style="margin-left:auto;font-size:12px;font-family:monospace">R$ ${parseFloat(m.preco).toFixed(2)}</div>`:''}
-    </div>`).join('');
-  res.style.display = 'block';
-}
-
-function selecionarTickerOperacao(ticker){
-  document.getElementById('op-ticker').value = ticker;
-  document.getElementById('op-ticker-results').style.display = 'none';
-  let precoAtual = null;
-  for(const s of Object.values(DADOS.setores||{})){
-    const e = s.empresas?.find(e=>e.ticker===ticker);
-    if(e?.preco){ precoAtual = e.preco; break; }
-  }
-  if(precoAtual) document.getElementById('op-preco').value = precoAtual.toFixed(2);
-  atualizarPreviewOperacao();
-  document.getElementById('op-quantidade').focus();
-}
-
-function atualizarPreviewOperacao(){
-  const qtd = parseFloat(document.getElementById('op-quantidade').value);
-  const preco = parseFloat(document.getElementById('op-preco').value);
-  const prev = document.getElementById('op-preview');
-  if(qtd > 0 && preco > 0){
-    prev.style.display = 'block';
-    prev.innerHTML = `💰 Total da operação: <strong>R$ ${fmt(qtd*preco)}</strong>`;
-  } else {
-    prev.style.display = 'none';
-  }
-}
-
-async function salvarOperacao(){
-  const ticker = document.getElementById('op-ticker').value.toUpperCase().trim();
-  const quantidade = parseFloat(document.getElementById('op-quantidade').value);
-  const preco = parseFloat(document.getElementById('op-preco').value);
-  const data = document.getElementById('op-data').value;
-  const corretora = document.getElementById('op-corretora').value.trim();
-
-  if(!ticker){ alert('Informe o ticker do ativo'); return; }
-  if(!quantidade || quantidade <= 0){ alert('Informe a quantidade'); return; }
-  if(!preco || preco <= 0){ alert('Informe o preço unitário'); return; }
-  if(!data){ alert('Informe a data da operação'); return; }
-
-  const btn = document.getElementById('op-btn-salvar');
-  btn.disabled = true; btn.textContent = '⏳ Salvando...';
-
-  try{
-    const r = await fetch('/api/performance/operacoes', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        ticker, tipo: _perfTipoSelecionado, data_operacao: data,
-        quantidade, preco_unitario: preco,
-        corretora: corretora || null,
-      })
-    });
-    const d = await r.json();
-    if(!r.ok){
-      alert(`Erro: ${d.erro || 'Não foi possível salvar a operação'}`);
-      btn.disabled = false; btn.textContent = '💾 Salvar operação';
-      return;
-    }
-    fecharModalOperacao();
-    await carregarPerformance();
-  }catch(e){
-    alert('Erro de conexão ao salvar operação');
-    btn.disabled = false; btn.textContent = '💾 Salvar operação';
-  }
-}
-
-
-let _dividendRanking = [];
-let _dividendUltimaAtualizacao = null; // MAX(reference_date) global — não depende de qual ativo é #1 do ranking
-let _dividendGaugeAtivo = false;
 
 // ── DIVIDENDOS ───────────────────────────────────────────────
 async function carregarDividendosRanking(){
