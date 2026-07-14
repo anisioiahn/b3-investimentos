@@ -77,13 +77,19 @@ def _parse_valor(v):
     try: return float(s)
     except: return None
 
-def buscar_serie_bcb(codigo_serie, data_inicial, data_final):
+def buscar_serie_bcb(codigo_serie, data_inicial, data_final, max_tentativas=3):
     """
     Busca uma série do SGS entre duas datas (inclusive), paginando
     automaticamente em janelas de até 9 anos (limite do BCB é 10).
-    Retorna lista de {"data": date, "valor": float}, ordenada por data.
+    Retorna lista de {"data": date, "valor": float}, ordenada por data,
+    sem datas duplicadas (mantém a última ocorrência — em caso de revisão
+    de dado, a última resposta lida é a mais confiável).
+
+    Cada janela tenta até `max_tentativas` vezes com backoff exponencial
+    antes de desistir — janelas grandes (~9 anos) por vezes recebem 502/503
+    transitório do lado do BCB, não é erro sistemático.
     """
-    resultado = []
+    por_data = {}  # dedupe nativo: dict por data, última resposta vence
     inicio = data_inicial
     janela_dias = JANELA_ANOS_MAX * 365  # aritmética simples de dias evita
                                           # o caso de borda de 29/fev cair
@@ -97,27 +103,44 @@ def buscar_serie_bcb(codigo_serie, data_inicial, data_final):
             "dataInicial": inicio.strftime("%d/%m/%Y"),
             "dataFinal": fim_janela.strftime("%d/%m/%Y"),
         }
-        try:
-            r = requests.get(url, params=params, timeout=TIMEOUT)
-            if r.status_code == 200:
-                for item in r.json():
-                    try:
-                        d = datetime.strptime(item["data"], "%d/%m/%Y").date()
-                    except Exception:
-                        continue
-                    valor = _parse_valor(item.get("valor"))
-                    if valor is not None:
-                        resultado.append({"data": d, "valor": valor})
-            else:
+
+        for tentativa in range(1, max_tentativas + 1):
+            try:
+                r = requests.get(url, params=params, timeout=TIMEOUT)
+                if r.status_code == 200:
+                    for item in r.json():
+                        try:
+                            d = datetime.strptime(item["data"], "%d/%m/%Y").date()
+                        except Exception:
+                            continue
+                        valor = _parse_valor(item.get("valor"))
+                        if valor is not None:
+                            por_data[d] = valor
+                    break  # sucesso, não tenta de novo
+
+                # Erros transitórios de gateway/proxy — vale retry
+                if r.status_code in (429, 500, 502, 503, 504) and tentativa < max_tentativas:
+                    espera = 2 ** tentativa  # 2s, 4s, 8s...
+                    print(f"[BENCHMARKS] ⏳ Série {codigo_serie} status {r.status_code} "
+                          f"(tentativa {tentativa}/{max_tentativas}), aguardando {espera}s...", flush=True)
+                    time.sleep(espera)
+                    continue
+
                 print(f"[BENCHMARKS] ⚠️ Série {codigo_serie} status {r.status_code}: {r.text[:150]}", flush=True)
-        except Exception as e:
-            print(f"[BENCHMARKS] ⚠️ Erro série {codigo_serie} ({inicio}–{fim_janela}): {e}", flush=True)
+                break
+            except Exception as e:
+                if tentativa < max_tentativas:
+                    espera = 2 ** tentativa
+                    print(f"[BENCHMARKS] ⏳ Erro série {codigo_serie} ({inicio}–{fim_janela}): {e} "
+                          f"(tentativa {tentativa}/{max_tentativas}), aguardando {espera}s...", flush=True)
+                    time.sleep(espera)
+                else:
+                    print(f"[BENCHMARKS] ⚠️ Falha definitiva série {codigo_serie} ({inicio}–{fim_janela}): {e}", flush=True)
 
         time.sleep(0.3)  # cortesia com a API do BCB
         inicio = fim_janela + timedelta(days=1)
 
-    resultado.sort(key=lambda x: x["data"])
-    return resultado
+    return [{"data": d, "valor": v} for d, v in sorted(por_data.items())]
 
 
 # ── IPCA: interpolação de mensal para fator diário ───────────
@@ -131,10 +154,20 @@ def interpolar_ipca_diario(pontos_mensais):
     padrão de mercado para poder comparar com séries diárias (CDI/SELIC)
     sem distorcer no fim do mês.
     """
-    saida = []
+    # Deduplica por (ano, mês) antes de gerar os dias — se o mesmo mês
+    # aparecer mais de uma vez na resposta da API (revisão de dado, ou
+    # sobreposição na borda entre janelas de paginação), a última
+    # ocorrência lida vence. Sem isso, o mesmo mês gera os mesmos dias
+    # duas vezes e a gravação em lote quebra com "ON CONFLICT... cannot
+    # affect row a second time" (foi exatamente o que aconteceu em produção).
+    por_mes = {}
     for p in pontos_mensais:
-        ano, mes = p["data"].year, p["data"].month
-        variacao_mes = p["valor"] / 100.0  # ex.: 0.44 -> 0.0044
+        chave = (p["data"].year, p["data"].month)
+        por_mes[chave] = p["valor"]
+
+    saida = []
+    for (ano, mes), valor in sorted(por_mes.items()):
+        variacao_mes = valor / 100.0  # ex.: 0.44 -> 0.0044
 
         if mes == 12:
             proximo_mes = date(ano + 1, 1, 1)
@@ -169,7 +202,9 @@ def salvar_benchmark_lote(conn, codigo_benchmark, pontos, fonte="BCB-SGS"):
     """
     if not pontos: return 0
     now = agora().isoformat()
-    rows = []
+    rows_por_data = {}  # 2ª camada de defesa: deduplica por data aqui também,
+                         # protege qualquer benchmark (não só IPCA) contra
+                         # dado duplicado vindo de qualquer fonte no futuro
     for p in pontos:
         taxa = p.get("taxa_diaria")
         fator = p.get("fator_diario")
@@ -177,11 +212,12 @@ def salvar_benchmark_lote(conn, codigo_benchmark, pontos, fonte="BCB-SGS"):
             fator = 1.0 + taxa / 100.0
         if fator is None:
             continue
-        rows.append((
+        rows_por_data[p["data"]] = (
             p["data"], codigo_benchmark,
             p.get("valor_indice"), taxa, fator,
             fonte, now
-        ))
+        )
+    rows = list(rows_por_data.values())
     if not rows: return 0
 
     with conn.cursor() as cur:
