@@ -135,6 +135,25 @@ def iniciar_cron_janus():
                           hour=3, minute=0,
                           id="dividend_coleta_semanal")
 
+        # Benchmarks (CDI/SELIC/IPCA) — diário às 20h, dias úteis.
+        # Só busca os últimos 15 dias (o backfill histórico completo dos ~10 anos
+        # roda manualmente 1 vez: `python benchmarks_collector.py`). O ON CONFLICT
+        # do coletor já trata re-gravação segura, então rodar todo dia sobre uma
+        # janela pequena mantém os dados frescos sem custo de reprocessar tudo.
+        def executar_benchmarks_diario():
+            print("[BENCHMARKS CRON] 📊 Atualizando CDI/SELIC/IPCA...", flush=True)
+            try:
+                import subprocess, sys
+                subprocess.Popen([sys.executable, "benchmarks_collector.py", "15"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                print(f"[BENCHMARKS CRON] ❌ Erro: {e}", flush=True)
+
+        scheduler.add_job(executar_benchmarks_diario, "cron",
+                          day_of_week="mon-fri",
+                          hour=20, minute=0,
+                          id="benchmarks_diario")
+
         scheduler.start()
         print("[JANUS CRON] ✅ Agendamentos configurados:")
         print("  → Coleta abertura:      dias úteis às 10h BRT")
@@ -143,6 +162,7 @@ def iniciar_cron_janus():
         print("  → Snapshot carteira:    dias úteis às 17:30h BRT")
         print("  → Agenda do mercado:    segunda-feira às 08h BRT")
         print("  → Dividend Engine:      sábado às 03h BRT")
+        print("  → Benchmarks CDI/SELIC/IPCA: dias úteis às 20h BRT")
         return scheduler
 
     except ImportError:
