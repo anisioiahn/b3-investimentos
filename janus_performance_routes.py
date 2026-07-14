@@ -1,15 +1,17 @@
 # ============================================================
-# JANUS PERFORMANCE — ROTAS FLASK v1.0
-# Fase 2: CRUD de operações + XIRR/comparação CDI da carteira geral.
+# JANUS PERFORMANCE — ROTAS FLASK v2.0
+# Fase 2 revisada: sincronização automática a partir da Carteira
+# (sem cadastro manual de operação) + drilldown de 3 níveis:
+# Carteira geral -> Categoria -> Ativo.
 #
 # Uso no servidor.py:
 #   from janus_performance_routes import registrar_rotas_performance
 #   registrar_rotas_performance(app, requer_auth, uid, obter_valor_atual_carteira)
 #
-# obter_valor_atual_carteira: função (uid) -> float que devolve o valor
-# atual total da carteira confirmada, a preço de mercado. Injetada pelo
-# servidor.py (que já sabe calcular isso via o cache de cotações) — este
-# módulo não precisa conhecer esse detalhe internamente.
+# obter_valor_atual_carteira: função (uid, categoria_id='TODAS', ticker=None) -> float
+# que devolve o valor atual a preço de mercado, filtrado pelo nível de
+# drilldown pedido. Injetada pelo servidor.py, que já sabe calcular isso
+# via o cache de cotações — este módulo não conhece esse detalhe.
 # ============================================================
 
 from datetime import datetime, timezone, timedelta
@@ -52,71 +54,19 @@ def _serializar_resultado(resultado: jp.ResultadoPerformance) -> dict:
     }
 
 
+def _resultado_vazio(mensagem):
+    return {"erro": "sem_operacoes", "mensagem": mensagem}
+
+
 def registrar_rotas_performance(app, requer_auth, uid, obter_valor_atual_carteira):
 
-    @app.route("/api/performance/operacoes", methods=["GET"])
-    @requer_auth
-    def api_performance_listar_operacoes():
-        ticker = request.args.get("ticker")
-        ops = db.db_listar_operacoes(uid(), ticker)
-        return jsonify(ops)
-
-    @app.route("/api/performance/operacoes", methods=["POST"])
-    @requer_auth
-    def api_performance_criar_operacao():
-        d = request.json or {}
-        ticker = (d.get("ticker") or "").upper().strip()
-        tipo = (d.get("tipo") or "").upper().strip()
-        data_operacao = d.get("data_operacao")
-        quantidade = d.get("quantidade")
-        preco_unitario = d.get("preco_unitario")
-
-        if not ticker:
-            return jsonify({"erro": "ticker é obrigatório"}), 400
-        if tipo not in ("COMPRA", "VENDA"):
-            return jsonify({"erro": "tipo deve ser COMPRA ou VENDA"}), 400
-        if not data_operacao:
-            return jsonify({"erro": "data_operacao é obrigatória"}), 400
-        try:
-            quantidade = float(quantidade)
-            preco_unitario = float(preco_unitario)
-        except (TypeError, ValueError):
-            return jsonify({"erro": "quantidade e preco_unitario devem ser numéricos"}), 400
-        if quantidade <= 0 or preco_unitario <= 0:
-            return jsonify({"erro": "quantidade e preco_unitario devem ser maiores que zero"}), 400
-
-        novo_id = db.db_criar_operacao(
-            uid(), ticker, tipo, data_operacao, quantidade, preco_unitario,
-            corretora=d.get("corretora"),
-            categoria_id=d.get("categoria_id"),
-            observacao=d.get("observacao"),
-        )
-        if novo_id is None:
-            return jsonify({"erro": "Não foi possível salvar a operação"}), 500
-        return jsonify({"ok": True, "id": novo_id})
-
-    @app.route("/api/performance/operacoes/<int:operacao_id>", methods=["DELETE"])
-    @requer_auth
-    def api_performance_excluir_operacao(operacao_id):
-        ok = db.db_excluir_operacao(uid(), operacao_id)
-        if not ok:
-            return jsonify({"erro": "Operação não encontrada"}), 404
-        return jsonify({"ok": True})
-
-    @app.route("/api/performance/carteira", methods=["GET"])
-    @requer_auth
-    def api_performance_carteira():
-        """
-        XIRR da carteira geral (todas as operações do usuário, todos os
-        tickers) comparado contra o CDI via simulação de carteira sombra.
-        """
-        operacoes = db.db_listar_operacoes(uid())
+    def _calcular(categoria_id='TODAS', ticker=None):
+        """Núcleo compartilhado pelos 3 níveis de drilldown — monta os
+        fluxos de caixa das operações no filtro pedido, busca o valor
+        atual no mesmo filtro, e roda o motor de performance."""
+        operacoes = db.db_listar_operacoes(uid(), ticker=ticker, categoria_id=categoria_id)
         if not operacoes:
-            return jsonify({
-                "erro": "sem_operacoes",
-                "mensagem": "Nenhuma operação registrada ainda. Adicione suas compras e "
-                            "vendas para calcular a rentabilidade pessoal da carteira.",
-            }), 200
+            return None
 
         fluxos = [
             FluxoCaixa(
@@ -128,15 +78,91 @@ def registrar_rotas_performance(app, requer_auth, uid, obter_valor_atual_carteir
         ]
 
         try:
-            valor_atual = obter_valor_atual_carteira(uid())
+            valor_atual = obter_valor_atual_carteira(uid(), categoria_id=categoria_id, ticker=ticker)
         except Exception as e:
-            print(f"[PERFORMANCE] Erro ao obter valor atual da carteira: {e}", flush=True)
+            print(f"[PERFORMANCE] Erro ao obter valor atual: {e}", flush=True)
             valor_atual = 0.0
 
         data_inicial = min(f.data for f in fluxos)
         fatores = db.db_buscar_fatores_benchmark("CDI", data_inicial, hoje())
 
-        resultado = jp.calcular_performance(
+        return jp.calcular_performance(
             fluxos, valor_atual, fatores, codigo_benchmark="CDI", data_referencia=hoje()
         )
+
+    @app.route("/api/performance/sincronizar", methods=["POST"])
+    @requer_auth
+    def api_performance_sincronizar():
+        n = db.db_sincronizar_operacoes_da_carteira(uid())
+        return jsonify({"ok": True, "n_operacoes": n})
+
+    @app.route("/api/performance/carteira", methods=["GET"])
+    @requer_auth
+    def api_performance_carteira():
+        """Nível 1 — visão geral, todas as operações."""
+        resultado = _calcular()
+        if resultado is None:
+            return jsonify(_resultado_vazio(
+                "Nenhuma operação sincronizada ainda. Clique em \"Atualizar Performance\" "
+                "para calcular a partir da sua Carteira."
+            )), 200
         return jsonify(_serializar_resultado(resultado))
+
+    @app.route("/api/performance/categorias", methods=["GET"])
+    @requer_auth
+    def api_performance_categorias():
+        """Nível 2 (lista) — categorias com operação, cada uma com seu
+        próprio resumo de performance, para a tela de drilldown."""
+        categorias = db.db_listar_categorias_com_operacoes(uid())
+        saida = []
+        for cat in categorias:
+            resultado = _calcular(categoria_id=cat["id"])
+            item = {"id": cat["id"], "nome": cat["nome"], "cor": cat["cor"], "icone": cat["icone"]}
+            item["resultado"] = _serializar_resultado(resultado) if resultado else None
+            saida.append(item)
+        return jsonify(saida)
+
+    @app.route("/api/performance/categoria/<id_categoria>", methods=["GET"])
+    @requer_auth
+    def api_performance_categoria(id_categoria):
+        """Nível 2 (detalhe) — performance da categoria + lista de ativos
+        dentro dela, cada um com seu próprio resumo (nível 3 em miniatura)."""
+        cat_id = None if id_categoria == "geral" else int(id_categoria)
+        resultado = _calcular(categoria_id=cat_id)
+        if resultado is None:
+            return jsonify(_resultado_vazio("Nenhuma operação nesta categoria.")), 200
+
+        tickers = db.db_listar_tickers_com_operacoes(uid(), categoria_id=cat_id)
+        ativos = []
+        for t in tickers:
+            r_ativo = _calcular(ticker=t)
+            ativos.append({"ticker": t, "resultado": _serializar_resultado(r_ativo) if r_ativo else None})
+
+        resp = _serializar_resultado(resultado)
+        resp["ativos"] = ativos
+        return jsonify(resp)
+
+    @app.route("/api/performance/ativo/<ticker>", methods=["GET"])
+    @requer_auth
+    def api_performance_ativo(ticker):
+        """Nível 3 — performance de um único ativo."""
+        resultado = _calcular(ticker=ticker.upper())
+        if resultado is None:
+            return jsonify(_resultado_vazio(f"Nenhuma operação registrada para {ticker.upper()}.")), 200
+        return jsonify(_serializar_resultado(resultado))
+
+    # ── Mantidas por compatibilidade / uso futuro (ex: módulo de vendas) ──
+    @app.route("/api/performance/operacoes", methods=["GET"])
+    @requer_auth
+    def api_performance_listar_operacoes():
+        ticker = request.args.get("ticker")
+        ops = db.db_listar_operacoes(uid(), ticker=ticker)
+        return jsonify(ops)
+
+    @app.route("/api/performance/operacoes/<int:operacao_id>", methods=["DELETE"])
+    @requer_auth
+    def api_performance_excluir_operacao(operacao_id):
+        ok = db.db_excluir_operacao(uid(), operacao_id)
+        if not ok:
+            return jsonify({"erro": "Operação não encontrada"}), 404
+        return jsonify({"ok": True})
