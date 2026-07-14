@@ -3223,12 +3223,9 @@ function _renderCockpitSaudacao(){
     });
   }).catch(()=>{});
 
-  const ref = _dividendRanking?.[0]?.reference_date;
-  const fmtDiv = ref ? fmtData(ref + 'T12:00:00') : '—';
-  ['ck-att-dividendos','mob-att-dividendos','desk-att-dividendos'].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.textContent = fmtDiv;
-  });
+  // Data de Dividendos — única fonte da verdade em _atualizarDataDividendosHeader(),
+  // para nunca mais haver 2 implementações divergentes escrevendo nos mesmos elementos.
+  _atualizarDataDividendosHeader();
 }
 
 // Atualiza a data de "Dividendos" no header/menu ⚙️ — extraída para função própria
