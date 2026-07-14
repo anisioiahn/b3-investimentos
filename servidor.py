@@ -3065,15 +3065,30 @@ def gerar_recomendacao(ticker, nome, noticias):
     return {"sinal":"NEUTRO","justificativa":"Erro ao gerar análise.","confianca":"Baixa"}
 
 # ── JANUS PERFORMANCE ────────────────────────────────────────
-def obter_valor_atual_carteira_geral(usuario_id):
-    """Valor atual total da carteira confirmada do usuário, a preço de
-    mercado — usa o mesmo padrão de leitura do cache de cotações já usado
-    em outras rotas deste arquivo (_cache["setores"][x]["empresas"])."""
+def obter_valor_atual_carteira_geral(usuario_id, categoria_id='TODAS', ticker=None):
+    """Valor atual da carteira confirmada do usuário, a preço de mercado —
+    usa o mesmo padrão de leitura do cache de cotações já usado em outras
+    rotas deste arquivo (_cache["setores"][x]["empresas"]).
+
+    categoria_id='TODAS' (default) não filtra; None filtra só as posições
+    SEM categoria (Geral); um id filtra só aquela categoria. ticker, quando
+    informado, tem prioridade sobre categoria_id — mesma convenção usada
+    em db_listar_operacoes, para os 3 níveis de drilldown do Performance
+    ficarem consistentes entre si."""
     posicoes = db.db_listar_carteira(usuario_id)
     total = 0.0
     for p in posicoes:
         if p.get('status') != 'confirmada':
             continue
+        if ticker:
+            if p['ticker'] != ticker:
+                continue
+        elif categoria_id is None:
+            if p.get('categoria_id') is not None:
+                continue
+        elif categoria_id != 'TODAS':
+            if p.get('categoria_id') != categoria_id:
+                continue
         preco_atual = next(
             (e["preco"] for s in _cache.get("setores", {}).values()
              for e in s.get("empresas", []) if e["ticker"] == p["ticker"]),
