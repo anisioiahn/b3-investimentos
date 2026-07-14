@@ -31,6 +31,19 @@ class ResultadoPerformance:
     codigo_benchmark: str
     dias_sem_fator: int = 0                    # dias dentro do período sem fator no banco (alerta de qualidade de dado)
 
+    # ── Campos de auditoria — números "crus", verificáveis na mão sem
+    # precisar entender o solver de XIRR. Pensados para responder direto
+    # à pergunta de um auditor: quanto entrou, quanto saiu, quanto vale
+    # hoje, qual o ganho simples (não anualizado) — do ativo e do CDI.
+    data_inicial: Optional[date] = None         # data do primeiro fluxo (aporte mais antigo)
+    data_final: Optional[date] = None           # data de referência do cálculo (hoje, quando gerado)
+    valor_total_investido: Optional[float] = None   # soma de todas as compras (bruto, sem descontar vendas)
+    valor_total_recebido: Optional[float] = None    # soma de todas as vendas já realizadas (0 por enquanto, nesta fase)
+    ganho_perda_absoluto: Optional[float] = None    # (recebido + valor_atual) - investido — NÃO anualizado
+    ganho_perda_percentual: Optional[float] = None  # ganho_perda_absoluto / investido — NÃO anualizado
+    benchmark_ganho_perda_absoluto: Optional[float] = None  # mesma conta, trocando valor_atual por saldo_benchmark
+    benchmark_ganho_perda_percentual: Optional[float] = None
+
 
 def _preencher_fatores_faltantes(fatores: Dict[date, float], data_inicial: date, data_final: date) -> tuple:
     """
@@ -142,6 +155,24 @@ def calcular_performance(fluxos: List[FluxoCaixa], valor_atual: float,
             diferenca_abs = valor_atual - saldo_benchmark
             diferenca_pct = diferenca_abs / saldo_benchmark
 
+    # ── Campos de auditoria — números crus, verificáveis com uma
+    # calculadora comum, sem precisar entender XIRR nem a simulação de
+    # benchmark. valor_total_investido = soma bruta de todas as compras
+    # (não desconta vendas — é "quanto saiu do bolso", não o saldo líquido).
+    data_inicial = min(f.data for f in fluxos) if fluxos else None
+    valor_investido = sum(abs(f.valor) for f in fluxos if f.valor < 0)
+    valor_recebido = sum(f.valor for f in fluxos if f.valor > 0)
+
+    ganho_abs = ganho_pct = None
+    if valor_atual is not None and valor_investido > 0:
+        ganho_abs = (valor_recebido + valor_atual) - valor_investido
+        ganho_pct = ganho_abs / valor_investido
+
+    bench_ganho_abs = bench_ganho_pct = None
+    if saldo_benchmark is not None and valor_investido > 0:
+        bench_ganho_abs = (valor_recebido + saldo_benchmark) - valor_investido
+        bench_ganho_pct = bench_ganho_abs / valor_investido
+
     return ResultadoPerformance(
         xirr=xirr,
         saldo_benchmark=saldo_benchmark,
@@ -150,4 +181,12 @@ def calcular_performance(fluxos: List[FluxoCaixa], valor_atual: float,
         diferenca_percentual=diferenca_pct,
         codigo_benchmark=codigo_benchmark,
         dias_sem_fator=dias_sem_fator,
+        data_inicial=data_inicial,
+        data_final=data_ref,
+        valor_total_investido=valor_investido if fluxos else None,
+        valor_total_recebido=valor_recebido if fluxos else None,
+        ganho_perda_absoluto=ganho_abs,
+        ganho_perda_percentual=ganho_pct,
+        benchmark_ganho_perda_absoluto=bench_ganho_abs,
+        benchmark_ganho_perda_percentual=bench_ganho_pct,
     )
