@@ -1791,6 +1791,50 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   </div>
 </div>
 
+<!-- MODAL DE VENDA (Janus Fiscal) -->
+<div class="pos-modal-overlay" id="venda-modal" onclick="fecharModalVenda(event)">
+  <div class="pos-modal" onclick="event.stopPropagation()">
+    <div class="pos-modal-header">
+      <div class="pos-modal-title">💰 Vender <span id="venda-ticker-titulo" style="color:var(--text2);font-weight:400"></span></div>
+      <button class="modal-close" onclick="fecharModalVenda()">✕</button>
+    </div>
+    <div class="pos-modal-body">
+      <div style="background:var(--bg);border-radius:8px;padding:10px;font-size:12px;color:var(--text2);margin-bottom:4px">
+        Você tem <strong id="venda-qtd-disponivel">0</strong> ações · preço médio R$ <strong id="venda-preco-medio-atual">0,00</strong>
+      </div>
+      <div class="pos-field-row">
+        <div class="pos-field">
+          <label>Quantidade a vender</label>
+          <input id="venda-quantidade" type="number" step="1" min="0" placeholder="0" oninput="atualizarPreviewVenda()">
+        </div>
+        <div class="pos-field">
+          <label>Preço de venda (R$)</label>
+          <input id="venda-preco" type="number" step="0.01" min="0" placeholder="0,00" oninput="atualizarPreviewVenda()">
+        </div>
+      </div>
+      <div class="pos-field">
+        <label>Data da venda</label>
+        <input id="venda-data" type="date">
+      </div>
+      <div class="pos-field-row">
+        <div class="pos-field">
+          <label>Custos (corretagem/taxas) <span style="font-weight:400;color:var(--text3)">opcional</span></label>
+          <input id="venda-custos" type="number" step="0.01" min="0" placeholder="0,00" oninput="atualizarPreviewVenda()">
+        </div>
+        <div class="pos-field">
+          <label>IRRF retido <span style="font-weight:400;color:var(--text3)">opcional</span></label>
+          <input id="venda-irrf" type="number" step="0.01" min="0" placeholder="0,00">
+        </div>
+      </div>
+      <div id="venda-preview" style="display:none;background:var(--bg);border-radius:8px;padding:12px;font-size:12px"></div>
+    </div>
+    <div class="pos-modal-footer">
+      <button class="pos-btn-cancel" onclick="fecharModalVenda()">Cancelar</button>
+      <button class="pos-btn-save" id="venda-btn-confirmar" onclick="confirmarVenda()" style="background:#f59e0b;border-color:#f59e0b">💰 Confirmar venda</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CARTEIRA SUGERIDA (JANUS INDEX) -->
 <div class="ji-modal-overlay" id="ji-modal-sugestao" onclick="fecharModalSugestao(event)">
   <div class="ji-modal" onclick="event.stopPropagation()">
@@ -8556,6 +8600,7 @@ function _renderTabelaAtivos(ativos, catId){
           <div onclick="event.stopPropagation()" style="font-size:11px">${alertasHtml}</div>
           <div style="display:flex;flex-direction:column;gap:4px">
             <button class="ct-edit" onclick="abrirGrafico('${p.ticker}')" title="Ver análise">📊</button>
+            <button class="ct-edit" onclick="abrirModalVenda('${p.ticker}', ${p.quantidade}, ${p.preco_medio}, ${p.preco_atual||p.preco_medio})" title="Vender" style="color:#f59e0b">💰</button>
             <button class="ct-edit" onclick="editarPosicao('${p.ticker}')" title="Editar">✏️</button>
             <button class="ct-del" onclick="removerPosicao('${p.ticker}')" title="Remover">🗑</button>
           </div>
@@ -9180,6 +9225,119 @@ async function salvarPosicao(){
     await carregarCategorias();
     renderCarteira();
   }catch(e){ alert('Erro de conexão ao salvar posição'); }
+}
+
+// ── VENDA (Janus Fiscal) ──────────────────────────────────────
+let _vendaTickerAtual = null;
+let _vendaQtdDisponivel = 0;
+let _vendaPrecoMedio = 0;
+
+function abrirModalVenda(ticker, quantidade, precoMedio, precoAtual){
+  _vendaTickerAtual = ticker;
+  _vendaQtdDisponivel = quantidade;
+  _vendaPrecoMedio = precoMedio;
+  document.getElementById('venda-ticker-titulo').textContent = ticker;
+  document.getElementById('venda-qtd-disponivel').textContent = quantidade;
+  document.getElementById('venda-preco-medio-atual').textContent = fmt(precoMedio);
+  document.getElementById('venda-quantidade').value = quantidade;
+  document.getElementById('venda-quantidade').max = quantidade;
+  document.getElementById('venda-preco').value = precoAtual ? parseFloat(precoAtual).toFixed(2) : '';
+  document.getElementById('venda-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('venda-custos').value = '';
+  document.getElementById('venda-irrf').value = '';
+  document.getElementById('venda-modal').classList.add('open');
+  atualizarPreviewVenda();
+}
+
+function fecharModalVenda(e){
+  if(!e || e.target === document.getElementById('venda-modal')){
+    document.getElementById('venda-modal').classList.remove('open');
+  }
+}
+
+function atualizarPreviewVenda(){
+  const qtd = parseFloat(document.getElementById('venda-quantidade').value);
+  const preco = parseFloat(document.getElementById('venda-preco').value);
+  const custos = parseFloat(document.getElementById('venda-custos').value) || 0;
+  const prev = document.getElementById('venda-preview');
+  if(!qtd || !preco || qtd <= 0 || preco <= 0){
+    prev.style.display = 'none';
+    return;
+  }
+  const valorBruto = qtd * preco;
+  const custoBase = qtd * _vendaPrecoMedio;
+  const resultado = valorBruto - custoBase - custos;
+  const cor = resultado >= 0 ? 'var(--green)' : '#e53935';
+  const avisoQtd = qtd > _vendaQtdDisponivel
+    ? `<div style="color:#e53935;font-size:11px;margin-top:6px">⚠️ Quantidade maior que a posição disponível (${_vendaQtdDisponivel})</div>` : '';
+  prev.style.display = 'block';
+  prev.innerHTML = `
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Valor bruto da venda</span><strong>R$ ${fmt(valorBruto)}</strong></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Custo base (${qtd} × R$ ${_vendaPrecoMedio.toFixed(2)})</span><strong>R$ ${fmt(custoBase)}</strong></div>
+    ${custos>0?`<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Custos</span><strong>−R$ ${fmt(custos)}</strong></div>`:''}
+    <div style="display:flex;justify-content:space-between;padding-top:6px;border-top:1px solid var(--border);font-size:13px">
+      <span>Resultado</span><strong style="color:${cor}">${resultado>=0?'+':''}R$ ${fmt(resultado)}</strong>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:6px">Cálculo prévio — a apuração de IR do mês aparece após confirmar.</div>
+    ${avisoQtd}`;
+}
+
+async function confirmarVenda(){
+  const ticker = _vendaTickerAtual;
+  const quantidade = parseFloat(document.getElementById('venda-quantidade').value);
+  const preco = parseFloat(document.getElementById('venda-preco').value);
+  const data = document.getElementById('venda-data').value;
+  const custos = parseFloat(document.getElementById('venda-custos').value) || 0;
+  const irrf = parseFloat(document.getElementById('venda-irrf').value) || 0;
+
+  if(!quantidade || quantidade <= 0){ alert('Informe a quantidade a vender'); return; }
+  if(quantidade > _vendaQtdDisponivel){ alert(`Quantidade maior que a posição disponível (${_vendaQtdDisponivel})`); return; }
+  if(!preco || preco <= 0){ alert('Informe o preço de venda'); return; }
+  if(!data){ alert('Informe a data da venda'); return; }
+
+  const btn = document.getElementById('venda-btn-confirmar');
+  btn.disabled = true; btn.textContent = '⏳ Processando...';
+
+  try{
+    const r = await fetch('/api/fiscal/vender', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ ticker, quantidade, preco_unitario: preco, data_operacao: data, custos, irrf })
+    });
+    const d = await r.json();
+    if(!r.ok){
+      alert(`Erro: ${d.erro || 'Não foi possível processar a venda'}`);
+      btn.disabled = false; btn.textContent = '💰 Confirmar venda';
+      return;
+    }
+    fecharModalVenda();
+    mostrarResultadoVenda(d);
+    await carregarCarteira();
+    renderCarteira();
+    if(document.getElementById('page-performance')?.classList.contains('active')) carregarPerformance();
+  }catch(e){
+    alert('Erro de conexão ao processar a venda');
+    btn.disabled = false; btn.textContent = '💰 Confirmar venda';
+  }
+  btn.disabled = false; btn.textContent = '💰 Confirmar venda';
+}
+
+function mostrarResultadoVenda(d){
+  const positivo = d.venda.resultado_liquido >= 0;
+  const cor = positivo ? '#16a34a' : '#e53935';
+  const apur = d.apuracao_mes;
+  const toast = document.createElement('div');
+  toast.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);
+    border:1px solid var(--border);border-left:4px solid ${cor};color:var(--text);padding:16px 20px;
+    border-radius:12px;font-size:13px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.2);max-width:340px`;
+  toast.innerHTML = `
+    <div style="font-weight:700;margin-bottom:6px">✅ Venda registrada</div>
+    <div style="color:${cor};font-weight:700;font-size:16px">${positivo?'+':''}R$ ${fmt(d.venda.resultado_liquido)}</div>
+    ${apur ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--text2)">
+      Mês ${apur.ano_mes}: ${apur.isento?'✅ Isento (dentro do limite de R$20k)':`IR devido: R$ ${fmt(apur.imposto_devido)}`}
+    </div>` : ''}
+    <button onclick="this.parentElement.remove()" style="margin-top:10px;width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--text2);cursor:pointer;font-size:11px">Fechar</button>`;
+  document.body.appendChild(toast);
+  setTimeout(()=>{ if(toast.parentElement) toast.remove(); }, 12000);
 }
 
 function editarPosicao(ticker){
