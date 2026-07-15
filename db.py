@@ -1274,6 +1274,84 @@ def db_calcular_acumulado_benchmark(codigo_benchmark, dias=365):
         return None
 
 
+# ── LOG PERSISTENTE (auditoria de eventos do sistema) ──────────
+def db_init_log_table(conn):
+    """Log do sistema, persistido — antes só vivia em memória (lista
+    limitada a 500 linhas), rotacionando rápido demais pra dar pra
+    auditar o que aconteceu num horário específico do dia."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS log_entries (
+                id SERIAL PRIMARY KEY,
+                data DATE NOT NULL,
+                hora TEXT NOT NULL,
+                tipo TEXT,
+                mensagem TEXT,
+                criado_em TIMESTAMP DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_log_entries_data ON log_entries(data);
+        """)
+    conn.commit()
+
+def db_gravar_log_lote(entradas):
+    """
+    Grava um lote de entradas de log de uma vez (execute_values) — NUNCA
+    um INSERT por linha, porque o log pode gerar centenas de linhas por
+    ciclo de atualização (uma por ticker). O padrão de flush periódico
+    (não gravar a cada log() individual) é o que evita isso na prática;
+    esta função só executa o lote que já foi acumulado.
+
+    entradas: lista de dicts {ts, tipo, msg} (mesmo formato usado em memória)
+    """
+    if not entradas:
+        return 0
+    try:
+        hoje_str = datetime.now(TZ_BRASILIA).strftime("%Y-%m-%d")
+        conn = get_conn()
+        with conn.cursor() as cur:
+            rows = [(hoje_str, e['ts'], e.get('tipo', 'info'), e['msg']) for e in entradas]
+            psycopg2.extras.execute_values(cur, """
+                INSERT INTO log_entries (data, hora, tipo, mensagem) VALUES %s
+            """, rows)
+        conn.commit()
+        conn.close()
+        return len(rows)
+    except Exception as e:
+        print(f"[DB] Erro ao gravar lote de log: {e}")
+        return 0
+
+def db_listar_log_por_data(data_str):
+    """Lista todas as entradas de log de um dia específico (YYYY-MM-DD),
+    na ordem em que aconteceram — usado pro export/auditoria."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT hora, tipo, mensagem FROM log_entries
+                WHERE data=%s ORDER BY id ASC
+            """, (data_str,))
+            linhas = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return linhas
+    except Exception as e:
+        print(f"[DB] Erro ao listar log por data: {e}")
+        return []
+
+def db_listar_datas_com_log():
+    """Datas distintas que têm log gravado — pra popular um seletor de
+    data no frontend, sem o usuário ter que adivinhar."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT DISTINCT data FROM log_entries ORDER BY data DESC LIMIT 30")
+            datas = [r[0].isoformat() for r in cur.fetchall()]
+        conn.close()
+        return datas
+    except Exception as e:
+        print(f"[DB] Erro ao listar datas com log: {e}")
+        return []
+
+
 # ── CARTEIRA SNAPSHOT (histórico diário de performance) ───────
 def db_init_snapshot_tables(conn):
     """Cria tabela de snapshots se não existir."""
