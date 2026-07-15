@@ -3543,15 +3543,14 @@ async function _perfCarregarListaCategorias(){
     const r = await fetch('/api/performance/categorias');
     const categorias = await r.json();
     if(!categorias.length){ drillArea.innerHTML = ''; return; }
-    drillArea.innerHTML = `
-      <div style="font-size:13px;font-weight:700;margin-bottom:.75rem">📂 Ver por categoria</div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        ${categorias.map(cat => _perfCardDrilldown({
-          titulo: `${cat.icone} ${cat.nome}`,
-          onclick: `abrirCategoriaPerformance(${cat.id===null?"'geral'":cat.id}, '${cat.nome.replace(/'/g,"\\'")}')`,
-          resultado: cat.resultado,
-        })).join('')}
-      </div>`;
+    drillArea.innerHTML = _perfTabelaDrilldown(
+      '📂 Ver por categoria', 'Categoria',
+      categorias.map(cat => ({
+        titulo: `${cat.icone} ${cat.nome}`,
+        onclick: `abrirCategoriaPerformance(${cat.id===null?"'geral'":cat.id}, '${cat.nome.replace(/'/g,"\\'")}')`,
+        resultado: cat.resultado,
+      }))
+    );
   }catch(e){ drillArea.innerHTML = ''; }
 }
 
@@ -3559,32 +3558,66 @@ function _renderPerfListaAtivos(ativos){
   const drillArea = document.getElementById('perf-drilldown-area');
   if(!drillArea) return;
   if(!ativos.length){ drillArea.innerHTML = ''; return; }
-  drillArea.innerHTML = `
-    <div style="font-size:13px;font-weight:700;margin-bottom:.75rem">📊 Ativos nesta categoria</div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      ${ativos.map(a => _perfCardDrilldown({
-        titulo: a.ticker,
-        onclick: `abrirAtivoPerformance('${a.ticker}')`,
-        resultado: a.resultado,
-      })).join('')}
-    </div>`;
+  drillArea.innerHTML = _perfTabelaDrilldown(
+    '📊 Ativos nesta categoria', 'Ativo',
+    ativos.map(a => ({
+      titulo: a.ticker,
+      onclick: `abrirAtivoPerformance('${a.ticker}')`,
+      resultado: a.resultado,
+    }))
+  );
 }
 
-function _perfCardDrilldown({titulo, onclick, resultado}){
-  const temTaxa = resultado && resultado.xirr && resultado.xirr.taxa_pct !== null && resultado.xirr.taxa_pct !== undefined;
-  const positivo = temTaxa && resultado.xirr.taxa_pct >= 0;
-  const corTaxa = positivo ? '#16a34a' : '#e53935';
-  return `<div onclick="${onclick}"
-    style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .15s"
-    onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
-    <span style="font-size:14px;font-weight:600">${titulo}</span>
-    <div style="display:flex;align-items:center;gap:10px">
-      ${temTaxa
-        ? `<span style="font-size:15px;font-weight:800;color:${corTaxa}">${positivo?'+':''}${resultado.xirr.taxa_pct.toFixed(2)}%</span>`
-        : `<span style="font-size:11px;color:var(--text3)">sem dados</span>`}
-      <span style="color:var(--text3);font-size:16px">›</span>
-    </div>
-  </div>`;
+function _perfTabelaDrilldown(tituloSecao, rotuloColuna, itens){
+  const linhas = itens.map(item => {
+    const res = item.resultado;
+    const aud = res?.auditoria || {};
+    const bm = res?.benchmark || {};
+    const x = res?.xirr || {};
+    const temDados = res && !res.erro && aud.valor_total_investido != null;
+
+    if(!temDados){
+      return `<tr onclick="${item.onclick}" style="cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+        <td style="padding:10px;font-weight:600">${item.titulo}</td>
+        <td colspan="5" style="padding:10px;text-align:center;color:var(--text3);font-size:12px">sem dados suficientes</td>
+        <td style="padding:10px;text-align:right;color:var(--text3)">›</td>
+      </tr>`;
+    }
+
+    const resPos = (aud.ganho_perda_absoluto||0) >= 0;
+    const resCls = resPos ? 'lucro-pos' : 'lucro-neg';
+    const cdiPos = (bm.ganho_perda_absoluto||0) >= 0;
+    const cdiCls = cdiPos ? 'lucro-pos' : 'lucro-neg';
+    const temTaxa = x.taxa_pct !== null && x.taxa_pct !== undefined;
+    const xirrPos = temTaxa && x.taxa_pct >= 0;
+
+    return `<tr onclick="${item.onclick}" style="cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+      <td style="padding:10px;font-weight:600;white-space:nowrap">${item.titulo}</td>
+      <td class="num" style="padding:10px;white-space:nowrap">R$ ${fmt(aud.valor_total_investido)}</td>
+      <td class="num" style="padding:10px;white-space:nowrap">R$ ${fmt(aud.valor_atual)}</td>
+      <td class="num ${resCls}" style="padding:10px;white-space:nowrap">${resPos?'+':''}R$ ${fmt(aud.ganho_perda_absoluto)}<br><span style="font-size:10px">${resPos?'+':''}${aud.ganho_perda_percentual?.toFixed(2)}%</span></td>
+      <td class="num ${cdiCls}" style="padding:10px;white-space:nowrap">${cdiPos?'+':''}R$ ${fmt(bm.ganho_perda_absoluto)}<br><span style="font-size:10px">${cdiPos?'+':''}${bm.ganho_perda_percentual?.toFixed(2)}%</span></td>
+      <td class="num" style="padding:10px;white-space:nowrap;font-weight:700;color:${temTaxa?(xirrPos?'#16a34a':'#e53935'):'var(--text3)'}">${temTaxa?`${xirrPos?'+':''}${x.taxa_pct.toFixed(2)}%`:'—'}</td>
+      <td style="padding:10px;text-align:right;color:var(--text3)">›</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div style="font-size:13px;font-weight:700;margin-bottom:.75rem">${tituloSecao}</div>
+    <div class="cockpit-card" style="padding:0;overflow-x:auto">
+      <table class="ct-table" style="width:100%">
+        <thead><tr style="border-bottom:2px solid var(--border)">
+          <th style="padding:10px;text-align:left;font-size:11px;color:var(--text3)">${rotuloColuna}</th>
+          <th class="num" style="padding:10px;font-size:11px;color:var(--text3)">Investido</th>
+          <th class="num" style="padding:10px;font-size:11px;color:var(--text3)">Atual</th>
+          <th class="num" style="padding:10px;font-size:11px;color:var(--text3)">Resultado</th>
+          <th class="num" style="padding:10px;font-size:11px;color:var(--text3)">Comparado CDI</th>
+          <th class="num" style="padding:10px;font-size:11px;color:var(--text3)">XIRR a.a.</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>`;
 }
 
 function abrirCategoriaPerformance(id, nome){
@@ -3668,6 +3701,8 @@ function renderResultadoPerformance(d){
   const positivo = (d.diferenca_absoluta||0) >= 0;
   const corTaxa = (x.taxa||0) >= 0 ? '#16a34a' : '#e53935';
   const avisoPeriodo = x.severidade_aviso_periodo;
+  const aud = d.auditoria || {};
+  const resultadoPos = (aud.ganho_perda_absoluto||0) >= 0;
 
   area.innerHTML = `
     <div class="cockpit-card">
@@ -3675,12 +3710,22 @@ function renderResultadoPerformance(d){
         ⚠️ ${x.mensagem_usuario}
       </div>`:''}
 
-      <div style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap;margin-bottom:1.5rem">
-        <div style="text-align:center">
+      <div style="display:flex;align-items:stretch;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem">
+        <div style="text-align:center;flex-shrink:0">
           <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px">Rentabilidade (XIRR)</div>
           <div style="font-size:40px;font-weight:800;color:${corTaxa};line-height:1">${x.taxa_pct>=0?'+':''}${x.taxa_pct?.toFixed(2)}%</div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">ao ano · ${x.dias_periodo||0} dias de histórico</div>
         </div>
+
+        <div style="flex:1;min-width:170px;background:var(--bg);border-radius:12px;padding:1rem 1.25rem">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Resultado</div>
+          <div class="${resultadoPos?'lucro-pos':'lucro-neg'}" style="font-size:20px;font-weight:800">${resultadoPos?'+':''}R$ ${fmt(aud.ganho_perda_absoluto||0)}</div>
+          <div class="${resultadoPos?'lucro-pos':'lucro-neg'}" style="font-size:13px;margin-top:1px">${resultadoPos?'+':''}${aud.ganho_perda_percentual?.toFixed(2)}%</div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--text3)">
+            <span>Investido: <strong style="color:var(--text2)">R$ ${fmt(aud.valor_total_investido||0)}</strong></span>
+          </div>
+        </div>
+
         <div style="flex:1;min-width:200px;background:${positivo?'rgba(22,163,74,0.08)':'rgba(229,57,53,0.08)'};border-radius:12px;padding:1rem 1.25rem">
           <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">vs. CDI (mesmos aportes)</div>
           <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
