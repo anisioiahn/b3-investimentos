@@ -163,6 +163,17 @@ def registrar_rotas_performance(app, requer_auth, uid, obter_valor_atual_carteir
             return jsonify(_resultado_vazio(f"Nenhuma operação registrada para {ticker.upper()}.")), 200
         return jsonify(_serializar_resultado(resultado))
 
+    @app.route("/api/performance/indicadores-macro", methods=["GET"])
+    @requer_auth
+    def api_performance_indicadores_macro():
+        """CDI/SELIC/IPCA acumulados em 12 meses — para o card de
+        Indicadores Econômicos do Cockpit. Não faz coleta nova, só soma
+        os fatores diários já gravados por benchmarks_collector.py."""
+        saida = {}
+        for codigo in ("CDI", "SELIC", "IPCA"):
+            saida[codigo] = db.db_calcular_acumulado_benchmark(codigo, dias=365)
+        return jsonify(saida)
+
     # ── Mantidas por compatibilidade / uso futuro (ex: módulo de vendas) ──
     @app.route("/api/performance/operacoes", methods=["GET"])
     @requer_auth
