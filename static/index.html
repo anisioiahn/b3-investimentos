@@ -1492,6 +1492,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div class="log-toolbar">
         <div class="log-title">Log de atualizações</div>
         <div class="log-status"><span class="log-dot" id="log-dot"></span><span id="log-conn">Conectando...</span></div>
+        <select id="log-export-data" style="padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)"></select>
+        <button class="btn" onclick="exportarLog()" title="Baixar o log do dia selecionado como arquivo de texto">📥 Exportar</button>
         <button class="btn" onclick="limparLog()">Limpar</button>
       </div>
       <div class="log-box" id="log-box"><div style="color:#555;text-align:center;padding:2rem">Aguardando eventos...</div></div>
@@ -2098,6 +2100,32 @@ function renderLog(){
   if(atBot) box.scrollTop=box.scrollHeight;
 }
 function limparLog(){logLines=[];logOffset=0;renderLog();}
+
+async function carregarDatasLog(){
+  const sel = document.getElementById('log-export-data');
+  if(!sel) return;
+  try{
+    const r = await fetch('/api/logs/datas');
+    const datas = await r.json();
+    const hoje = new Date().toISOString().split('T')[0];
+    const lista = datas.includes(hoje) ? datas : [hoje, ...datas]; // garante "hoje" mesmo se ainda não gravou nada
+    sel.innerHTML = lista.map((d,i) => {
+      const label = d === hoje ? `Hoje (${d.split('-').reverse().join('/')})` : d.split('-').reverse().join('/');
+      return `<option value="${d}">${label}</option>`;
+    }).join('');
+  }catch(e){
+    const hoje = new Date().toISOString().split('T')[0];
+    sel.innerHTML = `<option value="${hoje}">Hoje</option>`;
+  }
+}
+
+function exportarLog(){
+  const sel = document.getElementById('log-export-data');
+  const data = sel?.value || new Date().toISOString().split('T')[0];
+  // Abre a rota diretamente — o header Content-Disposition do servidor
+  // já faz o navegador baixar como arquivo, sem precisar de fetch/blob
+  window.open(`/api/logs/exportar?data=${data}`, '_blank');
+}
 
 // ── DADOS ────────────────────────────────────────────────────
 let dadosCarregados=false;
@@ -6445,6 +6473,7 @@ function goPage(p,el){
   _atualizarMenuAtivo(p);
   if(p==='cockpit') renderCockpit();
   if(p==='alertas') renderAlerts();
+  if(p==='log') carregarDatasLog();
   if(p==='backtesting'){
     const hoje = new Date().toISOString().split('T')[0];
     const dtFim = document.getElementById('bt-data-fim');
