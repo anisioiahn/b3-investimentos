@@ -841,6 +841,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
             <canvas id="cockpit-ibov-chart" style="max-width:100%"></canvas>
             <div id="cockpit-ibov-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text3)">Carregando...</div>
           </div>
+          <div class="cockpit-card-title" style="margin-top:4px">🏦 Indicadores Econômicos</div>
+          <div id="cockpit-indicadores-macro" style="display:flex;gap:8px;margin-bottom:1rem">
+            <div style="flex:1;text-align:center;padding:8px 4px;color:var(--text3);font-size:11px">Carregando...</div>
+          </div>
           <div class="cockpit-card-title" style="margin-top:4px">🌡️ Termômetro do Mercado</div>
           <div id="cockpit-heatmap" style="max-height:200px;overflow-y:auto;padding-right:4px"></div>
         </div>
@@ -2653,6 +2657,46 @@ async function carregarIbovChart(periodo, btnEl){
   }
 }
 
+// ── INDICADORES ECONÔMICOS (CDI/SELIC/IPCA) ──────────────────
+// Não faz coleta nova — só lê o acumulado 12m já calculado em cima do
+// que o benchmarks_collector.py grava diariamente no banco.
+async function carregarIndicadoresMacro(){
+  const el = document.getElementById('cockpit-indicadores-macro');
+  if(!el) return;
+  try{
+    const r = await fetch('/api/performance/indicadores-macro');
+    const d = await r.json();
+    _renderIndicadoresMacro(d);
+  }catch(e){
+    el.innerHTML = `<div style="flex:1;text-align:center;padding:8px 4px;color:var(--text3);font-size:11px">Indicadores indisponíveis</div>`;
+  }
+}
+
+function _renderIndicadoresMacro(d){
+  const el = document.getElementById('cockpit-indicadores-macro');
+  if(!el) return;
+  const config = [
+    {codigo:'CDI',   label:'CDI',   icone:'💰'},
+    {codigo:'SELIC', label:'SELIC', icone:'🏛️'},
+    {codigo:'IPCA',  label:'IPCA',  icone:'📈'},
+  ];
+  el.innerHTML = config.map(c => {
+    const item = d[c.codigo];
+    if(!item){
+      return `<div style="flex:1;background:var(--bg);border-radius:10px;padding:8px 6px;text-align:center">
+        <div style="font-size:10px;color:var(--text3)">${c.icone} ${c.label}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">sem dado</div>
+      </div>`;
+    }
+    const cobreAno = item.dias_utilizados >= 350;
+    return `<div style="flex:1;background:var(--bg);border-radius:10px;padding:8px 6px;text-align:center" title="${item.dias_utilizados} dias — ${item.data_inicial} a ${item.data_final}">
+      <div style="font-size:10px;color:var(--text3);font-weight:600">${c.icone} ${c.label}</div>
+      <div style="font-size:15px;font-weight:800;color:var(--text);margin-top:2px">${item.acumulado_pct>=0?'+':''}${item.acumulado_pct.toFixed(2)}%</div>
+      <div style="font-size:9px;color:var(--text3)">${cobreAno?'12 meses':item.dias_utilizados+' dias'}</div>
+    </div>`;
+  }).join('');
+}
+
 // ── AGENDA DO MERCADO — CALENDÁRIO ───────────────────────────
 let _agendaEventos = [];
 let _agendaMes = new Date().getMonth();
@@ -2858,6 +2902,7 @@ function renderCockpit(){
   setTimeout(renderRadarJanus, 300);
   carregarAgenda(false);
   setTimeout(()=>carregarIbovChart('1M', document.querySelector('#cockpit-ibov-chart')?.closest('.cockpit-card')?.querySelector('.range-btn')), 200);
+  carregarIndicadoresMacro();
 }
 
 async function _carregarPreviewOportunidades(){
