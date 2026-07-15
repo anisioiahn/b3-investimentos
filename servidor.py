@@ -32,6 +32,7 @@ TWILIO_WA_FROM  = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
 TWILIO_WA_CODE  = os.getenv("TWILIO_SANDBOX_CODE", "join janus-b3")  # código do sandbox
 
 _log_entries = []
+_log_buffer_flush = []  # entradas pendentes de gravar no banco — só esvaziado em lote, nunca linha a linha
 _atualizando = False
 _progresso = {"atual": 0, "total": 0, "setor_atual": ""}
 _intervalo_segundos = 3600
@@ -81,7 +82,33 @@ def log(msg, tipo="info"):
     entry = {"ts": agora().strftime("%H:%M:%S"), "msg": msg, "tipo": tipo}
     _log_entries.append(entry)
     if len(_log_entries) > 500: _log_entries.pop(0)
+    _log_buffer_flush.append(entry)
     print(f"[{entry['ts']}] {msg}", flush=True)
+
+def _flush_log_para_banco():
+    """
+    Grava em lote (execute_values) as entradas de log acumuladas desde o
+    último flush — nunca um INSERT por linha. Chamado periodicamente por
+    um timer em background (ver _agendar_flush_log), não a cada log()
+    individual, senão viraria exatamente o mesmo padrão de N+1 que já
+    corrigimos em outros lugares do projeto (Janus Index, Dividend Engine).
+    """
+    global _log_buffer_flush
+    if not _log_buffer_flush:
+        return
+    buffer_atual = _log_buffer_flush
+    _log_buffer_flush = []
+    try:
+        n = db.db_gravar_log_lote(buffer_atual)
+        if n:
+            print(f"[LOG] 💾 {n} entradas de log persistidas", flush=True)
+    except Exception as e:
+        print(f"[LOG] ⚠️ Erro ao persistir log: {e}", flush=True)
+
+def _agendar_flush_log():
+    """Roda o flush a cada 30s, indefinidamente, numa thread separada."""
+    _flush_log_para_banco()
+    threading.Timer(30.0, _agendar_flush_log).start()
 
 # ── DECORATORS AUTH ───────────────────────────────────────────
 def requer_auth(f):
@@ -2763,6 +2790,31 @@ def api_logs():
     desde = request.args.get("desde",0,type=int)
     return jsonify(_log_entries[desde:])
 
+@app.route("/api/logs/datas")
+@requer_auth
+def api_logs_datas():
+    """Datas com log gravado — pra popular o seletor de data no frontend."""
+    return jsonify(db.db_listar_datas_com_log())
+
+@app.route("/api/logs/exportar")
+@requer_auth
+def api_logs_exportar():
+    """Baixa o log de um dia inteiro como arquivo de texto — força o
+    flush do buffer pendente primeiro, pra não deixar de fora as entradas
+    mais recentes que ainda não tinham sido persistidas."""
+    _flush_log_para_banco()
+    data_str = request.args.get("data") or agora().strftime("%Y-%m-%d")
+    linhas = db.db_listar_log_por_data(data_str)
+    if not linhas:
+        conteudo = f"Nenhum log encontrado para {data_str}."
+    else:
+        conteudo = "\n".join(f"[{l['hora']}] ({l['tipo']}) {l['mensagem']}" for l in linhas)
+    from flask import Response
+    return Response(
+        conteudo, mimetype="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=janus_log_{data_str}.txt"}
+    )
+
 # ── AJIA — Analista Janus com Inteligência Artificial ─────────
 @app.route("/api/ajia/chat", methods=["POST"])
 @requer_auth
@@ -3128,6 +3180,7 @@ if _db_ok:
             db.db_init_carteiras_comunidade,
             db.db_init_whatsapp,
             db.db_init_operacoes_table,
+            db.db_init_log_table,
         ]
         for fn in inits:
             try:
@@ -3139,6 +3192,8 @@ if _db_ok:
                 except: pass
         conn_startup.close()
         print("[STARTUP] ✅ Tabelas verificadas", flush=True)
+        _agendar_flush_log()
+        print("[STARTUP] ✅ Persistência de log agendada (flush a cada 30s)", flush=True)
         # Garante yfinance instalado (em background para não travar o startup)
         def _instalar_yfinance():
             try:
