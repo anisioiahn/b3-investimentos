@@ -1,6 +1,7 @@
 import os, json, threading, time, requests, xml.etree.ElementTree as ET
 from janus_routes import registrar_rotas_janus
 from janus_performance_routes import registrar_rotas_performance
+from fiscal_routes import registrar_rotas_fiscal
 from janus_cron import iniciar_cron_janus
 from datetime import datetime, timezone, timedelta
 from flask import Flask, jsonify, send_from_directory, request, redirect
@@ -3156,6 +3157,7 @@ log(f"🚀 Janus v{VERSION} iniciado", "info")
 _db_ok = db.init_db()
 registrar_rotas_janus(app, requer_auth)
 registrar_rotas_performance(app, requer_auth, uid, obter_valor_atual_carteira_geral)
+registrar_rotas_fiscal(app, requer_auth, uid)
 iniciar_cron_janus()
 if _db_ok:
     cache_db = db.db_carregar_cache()
@@ -3181,6 +3183,7 @@ if _db_ok:
             db.db_init_whatsapp,
             db.db_init_operacoes_table,
             db.db_init_log_table,
+            db.db_init_fiscal_tables,
         ]
         for fn in inits:
             try:
