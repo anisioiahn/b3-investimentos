@@ -1074,20 +1074,19 @@ def db_criar_operacao(uid, ticker, tipo, data_operacao, quantidade, preco_unitar
 
 def db_sincronizar_operacoes_da_carteira(uid):
     """
-    Recria o livro-razão de operações inteiro a partir do estado ATUAL da
+    Recria as operações de COMPRA sintéticas a partir do estado ATUAL da
     Carteira — chamado sempre que o usuário clica "Atualizar Performance".
     Cada posição confirmada vira uma operação de COMPRA sintética, datada
     na data_compra da posição, herdando a categoria da posição (para o
     drilldown por categoria funcionar).
 
-    Limitação conhecida e aceita por ora: a Carteira só guarda a posição
-    ATUAL, não histórico de vendas. Se um ativo foi vendido e removido da
-    Carteira, o ganho dele desaparece do XIRR aqui — isso será resolvido
-    por um módulo futuro e separado de vendas/IR, não por este.
-
-    Substitui tudo a cada chamada (DELETE + INSERT), não acumula — assim
-    fica sempre consistente com o estado atual da Carteira, mesmo que o
-    usuário tenha editado preço médio/quantidade/categoria depois.
+    IMPORTANTE: só apaga e recria linhas marcadas como sincronizadas
+    automaticamente (observacao começando com 'Sincronizado automaticamente').
+    Vendas registradas pelo Janus Fiscal (observacao começando com 'Fiscal')
+    são preservadas — sem essa distinção, clicar "Atualizar Performance"
+    depois de vender um ativo apagaria o histórico de venda e o XIRR
+    voltaria a "esquecer" o ganho realizado, exatamente o problema que o
+    módulo Fiscal foi construído para resolver.
     """
     try:
         posicoes = db_listar_carteira(uid)
@@ -1095,7 +1094,10 @@ def db_sincronizar_operacoes_da_carteira(uid):
 
         conn = get_conn()
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM operacoes WHERE usuario_id=%s", (uid,))
+            cur.execute("""
+                DELETE FROM operacoes
+                WHERE usuario_id=%s AND observacao LIKE 'Sincronizado automaticamente%%'
+            """, (uid,))
             if confirmadas:
                 rows = [
                     (uid, p['ticker'], 'COMPRA', p['data_compra'],
@@ -1214,6 +1216,299 @@ def db_excluir_operacao(uid, operacao_id):
     except Exception as e:
         print(f"[DB] Erro ao excluir operação: {e}")
         return False
+
+
+# ── JANUS FISCAL (custo médio fiscal, vendas, apuração de IR) ──
+def db_init_fiscal_tables(conn):
+    """
+    Tabelas do módulo Fiscal (Fase 2). Separadas propositalmente da tabela
+    `operacoes` do Performance — são conceitos relacionados mas distintos
+    (seção 14 do documento: "cálculos fiscais e de performance deverão
+    permanecer separados"). `operacoes` guarda fluxo de caixa pro XIRR;
+    `operacoes_fiscais` guarda o que a Receita realmente pede pra apurar
+    imposto (custos admitidos, IRRF, resultado por operação).
+    """
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS posicoes_fiscais (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+                ticker TEXT NOT NULL,
+                quantidade NUMERIC NOT NULL DEFAULT 0,
+                custo_medio NUMERIC NOT NULL DEFAULT 0,
+                custo_total NUMERIC NOT NULL DEFAULT 0,
+                versao_regras TEXT,
+                atualizado_em TEXT,
+                UNIQUE(usuario_id, ticker)
+            );
+
+            CREATE TABLE IF NOT EXISTS operacoes_fiscais (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+                ticker TEXT NOT NULL,
+                tipo TEXT NOT NULL CHECK (tipo IN ('COMPRA','VENDA')),
+                modalidade TEXT NOT NULL DEFAULT 'COMUM' CHECK (modalidade IN ('COMUM','DAY_TRADE')),
+                data_operacao DATE NOT NULL,
+                quantidade NUMERIC NOT NULL,
+                preco_unitario NUMERIC NOT NULL,
+                valor_bruto NUMERIC NOT NULL,
+                custos NUMERIC NOT NULL DEFAULT 0,
+                irrf NUMERIC NOT NULL DEFAULT 0,
+                custo_base NUMERIC,               -- só em VENDA
+                resultado_liquido NUMERIC,         -- só em VENDA
+                categoria_id INTEGER,
+                observacao TEXT,
+                criado_em TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_operacoes_fiscais_usuario
+                ON operacoes_fiscais(usuario_id, ticker, data_operacao);
+
+            CREATE TABLE IF NOT EXISTS apuracoes_fiscais_mensais (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+                ano_mes TEXT NOT NULL,
+                total_vendas NUMERIC NOT NULL DEFAULT 0,
+                ganho_bruto NUMERIC NOT NULL DEFAULT 0,
+                perda_bruta NUMERIC NOT NULL DEFAULT 0,
+                resultado_liquido NUMERIC NOT NULL DEFAULT 0,
+                isento BOOLEAN NOT NULL DEFAULT FALSE,
+                prejuizo_anterior NUMERIC NOT NULL DEFAULT 0,
+                prejuizo_compensado NUMERIC NOT NULL DEFAULT 0,
+                base_tributavel NUMERIC NOT NULL DEFAULT 0,
+                ir_calculado NUMERIC NOT NULL DEFAULT 0,
+                irrf_disponivel NUMERIC NOT NULL DEFAULT 0,
+                irrf_utilizado NUMERIC NOT NULL DEFAULT 0,
+                imposto_devido NUMERIC NOT NULL DEFAULT 0,
+                prejuizo_novo_saldo NUMERIC NOT NULL DEFAULT 0,
+                versao_regras TEXT,
+                status TEXT NOT NULL DEFAULT 'Calculado',
+                calculado_em TEXT,
+                UNIQUE(usuario_id, ano_mes)
+            );
+        """)
+    conn.commit()
+
+
+def db_obter_posicao_fiscal(uid, ticker):
+    """Devolve a posição fiscal atual (custo médio) de um ticker, ou None
+    se ainda não existir nenhuma."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM posicoes_fiscais WHERE usuario_id=%s AND ticker=%s
+            """, (uid, ticker.upper()))
+            row = cur.fetchone()
+        conn.close()
+        if not row: return None
+        d = dict(row)
+        for campo in ('quantidade', 'custo_medio', 'custo_total'):
+            d[campo] = float(d[campo])
+        return d
+    except Exception as e:
+        print(f"[DB] Erro ao obter posição fiscal: {e}")
+        return None
+
+
+def db_bootstrap_posicao_fiscal_da_carteira(uid, ticker):
+    """
+    Quando ainda não existe posição fiscal pra esse ticker (primeira venda
+    dele no Janus), usa o preço médio já cadastrado na Carteira como ponto
+    de partida do custo médio fiscal. Não reconstrói o histórico completo
+    de compras anteriores a este módulo — é uma aproximação inicial,
+    igual à que já assumimos no Performance (posições antigas não têm
+    como recuperar retroativamente a data exata de cada compra).
+    """
+    posicoes = db_listar_carteira(uid)
+    pos_carteira = next((p for p in posicoes if p['ticker'] == ticker.upper()
+                          and p.get('status') == 'confirmada'), None)
+    if not pos_carteira:
+        return None
+    return {
+        "ticker": ticker.upper(),
+        "quantidade": float(pos_carteira['quantidade']),
+        "custo_medio": float(pos_carteira['preco_medio']),
+        "custo_total": round(float(pos_carteira['quantidade']) * float(pos_carteira['preco_medio']), 2),
+    }
+
+
+def db_salvar_posicao_fiscal(uid, ticker, quantidade, custo_medio, custo_total, versao_regras="2026.1"):
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO posicoes_fiscais (usuario_id, ticker, quantidade, custo_medio, custo_total, versao_regras, atualizado_em)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (usuario_id, ticker) DO UPDATE SET
+                    quantidade=EXCLUDED.quantidade, custo_medio=EXCLUDED.custo_medio,
+                    custo_total=EXCLUDED.custo_total, versao_regras=EXCLUDED.versao_regras,
+                    atualizado_em=EXCLUDED.atualizado_em
+            """, (uid, ticker.upper(), quantidade, custo_medio, custo_total, versao_regras, agora_str()))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erro ao salvar posição fiscal: {e}")
+        return False
+
+
+def db_registrar_operacao_fiscal(uid, ticker, tipo, modalidade, data_operacao, quantidade,
+                                  preco_unitario, valor_bruto, custos=0.0, irrf=0.0,
+                                  custo_base=None, resultado_liquido=None,
+                                  categoria_id=None, observacao=None):
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO operacoes_fiscais
+                    (usuario_id, ticker, tipo, modalidade, data_operacao, quantidade,
+                     preco_unitario, valor_bruto, custos, irrf, custo_base,
+                     resultado_liquido, categoria_id, observacao, criado_em)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (uid, ticker.upper(), tipo, modalidade, data_operacao, quantidade,
+                  preco_unitario, valor_bruto, custos, irrf, custo_base,
+                  resultado_liquido, categoria_id, observacao, agora_str()))
+            novo_id = cur.fetchone()[0]
+        conn.commit()
+        conn.close()
+        return novo_id
+    except Exception as e:
+        print(f"[DB] Erro ao registrar operação fiscal: {e}")
+        return None
+
+
+def db_listar_operacoes_fiscais(uid, ticker=None, ano_mes=None):
+    """Listagem geral (auditoria/histórico) — filtros opcionais por ticker
+    e/ou mês. Diferente de db_listar_vendas_fiscais_do_mes (que exige mês
+    e só traz VENDA/COMUM), esta traz tudo por padrão."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            condicoes = ["usuario_id=%s"]
+            params = [uid]
+            if ticker:
+                condicoes.append("ticker=%s")
+                params.append(ticker.upper())
+            if ano_mes:
+                condicoes.append("TO_CHAR(data_operacao, 'YYYY-MM') = %s")
+                params.append(ano_mes)
+            where = " AND ".join(condicoes)
+            cur.execute(f"""
+                SELECT * FROM operacoes_fiscais WHERE {where}
+                ORDER BY data_operacao DESC, id DESC
+            """, params)
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                for campo in ('quantidade','preco_unitario','valor_bruto','custos','irrf','custo_base','resultado_liquido'):
+                    if r.get(campo) is not None: r[campo] = float(r[campo])
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[DB] Erro ao listar operações fiscais: {e}")
+        return []
+
+def db_listar_vendas_fiscais_do_mes(uid, ano_mes):
+    """Vendas de modalidade COMUM de um mês (YYYY-MM) — usado na apuração."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM operacoes_fiscais
+                WHERE usuario_id=%s AND tipo='VENDA' AND modalidade='COMUM'
+                  AND TO_CHAR(data_operacao, 'YYYY-MM') = %s
+                ORDER BY data_operacao ASC, id ASC
+            """, (uid, ano_mes))
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                for campo in ('quantidade','preco_unitario','valor_bruto','custos','irrf','custo_base','resultado_liquido'):
+                    if r.get(campo) is not None: r[campo] = float(r[campo])
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[DB] Erro ao listar vendas fiscais do mês: {e}")
+        return []
+
+
+def db_obter_apuracao_mes_anterior(uid, ano_mes):
+    """Busca o prejuízo_novo_saldo do mês anterior ao informado, pra usar
+    como prejuizo_anterior da apuração atual — encadeia mês a mês sem
+    precisar de uma tabela de 'razão de prejuízos' separada (a própria
+    sequência de apurações mensais já cumpre esse papel)."""
+    try:
+        ano, mes = (int(x) for x in ano_mes.split('-'))
+        ano_ant, mes_ant = (ano - 1, 12) if mes == 1 else (ano, mes - 1)
+        ano_mes_anterior = f"{ano_ant:04d}-{mes_ant:02d}"
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT prejuizo_novo_saldo FROM apuracoes_fiscais_mensais
+                WHERE usuario_id=%s AND ano_mes=%s
+            """, (uid, ano_mes_anterior))
+            row = cur.fetchone()
+        conn.close()
+        return float(row[0]) if row else 0.0
+    except Exception as e:
+        print(f"[DB] Erro ao obter apuração do mês anterior: {e}")
+        return 0.0
+
+
+def db_salvar_apuracao_mensal(uid, ano_mes, apuracao_dict):
+    """apuracao_dict: os campos de ApuracaoMensal (fiscal_engine), já em dict."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO apuracoes_fiscais_mensais
+                    (usuario_id, ano_mes, total_vendas, ganho_bruto, perda_bruta,
+                     resultado_liquido, isento, prejuizo_anterior, prejuizo_compensado,
+                     base_tributavel, ir_calculado, irrf_disponivel, irrf_utilizado,
+                     imposto_devido, prejuizo_novo_saldo, versao_regras, status, calculado_em)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (usuario_id, ano_mes) DO UPDATE SET
+                    total_vendas=EXCLUDED.total_vendas, ganho_bruto=EXCLUDED.ganho_bruto,
+                    perda_bruta=EXCLUDED.perda_bruta, resultado_liquido=EXCLUDED.resultado_liquido,
+                    isento=EXCLUDED.isento, prejuizo_anterior=EXCLUDED.prejuizo_anterior,
+                    prejuizo_compensado=EXCLUDED.prejuizo_compensado, base_tributavel=EXCLUDED.base_tributavel,
+                    ir_calculado=EXCLUDED.ir_calculado, irrf_disponivel=EXCLUDED.irrf_disponivel,
+                    irrf_utilizado=EXCLUDED.irrf_utilizado, imposto_devido=EXCLUDED.imposto_devido,
+                    prejuizo_novo_saldo=EXCLUDED.prejuizo_novo_saldo, versao_regras=EXCLUDED.versao_regras,
+                    status=EXCLUDED.status, calculado_em=EXCLUDED.calculado_em
+            """, (uid, ano_mes, apuracao_dict['total_vendas_acoes'], apuracao_dict['ganho_bruto'],
+                  apuracao_dict['perda_bruta'], apuracao_dict['resultado_liquido_mes'],
+                  apuracao_dict['isento'], apuracao_dict['prejuizo_anterior'],
+                  apuracao_dict['prejuizo_compensado'], apuracao_dict['base_tributavel'],
+                  apuracao_dict['ir_calculado'], apuracao_dict['irrf_disponivel'],
+                  apuracao_dict['irrf_utilizado'], apuracao_dict['imposto_devido'],
+                  apuracao_dict['prejuizo_novo_saldo'], apuracao_dict['versao_regras'],
+                  apuracao_dict['status'], agora_str()))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erro ao salvar apuração mensal: {e}")
+        return False
+
+
+def db_obter_apuracao_mensal(uid, ano_mes):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM apuracoes_fiscais_mensais WHERE usuario_id=%s AND ano_mes=%s
+            """, (uid, ano_mes))
+            row = cur.fetchone()
+        conn.close()
+        if not row: return None
+        d = dict(row)
+        for campo in ('total_vendas','ganho_bruto','perda_bruta','resultado_liquido',
+                      'prejuizo_anterior','prejuizo_compensado','base_tributavel',
+                      'ir_calculado','irrf_disponivel','irrf_utilizado','imposto_devido','prejuizo_novo_saldo'):
+            d[campo] = float(d[campo])
+        return d
+    except Exception as e:
+        print(f"[DB] Erro ao obter apuração mensal: {e}")
+        return None
 
 
 # ── Fatores de benchmark (usado pelo motor de Performance) ────────
