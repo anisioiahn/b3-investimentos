@@ -1235,6 +1235,44 @@ def db_buscar_fatores_benchmark(codigo_benchmark, data_inicial, data_final):
         print(f"[DB] Erro ao buscar fatores de benchmark: {e}")
         return {}
 
+def db_calcular_acumulado_benchmark(codigo_benchmark, dias=365):
+    """
+    Retorno acumulado dos últimos `dias` corridos de um benchmark, a
+    partir dos fatores diários já gravados (sem coleta nova — só soma o
+    que já está no banco). Usado no card de Indicadores Econômicos do
+    Cockpit (CDI/SELIC/IPCA 12 meses).
+
+    Devolve dict {acumulado_pct, dias_utilizados, data_inicial, data_final}
+    ou None se não houver nenhum dado no período.
+    """
+    from datetime import date, timedelta
+    data_final = date.today()
+    data_inicial = data_final - timedelta(days=dias)
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT data, fator_diario FROM benchmark_diario
+                WHERE codigo_benchmark=%s AND data >= %s
+                ORDER BY data ASC
+            """, (codigo_benchmark, data_inicial))
+            linhas = cur.fetchall()
+        conn.close()
+        if not linhas:
+            return None
+        acumulado = 1.0
+        for _, fator in linhas:
+            acumulado *= float(fator)
+        return {
+            "acumulado_pct": round((acumulado - 1.0) * 100, 4),
+            "dias_utilizados": len(linhas),
+            "data_inicial": linhas[0][0].isoformat(),
+            "data_final": linhas[-1][0].isoformat(),
+        }
+    except Exception as e:
+        print(f"[DB] Erro ao calcular acumulado de benchmark {codigo_benchmark}: {e}")
+        return None
+
 
 # ── CARTEIRA SNAPSHOT (histórico diário de performance) ───────
 def db_init_snapshot_tables(conn):
