@@ -37,6 +37,7 @@ class ConfiguracaoFiscal:
     limite_isencao_mensal_acoes: float = 20000.0
     aliquota_swing_trade: float = 0.15
     aliquota_day_trade: float = 0.20  # não usado na Fase 1, reservado pra Fase 3
+    minimo_recolhimento_darf: float = 10.0  # seção 8/13: abaixo disso, acumula pro mês seguinte
     versao_regras: str = "2026.1"
     fonte_normativa: str = "Receita Federal — Renda Variável (referência julho/2026)"
 
@@ -184,7 +185,10 @@ class ApuracaoMensal:
     ir_calculado: float
     irrf_disponivel: float
     irrf_utilizado: float
-    imposto_devido: float
+    imposto_devido: float               # calculado ESTE mês, antes do mínimo legal
+    imposto_acumulado_anterior: float   # vindo de meses anteriores abaixo do mínimo
+    imposto_a_pagar_agora: float        # 0 se ainda abaixo do mínimo — é o valor real do DARF
+    imposto_acumulado_novo_saldo: float # o que fica pendente pro próximo mês
     prejuizo_novo_saldo: float
     versao_regras: str
     status: str = "Calculado"
@@ -192,7 +196,8 @@ class ApuracaoMensal:
 
 def apurar_mes(vendas_do_mes: List[ResultadoVenda], prejuizo_anterior: float,
                 irrf_disponivel: float, ano_mes: str,
-                cfg: Optional[ConfiguracaoFiscal] = None) -> ApuracaoMensal:
+                cfg: Optional[ConfiguracaoFiscal] = None,
+                imposto_acumulado_anterior: float = 0.0) -> ApuracaoMensal:
     """
     Seção 7: isenção é sobre o TOTAL VENDIDO no mês (alienação), não
     sobre o lucro — "referência de R$20.000,00 é limite de vendas, e não
@@ -204,6 +209,12 @@ def apurar_mes(vendas_do_mes: List[ResultadoVenda], prejuizo_anterior: float,
     permanece intacto pro próximo mês tributável (isenção não "gasta"
     saldo de prejuízo à toa).
 
+    Seção 8/13: imposto abaixo do mínimo legal de recolhimento (default
+    R$10) NÃO gera DARF neste mês — acumula com o próximo mês até
+    atingir o mínimo. `imposto_acumulado_anterior` é o saldo pendente
+    de meses anteriores; `imposto_a_pagar_agora` é o valor real do DARF
+    deste mês (0 se ainda não atingiu o mínimo).
+
     Validado contra os 2 exemplos numéricos do documento:
       seção 9  -> prejuízo 6.000, ganho 9.000, compensa 6.000, base 3.000
       seção 12 -> vendas 27.500, ganhos 6.800, perdas 1.300,
@@ -214,6 +225,8 @@ def apurar_mes(vendas_do_mes: List[ResultadoVenda], prejuizo_anterior: float,
         raise ErroValidacaoFiscal("Prejuízo anterior não pode ser negativo (é um saldo, não uma dívida).")
     if irrf_disponivel < 0:
         raise ErroValidacaoFiscal("IRRF disponível não pode ser negativo.")
+    if imposto_acumulado_anterior < 0:
+        raise ErroValidacaoFiscal("Imposto acumulado anterior não pode ser negativo.")
 
     total_vendas = sum(v.valor_bruto for v in vendas_do_mes)
     ganho_bruto = sum(v.resultado_liquido for v in vendas_do_mes if v.resultado_liquido > 0)
@@ -247,6 +260,16 @@ def apurar_mes(vendas_do_mes: List[ResultadoVenda], prejuizo_anterior: float,
     irrf_utilizado = min(irrf_disponivel, ir_calculado)
     imposto_devido = round(max(0.0, ir_calculado - irrf_utilizado), 2)
 
+    # Mínimo legal de recolhimento (seção 8/13): soma o pendente de meses
+    # anteriores; só "libera" o DARF quando o total atinge o mínimo.
+    imposto_pendente_total = round(imposto_devido + imposto_acumulado_anterior, 2)
+    if imposto_pendente_total < cfg.minimo_recolhimento_darf:
+        imposto_a_pagar_agora = 0.0
+        imposto_acumulado_novo_saldo = imposto_pendente_total
+    else:
+        imposto_a_pagar_agora = imposto_pendente_total
+        imposto_acumulado_novo_saldo = 0.0
+
     return ApuracaoMensal(
         ano_mes=ano_mes,
         total_vendas_acoes=total_vendas,
@@ -261,6 +284,55 @@ def apurar_mes(vendas_do_mes: List[ResultadoVenda], prejuizo_anterior: float,
         irrf_disponivel=irrf_disponivel,
         irrf_utilizado=irrf_utilizado,
         imposto_devido=imposto_devido,
+        imposto_acumulado_anterior=imposto_acumulado_anterior,
+        imposto_a_pagar_agora=imposto_a_pagar_agora,
+        imposto_acumulado_novo_saldo=imposto_acumulado_novo_saldo,
         prejuizo_novo_saldo=round(prejuizo_novo_saldo, 2),
         versao_regras=cfg.versao_regras,
+    )
+
+
+# ── DARF (seção 8) ────────────────────────────────────────────
+@dataclass
+class DARF:
+    ano_mes_referencia: str
+    codigo_receita: str
+    valor: float
+    data_vencimento: str  # ISO (YYYY-MM-DD)
+    competencia: str      # MM/AAAA, formato usado no Sicalc
+
+
+def calcular_vencimento_darf(ano_mes: str) -> str:
+    """
+    Último dia útil do mês seguinte ao da apuração (seção 8). LIMITAÇÃO
+    CONHECIDA: só recua sobre fins de semana, não sobre feriados
+    nacionais/estaduais — um calendário de feriados fica pra um
+    refinamento futuro (a data aqui pode ficar 1-3 dias adiantada em
+    meses com feriado no fim do mês; sempre conferir a data oficial
+    antes de pagar).
+    """
+    from datetime import date, timedelta
+    ano, mes = (int(x) for x in ano_mes.split('-'))
+    ano_venc, mes_venc = (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+    primeiro_dia_seguinte = date(ano_venc + 1, 1, 1) if mes_venc == 12 else date(ano_venc, mes_venc + 1, 1)
+    ultimo_dia = primeiro_dia_seguinte - timedelta(days=1)
+    while ultimo_dia.weekday() >= 5:  # 5=sábado, 6=domingo
+        ultimo_dia -= timedelta(days=1)
+    return ultimo_dia.isoformat()
+
+
+def gerar_darf(apuracao: ApuracaoMensal, codigo_receita: str = "6015") -> Optional[DARF]:
+    """
+    Devolve None se não há nada a pagar ainda (isento, prejuízo, ou
+    abaixo do mínimo legal ainda acumulando — ver imposto_a_pagar_agora).
+    """
+    if apuracao.imposto_a_pagar_agora <= 0:
+        return None
+    ano, mes = (int(x) for x in apuracao.ano_mes.split('-'))
+    return DARF(
+        ano_mes_referencia=apuracao.ano_mes,
+        codigo_receita=codigo_receita,
+        valor=apuracao.imposto_a_pagar_agora,
+        data_vencimento=calcular_vencimento_darf(apuracao.ano_mes),
+        competencia=f"{mes:02d}/{ano:04d}",
     )
