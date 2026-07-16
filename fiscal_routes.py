@@ -1,7 +1,8 @@
 # ============================================================
-# JANUS FISCAL — ROTAS FLASK v1.0 (Fase 2)
-# Integração CARTEIRA → PERFORMANCE → FISCAL numa venda só, conforme
-# o documento "JANUS FISCAL — Módulo de Venda de Ativos", seção 2.
+# JANUS FISCAL — ROTAS FLASK v2.0 (Fase 2 + Central Fiscal completa)
+# Integração CARTEIRA → PERFORMANCE → FISCAL numa venda só, com
+# apuração mensal, fechamento/reabertura auditável de mês, DARF,
+# extrato de vendas e export simplificado pro IRPF.
 #
 # Uso no servidor.py:
 #   from fiscal_routes import registrar_rotas_fiscal
@@ -9,7 +10,7 @@
 # ============================================================
 
 from datetime import datetime, timezone, timedelta
-from flask import jsonify, request
+from flask import jsonify, request, Response
 
 import db
 import fiscal_engine as fe
@@ -19,8 +20,6 @@ def hoje(): return datetime.now(TZ_BR).date()
 
 
 def _serializar_apuracao(a):
-    """Aceita tanto um dataclass ApuracaoMensal (recém-calculado) quanto
-    um dict vindo do banco (já salvo) — normaliza os dois formatos."""
     if a is None:
         return None
     if isinstance(a, dict):
@@ -42,22 +41,30 @@ def _serializar_apuracao(a):
         "irrf_disponivel": round(a.irrf_disponivel, 2),
         "irrf_utilizado": round(a.irrf_utilizado, 2),
         "imposto_devido": round(a.imposto_devido, 2),
+        "imposto_acumulado_anterior": round(a.imposto_acumulado_anterior, 2),
+        "imposto_a_pagar_agora": round(a.imposto_a_pagar_agora, 2),
+        "imposto_acumulado_novo_saldo": round(a.imposto_acumulado_novo_saldo, 2),
         "prejuizo_novo_saldo": round(a.prejuizo_novo_saldo, 2),
         "versao_regras": a.versao_regras,
         "status": a.status,
     }
 
 
+def _serializar_darf(d):
+    if d is None:
+        return None
+    return {
+        "ano_mes_referencia": d.ano_mes_referencia,
+        "codigo_receita": d.codigo_receita,
+        "valor": round(d.valor, 2),
+        "data_vencimento": d.data_vencimento,
+        "competencia": d.competencia,
+    }
+
+
 def registrar_rotas_fiscal(app, requer_auth, uid):
 
-    def _recalcular_apuracao_mes(usuario_id, ano_mes, cfg=None):
-        """
-        Recalcula a apuração de um mês do zero, a partir de todas as
-        vendas COMUNS registradas nele — é barato o suficiente pra
-        recalcular sempre (não centenas de vendas por mês) e evita
-        qualquer risco de apuração salva ficar dessincronizada de uma
-        venda editada/excluída depois.
-        """
+    def _calcular_apuracao(usuario_id, ano_mes, cfg=None):
         vendas_raw = db.db_listar_vendas_fiscais_do_mes(usuario_id, ano_mes)
         if not vendas_raw:
             return None
@@ -67,15 +74,58 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
                 preco_unitario=v["preco_unitario"], valor_bruto=v["valor_bruto"],
                 custo_base=v.get("custo_base") or 0.0, custos_venda=v.get("custos") or 0.0,
                 irrf=v.get("irrf") or 0.0, resultado_liquido=v.get("resultado_liquido") or 0.0,
-                posicao_remanescente=None,  # não usado por apurar_mes
+                posicao_remanescente=None,
             )
             for v in vendas_raw
         ]
-        prejuizo_anterior = db.db_obter_apuracao_mes_anterior(usuario_id, ano_mes)
+        saldos = db.db_obter_saldos_mes_anterior(usuario_id, ano_mes)
         irrf_disponivel = sum(v.get("irrf") or 0.0 for v in vendas_raw)
-        apuracao = fe.apurar_mes(vendas_obj, prejuizo_anterior, irrf_disponivel, ano_mes, cfg or fe.ConfiguracaoFiscal())
-        db.db_salvar_apuracao_mensal(usuario_id, ano_mes, apuracao.__dict__)
+        return fe.apurar_mes(
+            vendas_obj, saldos["prejuizo_anterior"], irrf_disponivel, ano_mes,
+            cfg or fe.ConfiguracaoFiscal(),
+            imposto_acumulado_anterior=saldos["imposto_acumulado_anterior"],
+        )
+
+    def _recalcular_e_salvar_mes(usuario_id, ano_mes, permitir_sobrescrever_fechado=False):
+        apuracao = _calcular_apuracao(usuario_id, ano_mes)
+        if apuracao is None:
+            return None
+        db.db_salvar_apuracao_mensal(usuario_id, ano_mes, apuracao.__dict__,
+                                      permitir_sobrescrever_fechado=permitir_sobrescrever_fechado)
         return apuracao
+
+    def _reprocessar_cascata(usuario_id, ano_mes_inicial, forcar_reabertura=False):
+        recalculados = []
+        bloqueados = []
+        meses_a_processar = [ano_mes_inicial] + db.db_listar_meses_apos(usuario_id, ano_mes_inicial)
+        for am in meses_a_processar:
+            apuracao_atual = db.db_obter_apuracao_mensal(usuario_id, am)
+            if apuracao_atual and apuracao_atual.get("status") == "Fechado":
+                if not forcar_reabertura:
+                    bloqueados.append(am)
+                    break
+                ok, _ = db.db_reabrir_mes_fiscal(
+                    usuario_id, am,
+                    motivo=f"Reaberto automaticamente por reprocessamento em cascata a partir de {ano_mes_inicial}",
+                )
+                if not ok:
+                    bloqueados.append(am)
+                    break
+
+            nova = _recalcular_e_salvar_mes(usuario_id, am, permitir_sobrescrever_fechado=True)
+            if nova is not None:
+                recalculados.append(am)
+                if apuracao_atual and apuracao_atual.get("status") in ("Fechado", "Reaberto"):
+                    db.db_registrar_log_reprocessamento(
+                        usuario_id, am, "REPROCESSOU",
+                        motivo=f"Cascata a partir de {ano_mes_inicial}",
+                        valores_antes=apuracao_atual, valores_depois=nova.__dict__,
+                    )
+                    db.db_salvar_apuracao_mensal(
+                        usuario_id, am, {**nova.__dict__, "status": "Reprocessado"},
+                        permitir_sobrescrever_fechado=True,
+                    )
+        return recalculados, bloqueados
 
     @app.route("/api/fiscal/posicao/<ticker>", methods=["GET"])
     @requer_auth
@@ -110,9 +160,15 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
         except (TypeError, ValueError):
             return jsonify({"erro": "quantidade e preco_unitario devem ser numéricos"}), 400
 
-        # 1) posição fiscal atual — se for a primeira venda deste ativo,
-        #    parte do preço médio já cadastrado na Carteira (seção 6: sem
-        #    reconstrução retroativa de histórico anterior a este módulo)
+        ano_mes = str(data_operacao)[:7]
+        apuracao_existente = db.db_obter_apuracao_mensal(uid(), ano_mes)
+        if apuracao_existente and apuracao_existente.get("status") == "Fechado":
+            return jsonify({
+                "erro": "mes_fechado",
+                "mensagem": f"O mês {ano_mes} já está fechado. Reabra-o na Central Fiscal "
+                            f"(com um motivo) antes de registrar uma venda nele.",
+            }), 400
+
         pos_dict = db.db_obter_posicao_fiscal(uid(), ticker)
         if not pos_dict:
             pos_dict = db.db_bootstrap_posicao_fiscal_da_carteira(uid(), ticker)
@@ -123,20 +179,16 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
             ticker=ticker, quantidade=pos_dict["quantidade"],
             custo_medio=pos_dict["custo_medio"], custo_total=pos_dict["custo_total"],
         )
-
-        # 2) motor fiscal — determinístico, isolado, já testado (Fase 1)
         try:
             resultado = fe.processar_venda(posicao, quantidade, preco_unitario, custos=custos, irrf=irrf)
         except fe.ErroValidacaoFiscal as e:
             return jsonify({"erro": str(e)}), 400
 
-        # 3) persiste a posição fiscal atualizada
         db.db_salvar_posicao_fiscal(
             uid(), ticker, resultado.posicao_remanescente.quantidade,
             resultado.posicao_remanescente.custo_medio, resultado.posicao_remanescente.custo_total,
         )
 
-        # 4) categoria/corretora herdadas da posição atual na Carteira
         posicoes_carteira = db.db_listar_carteira(uid())
         pos_carteira = next(
             (p for p in posicoes_carteira if p["ticker"] == ticker and p.get("status") == "confirmada"), None
@@ -144,7 +196,6 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
         categoria_id = pos_carteira.get("categoria_id") if pos_carteira else None
         corretora = d.get("corretora") or (pos_carteira.get("corretora") if pos_carteira else None)
 
-        # 5) registra no livro-razão fiscal (fonte de verdade da apuração de IR)
         op_fiscal_id = db.db_registrar_operacao_fiscal(
             uid(), ticker, "VENDA", "COMUM", data_operacao, quantidade, preco_unitario,
             resultado.valor_bruto, custos=custos, irrf=irrf,
@@ -152,16 +203,12 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
             categoria_id=categoria_id, observacao="Venda registrada via Janus Fiscal",
         )
 
-        # 6) alimenta o Performance (fecha a lacuna: sem isso, o ganho
-        #    realizado sumiria do XIRR assim que o ativo saísse da Carteira)
         db.db_criar_operacao(
             uid(), ticker, "VENDA", data_operacao, quantidade, preco_unitario,
             corretora=corretora, categoria_id=categoria_id,
             observacao="Fiscal — venda registrada",
         )
 
-        # 7) atualiza a Carteira — reduz quantidade preservando o custo
-        #    médio fiscal remanescente; remove se zerou (seção 2)
         if pos_carteira:
             nova_qtd = resultado.posicao_remanescente.quantidade
             if nova_qtd <= 0:
@@ -174,11 +221,10 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
                     pos_carteira["data_compra"], pos_carteira.get("corretora"), categoria_id,
                 )
 
-        # 8) recalcula a apuração do mês da venda
-        ano_mes = str(data_operacao)[:7]
-        apuracao = _recalcular_apuracao_mes(uid(), ano_mes)
+        _, bloqueados = _reprocessar_cascata(uid(), ano_mes, forcar_reabertura=False)
+        apuracao_do_mes = db.db_obter_apuracao_mensal(uid(), ano_mes)
 
-        return jsonify({
+        resposta = {
             "ok": True,
             "operacao_fiscal_id": op_fiscal_id,
             "venda": {
@@ -191,43 +237,113 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
                 "quantidade": resultado.posicao_remanescente.quantidade,
                 "custo_medio": round(resultado.posicao_remanescente.custo_medio, 2),
             },
-            "apuracao_mes": _serializar_apuracao(apuracao),
-        })
+            "apuracao_mes": _serializar_apuracao(apuracao_do_mes),
+        }
+        if bloqueados:
+            resposta["aviso"] = (
+                f"Meses já fechados à frente desta venda não foram recalculados "
+                f"automaticamente: {', '.join(bloqueados)}. Reabra-os manualmente na "
+                f"Central Fiscal se precisar refletir esta venda neles."
+            )
+        return jsonify(resposta)
 
     @app.route("/api/fiscal/apuracao/<ano_mes>", methods=["GET"])
     @requer_auth
     def api_fiscal_apuracao(ano_mes):
         salva = db.db_obter_apuracao_mensal(uid(), ano_mes)
         if salva:
-            return jsonify(_serializar_apuracao(salva))
-        apuracao = _recalcular_apuracao_mes(uid(), ano_mes)
-        if apuracao is None:
-            return jsonify({
-                "erro": "sem_vendas",
-                "mensagem": f"Nenhuma venda registrada em {ano_mes}.",
-            }), 200
-        return jsonify(_serializar_apuracao(apuracao))
+            resp = _serializar_apuracao(salva)
+        else:
+            apuracao = _recalcular_e_salvar_mes(uid(), ano_mes)
+            if apuracao is None:
+                return jsonify({"erro": "sem_vendas", "mensagem": f"Nenhuma venda registrada em {ano_mes}."}), 200
+            resp = _serializar_apuracao(apuracao)
+        darf = None
+        if resp and resp.get("imposto_a_pagar_agora", 0) > 0:
+            darf = _serializar_darf(fe.gerar_darf(fe.ApuracaoMensal(
+                ano_mes=resp["ano_mes"], total_vendas_acoes=resp["total_vendas"],
+                ganho_bruto=resp["ganho_bruto"], perda_bruta=resp["perda_bruta"],
+                resultado_liquido_mes=resp["resultado_liquido"], isento=resp["isento"],
+                prejuizo_anterior=resp["prejuizo_anterior"], prejuizo_compensado=resp["prejuizo_compensado"],
+                base_tributavel=resp["base_tributavel"], ir_calculado=resp["ir_calculado"],
+                irrf_disponivel=resp["irrf_disponivel"], irrf_utilizado=resp["irrf_utilizado"],
+                imposto_devido=resp["imposto_devido"], imposto_acumulado_anterior=resp["imposto_acumulado_anterior"],
+                imposto_a_pagar_agora=resp["imposto_a_pagar_agora"],
+                imposto_acumulado_novo_saldo=resp["imposto_acumulado_novo_saldo"],
+                prejuizo_novo_saldo=resp["prejuizo_novo_saldo"], versao_regras=resp["versao_regras"],
+                status=resp["status"],
+            )))
+        resp["darf"] = darf
+        return jsonify(resp)
 
     @app.route("/api/fiscal/central", methods=["GET"])
     @requer_auth
     def api_fiscal_central():
-        """Resumo do mês atual — a base do futuro Dashboard Fiscal
-        (seção 10): status de isenção, IR devido, progresso do limite."""
         ano_mes = request.args.get("ano_mes") or hoje().strftime("%Y-%m")
-        salva = db.db_obter_apuracao_mensal(uid(), ano_mes)
-        apuracao = salva if salva else _recalcular_apuracao_mes(uid(), ano_mes)
-        serializado = _serializar_apuracao(apuracao)
+        return api_fiscal_apuracao(ano_mes)
 
-        cfg = fe.ConfiguracaoFiscal()
-        total_vendas = serializado["total_vendas"] if serializado else 0.0
-        pct_limite = round(min(100.0, (total_vendas / cfg.limite_isencao_mensal_acoes) * 100), 1) if cfg.limite_isencao_mensal_acoes else 0.0
+    @app.route("/api/fiscal/apuracoes", methods=["GET"])
+    @requer_auth
+    def api_fiscal_apuracoes_historico():
+        limite = request.args.get("limite", 24, type=int)
+        apuracoes = db.db_listar_apuracoes_fiscais(uid(), limite=limite)
+        return jsonify([_serializar_apuracao(a) for a in apuracoes])
 
+    @app.route("/api/fiscal/reprocessar", methods=["POST"])
+    @requer_auth
+    def api_fiscal_reprocessar():
+        """
+        Recalcula em cascata a partir de um mês, independente do mês
+        inicial estar fechado ou não — útil depois de editar/excluir uma
+        venda antiga e querer propagar o efeito pra frente. Meses
+        FECHADOS no caminho só são tocados com forcar_reabertura=True.
+        """
+        d = request.json or {}
+        ano_mes_inicial = d.get("ano_mes_inicial")
+        forcar_reabertura = bool(d.get("forcar_reabertura"))
+        if not ano_mes_inicial:
+            return jsonify({"erro": "ano_mes_inicial é obrigatório"}), 400
+
+        recalculados, bloqueados = _reprocessar_cascata(uid(), ano_mes_inicial, forcar_reabertura=forcar_reabertura)
         return jsonify({
-            "ano_mes": ano_mes,
-            "limite_isencao_mensal": cfg.limite_isencao_mensal_acoes,
-            "percentual_limite_usado": pct_limite,
-            "apuracao": serializado,
+            "ok": True,
+            "meses_recalculados": recalculados,
+            "meses_ainda_bloqueados": bloqueados,
         })
+
+    @app.route("/api/fiscal/mes/<ano_mes>/fechar", methods=["POST"])
+    @requer_auth
+    def api_fiscal_fechar_mes(ano_mes):
+        ok, erro = db.db_fechar_mes_fiscal(uid(), ano_mes)
+        if not ok:
+            return jsonify({"erro": erro}), 400
+        return jsonify({"ok": True})
+
+    @app.route("/api/fiscal/mes/<ano_mes>/reabrir", methods=["POST"])
+    @requer_auth
+    def api_fiscal_reabrir_mes(ano_mes):
+        d = request.json or {}
+        motivo = (d.get("motivo") or "").strip()
+        cascata = bool(d.get("cascata"))
+        if not motivo:
+            return jsonify({"erro": "É necessário informar o motivo da reabertura."}), 400
+
+        ok, erro = db.db_reabrir_mes_fiscal(uid(), ano_mes, motivo)
+        if not ok:
+            return jsonify({"erro": erro}), 400
+
+        recalculados, bloqueados = _reprocessar_cascata(uid(), ano_mes, forcar_reabertura=cascata)
+        return jsonify({
+            "ok": True,
+            "meses_recalculados": recalculados,
+            "meses_ainda_bloqueados": bloqueados,
+        })
+
+    @app.route("/api/fiscal/reprocessamento/log", methods=["GET"])
+    @requer_auth
+    def api_fiscal_log_reprocessamento():
+        ano_mes = request.args.get("ano_mes")
+        return jsonify(db.db_listar_log_reprocessamento(uid(), ano_mes))
 
     @app.route("/api/fiscal/vendas", methods=["GET"])
     @requer_auth
@@ -236,3 +352,51 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
         ticker = request.args.get("ticker")
         vendas = db.db_listar_operacoes_fiscais(uid(), ticker=ticker, ano_mes=ano_mes)
         return jsonify(vendas)
+
+    @app.route("/api/fiscal/export/irpf/<ano>", methods=["GET"])
+    @requer_auth
+    def api_fiscal_export_irpf(ano):
+        apuracoes = [a for a in db.db_listar_apuracoes_fiscais(uid(), limite=12)
+                     if a["ano_mes"].startswith(ano)]
+        apuracoes.sort(key=lambda a: a["ano_mes"])
+        vendas = [v for v in db.db_listar_operacoes_fiscais(uid())
+                  if str(v["data_operacao"]).startswith(ano) and v["tipo"] == "VENDA"]
+
+        linhas = [
+            f"JANUS FISCAL — RESUMO PARA DECLARAÇÃO DE IMPOSTO DE RENDA {ano}",
+            "=" * 70,
+            "Este arquivo organiza os números para digitação manual no programa",
+            "da Receita Federal (ficha 'Renda Variável - Operações Comuns/Day Trade').",
+            "Não é um arquivo de importação automática.",
+            "",
+            "-- RESULTADO MENSAL (Renda Variável) --",
+            "",
+        ]
+        total_ir_ano = 0.0
+        for a in apuracoes:
+            linhas.append(f"{a['ano_mes']}:")
+            linhas.append(f"  Vendas no mes: R$ {a['total_vendas']:.2f}")
+            linhas.append(f"  Resultado liquido: R$ {a['resultado_liquido']:.2f}")
+            linhas.append(f"  Situacao: {'Isento' if a['isento'] else 'Tributavel'}")
+            if not a["isento"]:
+                linhas.append(f"  Base de calculo: R$ {a['base_tributavel']:.2f}")
+                linhas.append(f"  IR pago no mes: R$ {a['imposto_a_pagar_agora']:.2f}")
+            linhas.append("")
+            total_ir_ano += a["imposto_a_pagar_agora"]
+
+        linhas.append(f"TOTAL DE IR PAGO NO ANO: R$ {total_ir_ano:.2f}")
+        linhas.append("")
+        linhas.append("-- OPERACOES DETALHADAS (auditoria) --")
+        linhas.append("")
+        for v in vendas:
+            linhas.append(
+                f"{v['data_operacao']} | VENDA {v['ticker']} | "
+                f"{v['quantidade']} un x R$ {v['preco_unitario']:.2f} = R$ {v['valor_bruto']:.2f} | "
+                f"Resultado: R$ {(v.get('resultado_liquido') or 0):.2f}"
+            )
+
+        conteudo = "\n".join(linhas)
+        return Response(
+            conteudo, mimetype="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename=janus_fiscal_irpf_{ano}.txt"},
+        )
