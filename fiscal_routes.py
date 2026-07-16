@@ -9,7 +9,7 @@
 #   registrar_rotas_fiscal(app, requer_auth, uid)
 # ============================================================
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, date, timezone, timedelta
 from flask import jsonify, request, Response
 
 import db
@@ -80,9 +80,18 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
         ]
         saldos = db.db_obter_saldos_mes_anterior(usuario_id, ano_mes)
         irrf_disponivel = sum(v.get("irrf") or 0.0 for v in vendas_raw)
+
+        if cfg is None:
+            # Busca a regra vigente NO MÊS SENDO APURADO (dia 1), não hoje —
+            # essencial pra reprocessar mês antigo com a regra que valia
+            # naquela época, se a legislação mudou entre lá e agora.
+            ano, mes = (int(x) for x in ano_mes.split('-'))
+            data_referencia_regra = date(ano, mes, 1)
+            cfg_dict = db.db_montar_configuracao_fiscal(data_referencia_regra)
+            cfg = fe.ConfiguracaoFiscal(**cfg_dict)
+
         return fe.apurar_mes(
-            vendas_obj, saldos["prejuizo_anterior"], irrf_disponivel, ano_mes,
-            cfg or fe.ConfiguracaoFiscal(),
+            vendas_obj, saldos["prejuizo_anterior"], irrf_disponivel, ano_mes, cfg,
             imposto_acumulado_anterior=saldos["imposto_acumulado_anterior"],
         )
 
@@ -344,6 +353,44 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
     def api_fiscal_log_reprocessamento():
         ano_mes = request.args.get("ano_mes")
         return jsonify(db.db_listar_log_reprocessamento(uid(), ano_mes))
+
+    # ── Regras fiscais versionadas (limite, alíquotas, mínimo DARF) ──
+    @app.route("/api/fiscal/regras", methods=["GET"])
+    @requer_auth
+    def api_fiscal_listar_regras():
+        tipo = request.args.get("tipo")
+        return jsonify(db.db_listar_regras_fiscais(tipo))
+
+    @app.route("/api/fiscal/regras", methods=["POST"])
+    @requer_auth
+    def api_fiscal_criar_regra():
+        d = request.json or {}
+        tipo_regra = d.get("tipo_regra")
+        vigencia_inicio = d.get("vigencia_inicio")
+        if not tipo_regra or tipo_regra not in db.TIPOS_REGRA_VALIDOS:
+            return jsonify({"erro": f"tipo_regra inválido. Use um de: {', '.join(db.TIPOS_REGRA_VALIDOS)}"}), 400
+        if not vigencia_inicio:
+            return jsonify({"erro": "vigencia_inicio é obrigatória"}), 400
+        try:
+            valor = float(d.get("valor"))
+        except (TypeError, ValueError):
+            return jsonify({"erro": "valor deve ser numérico"}), 400
+        if valor < 0:
+            return jsonify({"erro": "valor não pode ser negativo"}), 400
+        # Alíquotas são fração (0.15 = 15%) — trava simples contra erro de
+        # digitação comum (digitar "15" pensando em 15% em vez de 0.15)
+        if 'aliquota' in tipo_regra and valor > 1:
+            return jsonify({"erro": "Alíquota deve ser fração decimal (ex: 0.15 para 15%), não percentual inteiro."}), 400
+
+        ok, resultado = db.db_criar_regra_fiscal(
+            tipo_regra, valor, vigencia_inicio,
+            fonte_normativa=d.get("fonte_normativa"),
+            observacao=d.get("observacao"),
+            criado_por=uid(),
+        )
+        if not ok:
+            return jsonify({"erro": resultado}), 400
+        return jsonify({"ok": True, "id": resultado})
 
     @app.route("/api/fiscal/vendas", methods=["GET"])
     @requer_auth
