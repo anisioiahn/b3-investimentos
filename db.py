@@ -1279,12 +1279,38 @@ def db_init_fiscal_tables(conn):
                 irrf_disponivel NUMERIC NOT NULL DEFAULT 0,
                 irrf_utilizado NUMERIC NOT NULL DEFAULT 0,
                 imposto_devido NUMERIC NOT NULL DEFAULT 0,
+                imposto_acumulado_anterior NUMERIC NOT NULL DEFAULT 0,
+                imposto_a_pagar_agora NUMERIC NOT NULL DEFAULT 0,
+                imposto_acumulado_novo_saldo NUMERIC NOT NULL DEFAULT 0,
                 prejuizo_novo_saldo NUMERIC NOT NULL DEFAULT 0,
                 versao_regras TEXT,
                 status TEXT NOT NULL DEFAULT 'Calculado',
                 calculado_em TEXT,
+                fechado_em TEXT,
                 UNIQUE(usuario_id, ano_mes)
             );
+
+            CREATE TABLE IF NOT EXISTS fiscal_reprocessamento_log (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+                ano_mes TEXT NOT NULL,
+                acao TEXT NOT NULL,
+                motivo TEXT,
+                valores_antes TEXT,
+                valores_depois TEXT,
+                criado_em TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_fiscal_reproc_usuario ON fiscal_reprocessamento_log(usuario_id, ano_mes);
+        """)
+        # Migração defensiva: bancos que já tinham apuracoes_fiscais_mensais
+        # de uma versão anterior (Fase 2 original) não têm essas colunas —
+        # CREATE TABLE IF NOT EXISTS não as adiciona sozinho.
+        cur.execute("""
+            ALTER TABLE apuracoes_fiscais_mensais
+                ADD COLUMN IF NOT EXISTS imposto_acumulado_anterior NUMERIC NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS imposto_a_pagar_agora NUMERIC NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS imposto_acumulado_novo_saldo NUMERIC NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS fechado_em TEXT;
         """)
     conn.commit()
 
@@ -1430,11 +1456,35 @@ def db_listar_vendas_fiscais_do_mes(uid, ano_mes):
         return []
 
 
+def db_obter_saldos_mes_anterior(uid, ano_mes):
+    """Busca prejuizo_novo_saldo E imposto_acumulado_novo_saldo do mês
+    anterior ao informado — os dois valores que encadeiam mês a mês pra
+    apuração seguinte (prejuízo compensável e imposto abaixo do mínimo
+    ainda pendente). Sem precisar de uma tabela de 'razão' separada —
+    a própria sequência de apurações mensais já cumpre esse papel."""
+    try:
+        ano, mes = (int(x) for x in ano_mes.split('-'))
+        ano_ant, mes_ant = (ano - 1, 12) if mes == 1 else (ano, mes - 1)
+        ano_mes_anterior = f"{ano_ant:04d}-{mes_ant:02d}"
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT prejuizo_novo_saldo, imposto_acumulado_novo_saldo
+                FROM apuracoes_fiscais_mensais WHERE usuario_id=%s AND ano_mes=%s
+            """, (uid, ano_mes_anterior))
+            row = cur.fetchone()
+        conn.close()
+        if not row:
+            return {"prejuizo_anterior": 0.0, "imposto_acumulado_anterior": 0.0}
+        return {"prejuizo_anterior": float(row[0]), "imposto_acumulado_anterior": float(row[1])}
+    except Exception as e:
+        print(f"[DB] Erro ao obter saldos do mês anterior: {e}")
+        return {"prejuizo_anterior": 0.0, "imposto_acumulado_anterior": 0.0}
+
+
 def db_obter_apuracao_mes_anterior(uid, ano_mes):
-    """Busca o prejuízo_novo_saldo do mês anterior ao informado, pra usar
-    como prejuizo_anterior da apuração atual — encadeia mês a mês sem
-    precisar de uma tabela de 'razão de prejuízos' separada (a própria
-    sequência de apurações mensais já cumpre esse papel)."""
+    """Mantida por compatibilidade — só o prejuízo. Prefira
+    db_obter_saldos_mes_anterior() para código novo (traz os 2 saldos)."""
     try:
         ano, mes = (int(x) for x in ano_mes.split('-'))
         ano_ant, mes_ant = (ano - 1, 12) if mes == 1 else (ano, mes - 1)
@@ -1453,9 +1503,22 @@ def db_obter_apuracao_mes_anterior(uid, ano_mes):
         return 0.0
 
 
-def db_salvar_apuracao_mensal(uid, ano_mes, apuracao_dict):
-    """apuracao_dict: os campos de ApuracaoMensal (fiscal_engine), já em dict."""
+def db_salvar_apuracao_mensal(uid, ano_mes, apuracao_dict, permitir_sobrescrever_fechado=False):
+    """
+    apuracao_dict: os campos de ApuracaoMensal (fiscal_engine), já em dict.
+
+    Trava de segurança (seção 15): por padrão, recusa sobrescrever uma
+    apuração já 'Fechado' — isso só deve acontecer através do fluxo
+    explícito de reabertura (db_reabrir_mes_fiscal), nunca como efeito
+    colateral silencioso de recalcular por causa de outra coisa.
+    """
     try:
+        if not permitir_sobrescrever_fechado:
+            atual = db_obter_apuracao_mensal(uid, ano_mes)
+            if atual and atual.get('status') == 'Fechado':
+                print(f"[DB] ⚠️ Tentativa de sobrescrever apuração FECHADA ({ano_mes}) sem permissão — bloqueado", flush=True)
+                return False
+
         conn = get_conn()
         with conn.cursor() as cur:
             cur.execute("""
@@ -1463,8 +1526,10 @@ def db_salvar_apuracao_mensal(uid, ano_mes, apuracao_dict):
                     (usuario_id, ano_mes, total_vendas, ganho_bruto, perda_bruta,
                      resultado_liquido, isento, prejuizo_anterior, prejuizo_compensado,
                      base_tributavel, ir_calculado, irrf_disponivel, irrf_utilizado,
-                     imposto_devido, prejuizo_novo_saldo, versao_regras, status, calculado_em)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                     imposto_devido, imposto_acumulado_anterior, imposto_a_pagar_agora,
+                     imposto_acumulado_novo_saldo, prejuizo_novo_saldo, versao_regras,
+                     status, calculado_em)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (usuario_id, ano_mes) DO UPDATE SET
                     total_vendas=EXCLUDED.total_vendas, ganho_bruto=EXCLUDED.ganho_bruto,
                     perda_bruta=EXCLUDED.perda_bruta, resultado_liquido=EXCLUDED.resultado_liquido,
@@ -1472,6 +1537,9 @@ def db_salvar_apuracao_mensal(uid, ano_mes, apuracao_dict):
                     prejuizo_compensado=EXCLUDED.prejuizo_compensado, base_tributavel=EXCLUDED.base_tributavel,
                     ir_calculado=EXCLUDED.ir_calculado, irrf_disponivel=EXCLUDED.irrf_disponivel,
                     irrf_utilizado=EXCLUDED.irrf_utilizado, imposto_devido=EXCLUDED.imposto_devido,
+                    imposto_acumulado_anterior=EXCLUDED.imposto_acumulado_anterior,
+                    imposto_a_pagar_agora=EXCLUDED.imposto_a_pagar_agora,
+                    imposto_acumulado_novo_saldo=EXCLUDED.imposto_acumulado_novo_saldo,
                     prejuizo_novo_saldo=EXCLUDED.prejuizo_novo_saldo, versao_regras=EXCLUDED.versao_regras,
                     status=EXCLUDED.status, calculado_em=EXCLUDED.calculado_em
             """, (uid, ano_mes, apuracao_dict['total_vendas_acoes'], apuracao_dict['ganho_bruto'],
@@ -1480,8 +1548,11 @@ def db_salvar_apuracao_mensal(uid, ano_mes, apuracao_dict):
                   apuracao_dict['prejuizo_compensado'], apuracao_dict['base_tributavel'],
                   apuracao_dict['ir_calculado'], apuracao_dict['irrf_disponivel'],
                   apuracao_dict['irrf_utilizado'], apuracao_dict['imposto_devido'],
+                  apuracao_dict.get('imposto_acumulado_anterior', 0.0),
+                  apuracao_dict.get('imposto_a_pagar_agora', apuracao_dict['imposto_devido']),
+                  apuracao_dict.get('imposto_acumulado_novo_saldo', 0.0),
                   apuracao_dict['prejuizo_novo_saldo'], apuracao_dict['versao_regras'],
-                  apuracao_dict['status'], agora_str()))
+                  apuracao_dict.get('status', 'Calculado'), agora_str()))
         conn.commit()
         conn.close()
         return True
@@ -1503,12 +1574,161 @@ def db_obter_apuracao_mensal(uid, ano_mes):
         d = dict(row)
         for campo in ('total_vendas','ganho_bruto','perda_bruta','resultado_liquido',
                       'prejuizo_anterior','prejuizo_compensado','base_tributavel',
-                      'ir_calculado','irrf_disponivel','irrf_utilizado','imposto_devido','prejuizo_novo_saldo'):
+                      'ir_calculado','irrf_disponivel','irrf_utilizado','imposto_devido',
+                      'imposto_acumulado_anterior','imposto_a_pagar_agora','imposto_acumulado_novo_saldo',
+                      'prejuizo_novo_saldo'):
             d[campo] = float(d[campo])
         return d
     except Exception as e:
         print(f"[DB] Erro ao obter apuração mensal: {e}")
         return None
+
+
+def db_listar_apuracoes_fiscais(uid, limite=24):
+    """Histórico de apurações mensais, mais recente primeiro — pra tela
+    de auditoria/compensação de prejuízos."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM apuracoes_fiscais_mensais WHERE usuario_id=%s
+                ORDER BY ano_mes DESC LIMIT %s
+            """, (uid, limite))
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                for campo in ('total_vendas','ganho_bruto','perda_bruta','resultado_liquido',
+                              'prejuizo_anterior','prejuizo_compensado','base_tributavel',
+                              'ir_calculado','irrf_disponivel','irrf_utilizado','imposto_devido',
+                              'imposto_acumulado_anterior','imposto_a_pagar_agora','imposto_acumulado_novo_saldo',
+                              'prejuizo_novo_saldo'):
+                    r[campo] = float(r[campo])
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[DB] Erro ao listar apurações fiscais: {e}")
+        return []
+
+
+def db_listar_meses_apos(uid, ano_mes_referencia):
+    """Meses com apuração salva, estritamente APÓS o mês de referência,
+    em ordem cronológica — usado pelo reprocessamento em cascata."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT ano_mes FROM apuracoes_fiscais_mensais
+                WHERE usuario_id=%s AND ano_mes > %s
+                ORDER BY ano_mes ASC
+            """, (uid, ano_mes_referencia))
+            return [r[0] for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[DB] Erro ao listar meses posteriores: {e}")
+        return []
+
+
+def db_fechar_mes_fiscal(uid, ano_mes):
+    """
+    Fecha um mês — a partir daqui, ele só pode ser alterado através de
+    reabertura explícita (db_reabrir_mes_fiscal). Exige que já exista
+    uma apuração calculada pra esse mês.
+    """
+    apuracao = db_obter_apuracao_mensal(uid, ano_mes)
+    if not apuracao:
+        return False, "Não há apuração calculada para este mês ainda."
+    if apuracao['status'] == 'Fechado':
+        return False, "Este mês já está fechado."
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE apuracoes_fiscais_mensais SET status='Fechado', fechado_em=%s
+                WHERE usuario_id=%s AND ano_mes=%s
+            """, (agora_str(), uid, ano_mes))
+        conn.commit()
+        conn.close()
+        db_registrar_log_reprocessamento(uid, ano_mes, "FECHOU", motivo=None,
+                                          valores_antes=None, valores_depois=apuracao)
+        return True, None
+    except Exception as e:
+        print(f"[DB] Erro ao fechar mês fiscal: {e}")
+        return False, str(e)
+
+
+def db_reabrir_mes_fiscal(uid, ano_mes, motivo):
+    """
+    Reabre um mês fechado — SEMPRE requer motivo explícito e SEMPRE fica
+    registrado no log de reprocessamento (seção 15: nada de mudança
+    silenciosa em mês já fechado).
+    """
+    apuracao = db_obter_apuracao_mensal(uid, ano_mes)
+    if not apuracao:
+        return False, "Não há apuração para este mês."
+    if apuracao['status'] != 'Fechado':
+        return False, "Este mês não está fechado — nada para reabrir."
+    if not motivo or not motivo.strip():
+        return False, "É necessário informar o motivo da reabertura."
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE apuracoes_fiscais_mensais SET status='Reaberto'
+                WHERE usuario_id=%s AND ano_mes=%s
+            """, (uid, ano_mes))
+        conn.commit()
+        conn.close()
+        db_registrar_log_reprocessamento(uid, ano_mes, "REABRIU", motivo=motivo,
+                                          valores_antes=apuracao, valores_depois=None)
+        return True, None
+    except Exception as e:
+        print(f"[DB] Erro ao reabrir mês fiscal: {e}")
+        return False, str(e)
+
+
+def db_registrar_log_reprocessamento(uid, ano_mes, acao, motivo=None, valores_antes=None, valores_depois=None):
+    """Registra uma entrada no log de auditoria de fechamento/reabertura/
+    reprocessamento. valores_antes/depois são dicts (serializados em JSON)."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO fiscal_reprocessamento_log
+                    (usuario_id, ano_mes, acao, motivo, valores_antes, valores_depois, criado_em)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+            """, (uid, ano_mes, acao, motivo,
+                  json.dumps(valores_antes, default=str) if valores_antes else None,
+                  json.dumps(valores_depois, default=str) if valores_depois else None,
+                  agora_str()))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erro ao registrar log de reprocessamento: {e}")
+        return False
+
+
+def db_listar_log_reprocessamento(uid, ano_mes=None):
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            if ano_mes:
+                cur.execute("""
+                    SELECT * FROM fiscal_reprocessamento_log WHERE usuario_id=%s AND ano_mes=%s
+                    ORDER BY id DESC
+                """, (uid, ano_mes))
+            else:
+                cur.execute("""
+                    SELECT * FROM fiscal_reprocessamento_log WHERE usuario_id=%s
+                    ORDER BY id DESC LIMIT 100
+                """, (uid,))
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                if r.get('valores_antes'): r['valores_antes'] = json.loads(r['valores_antes'])
+                if r.get('valores_depois'): r['valores_depois'] = json.loads(r['valores_depois'])
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[DB] Erro ao listar log de reprocessamento: {e}")
+        return []
 
 
 # ── Fatores de benchmark (usado pelo motor de Performance) ────────
