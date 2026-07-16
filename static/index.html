@@ -55,6 +55,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid var(--border);background:#fff;position:sticky;top:0;z-index:200}
 /* ── MOBILE ─────────────────────────────── */
 .bottom-bar{display:none}
+@media(min-width:769px){
+  .btn-tema-mobile{display:none}
+}
 @media(max-width:768px){
   .header{padding:.75rem 1rem}
   .hlogo .htitle{font-size:16px}
@@ -576,8 +579,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       style="background:none;border:none;cursor:pointer;font-size:20px;padding:4px 8px;color:var(--text2);transition:color .15s"
       onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--text2)'">🔍</button>
 
-    <!-- Botão tema — sempre visível (mobile e desktop) -->
-    <button class="btn" id="btn-tema" onclick="alternarTema()" title="Alternar tema" style="font-size:16px;padding:6px 10px">🌙</button>
+    <!-- Botão tema — versão mobile (a versão desktop fica no hframe de Preferências, escondido em telas <=768px) -->
+    <button class="btn btn-tema-mobile" id="btn-tema-mobile" onclick="alternarTema()" title="Alternar tema" style="font-size:16px;padding:6px 10px">🌙</button>
 
     <!-- Modal de busca -->
     <div id="modal-busca" onclick="if(event.target===this)fecharModalBusca()"
@@ -600,6 +603,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     </div>
 
     <div class="hright">
+      <!-- Frame 0: Status do Pregão B3 -->
+      <div class="hframe" id="b3-pregao-frame" title="Pregão regular: 10h00 às 16h55 (dias úteis)">
+        <span id="b3-pregao-dot" style="width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0"></span>
+        <span id="b3-pregao-texto" style="font-size:12px;white-space:nowrap"></span>
+        <div id="b3-pregao-barra-fundo" style="width:44px;height:4px;background:var(--border);border-radius:2px;overflow:hidden;display:none">
+          <div id="b3-pregao-barra" style="height:100%;width:0%;background:var(--green);border-radius:2px;transition:width 1s linear"></div>
+        </div>
+      </div>
       <!-- Frame 1: Cotações -->
       <div class="hframe">
         <div class="status-pill"><span class="dot" id="sdot"></span><span id="status-txt">Conectando</span></div>
@@ -2742,10 +2753,75 @@ function alternarTema(){
 
 function aplicarTema(tema){
   document.documentElement.setAttribute('data-tema', tema);
-  const btn = document.getElementById('btn-tema');
-  if(btn) btn.textContent = tema === 'escuro' ? '☀️' : '🌙';
-  if(btn) btn.title = tema === 'escuro' ? 'Mudar para tema claro' : 'Mudar para tema escuro';
+  const icone = tema === 'escuro' ? '☀️' : '🌙';
+  const titulo = tema === 'escuro' ? 'Mudar para tema claro' : 'Mudar para tema escuro';
+  ['btn-tema', 'btn-tema-mobile'].forEach(id => {
+    const btn = document.getElementById(id);
+    if(btn){ btn.textContent = icone; btn.title = titulo; }
+  });
 }
+
+// ── Status do pregão B3 (10h00–16h55, dias úteis) ─────────────
+// "Perfumaria" pedida: indicador de aberto/fechado + gauge de quanto já
+// passou da sessão. Não considera feriados da B3 (só fim de semana) —
+// limitação conhecida e aceita, dado o caráter cosmético do recurso.
+function _statusPregaoB3(agora){
+  const partes = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(agora || new Date());
+  const obj = {};
+  partes.forEach(p => obj[p.type] = p.value);
+  const diaSemana = obj.weekday;
+  const hora = parseInt(obj.hour === '24' ? '0' : obj.hour);
+  const minuto = parseInt(obj.minute);
+  const minutosAgora = hora * 60 + minuto;
+
+  const ABERTURA = 10 * 60;        // 10h00
+  const FECHAMENTO = 16 * 60 + 55; // 16h55
+  const ehDiaUtil = !['Sat','Sun'].includes(diaSemana);
+  const aberto = ehDiaUtil && minutosAgora >= ABERTURA && minutosAgora < FECHAMENTO;
+
+  let pctSessao = null, decorrido = null, restante = null;
+  if(aberto){
+    decorrido = minutosAgora - ABERTURA;
+    restante = FECHAMENTO - minutosAgora;
+    pctSessao = Math.round((decorrido / (FECHAMENTO - ABERTURA)) * 100);
+  }
+  return {aberto, pctSessao, decorrido, restante};
+}
+
+function _fmtMinutos(min){
+  const h = Math.floor(min / 60), m = min % 60;
+  return h > 0 ? `${h}h${m.toString().padStart(2,'0')}` : `${m}min`;
+}
+
+function _renderStatusPregaoB3(){
+  const dot = document.getElementById('b3-pregao-dot');
+  const texto = document.getElementById('b3-pregao-texto');
+  const barraFundo = document.getElementById('b3-pregao-barra-fundo');
+  const barra = document.getElementById('b3-pregao-barra');
+  const frame = document.getElementById('b3-pregao-frame');
+  if(!dot || !texto) return;
+
+  const s = _statusPregaoB3();
+  if(s.aberto){
+    dot.style.background = 'var(--green)';
+    dot.style.boxShadow = '0 0 0 3px rgba(22,163,74,0.2)';
+    texto.textContent = `Pregão aberto`;
+    barraFundo.style.display = 'block';
+    barra.style.width = s.pctSessao + '%';
+    frame.title = `Pregão aberto há ${_fmtMinutos(s.decorrido)} · fecha em ${_fmtMinutos(s.restante)} (16h55)`;
+  } else {
+    dot.style.background = '#94a3b8';
+    dot.style.boxShadow = 'none';
+    texto.textContent = 'Pregão fechado';
+    barraFundo.style.display = 'none';
+    frame.title = 'Pregão regular: 10h00 às 16h55 (dias úteis)';
+  }
+}
+
+_renderStatusPregaoB3();
+setInterval(_renderStatusPregaoB3, 30000); // atualiza a cada 30s — granularidade de minuto não precisa de mais que isso
 
 // Aplica tema salvo ou preferência do sistema ao carregar
 (function(){
