@@ -650,6 +650,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div class="tab-dropdown-menu" id="dd-carteira">
         <div class="tab-dropdown-item" id="tab-carteira" onclick="fecharDropdowns();goPage('carteira',this)">💼 Carteira</div>
         <div class="tab-dropdown-item" id="tab-performance" onclick="fecharDropdowns();goPage('performance',this)">📈 Performance</div>
+        <div class="tab-dropdown-item" id="tab-fiscal" onclick="fecharDropdowns();goPage('fiscal',this)">🧾 Fiscal</div>
         <div class="tab-dropdown-item" id="tab-alertas" onclick="fecharDropdowns();goPage('alertas',this)">
           🔔 Alertas <span class="tab-badge" id="alt-cnt" style="display:none;margin-left:4px">0</span>
         </div>
@@ -1070,6 +1071,81 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <div id="perf-drilldown-area"></div>
       </div>
     </div>
+
+    <!-- CENTRAL FISCAL -->
+    <div class="page" id="page-fiscal">
+      <div style="max-width:1000px;margin:0 auto">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1rem">
+          <div>
+            <div style="font-size:20px;font-weight:700">🧾 Central Fiscal</div>
+            <div style="font-size:13px;color:var(--text2);margin-top:2px">Apuração de IR sobre vendas de ações — da venda ao DARF, tudo auditável</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="fiscal-mes-select" onchange="mudarMesFiscal(this.value)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text)"></select>
+            <button onclick="exportarIRPF()" class="btn" style="padding:9px 14px;font-size:12px" title="Baixar resumo do ano pra digitar na declaração">📄 Export IRPF</button>
+          </div>
+        </div>
+
+        <!-- Resumo do mês -->
+        <div id="fiscal-resumo-area" style="margin-bottom:1rem">
+          <div class="cockpit-card" style="text-align:center;padding:3rem 2rem;color:var(--text3)">
+            <div style="font-size:32px;margin-bottom:.75rem">⏳</div>Carregando...
+          </div>
+        </div>
+
+        <!-- DARF -->
+        <div id="fiscal-darf-area" style="margin-bottom:1rem"></div>
+
+        <!-- Ações de fechamento -->
+        <div id="fiscal-acoes-area" style="margin-bottom:1.5rem"></div>
+
+        <!-- Extrato de vendas do mês -->
+        <div class="cockpit-card" style="margin-bottom:1rem">
+          <div class="cockpit-card-title">📋 Extrato de Vendas do Mês</div>
+          <div id="fiscal-extrato-area"><div style="text-align:center;padding:1.5rem;color:var(--text3)">Carregando...</div></div>
+        </div>
+
+        <!-- Histórico / compensação de prejuízos -->
+        <div class="cockpit-card" style="margin-bottom:1rem">
+          <div class="cockpit-card-title">📊 Histórico Mensal e Compensação de Prejuízos</div>
+          <div id="fiscal-historico-area"><div style="text-align:center;padding:1.5rem;color:var(--text3)">Carregando...</div></div>
+        </div>
+
+        <!-- Log de auditoria -->
+        <div class="cockpit-card">
+          <div class="cockpit-card-title" style="cursor:pointer" onclick="toggleLogFiscal()">🔍 Log de Auditoria (fechamentos e reprocessamentos) <span id="fiscal-log-arrow">▾</span></div>
+          <div id="fiscal-log-area" style="display:none"><div style="text-align:center;padding:1.5rem;color:var(--text3)">Carregando...</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL REABRIR MÊS FISCAL -->
+    <div class="pos-modal-overlay" id="reabrir-modal" onclick="fecharModalReabrir(event)">
+      <div class="pos-modal" onclick="event.stopPropagation()">
+        <div class="pos-modal-header">
+          <div class="pos-modal-title">🔓 Reabrir mês <span id="reabrir-mes-titulo" style="color:var(--text2);font-weight:400"></span></div>
+          <button class="modal-close" onclick="fecharModalReabrir()">✕</button>
+        </div>
+        <div class="pos-modal-body">
+          <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:10px;font-size:12px;color:#78350f;margin-bottom:4px">
+            ⚠️ Reabrir um mês fechado fica registrado no log de auditoria com o motivo informado. Use isso pra corrigir algo, não como rotina.
+          </div>
+          <div class="pos-field">
+            <label>Motivo da reabertura <span style="font-weight:400;color:var(--text3)">obrigatório</span></label>
+            <textarea id="reabrir-motivo" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);font-family:inherit" placeholder="Ex: esqueci de registrar uma venda deste mês"></textarea>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-top:4px">
+            <input type="checkbox" id="reabrir-cascata">
+            Propagar automaticamente pros meses seguintes já fechados, se houver
+          </label>
+        </div>
+        <div class="pos-modal-footer">
+          <button class="pos-btn-cancel" onclick="fecharModalReabrir()">Cancelar</button>
+          <button class="pos-btn-save" id="reabrir-btn-confirmar" onclick="confirmarReaberturaMes()" style="background:#f59e0b;border-color:#f59e0b">🔓 Reabrir mês</button>
+        </div>
+      </div>
+    </div>
+
     <!-- PÁGINA OPORTUNIDADES -->
     <div class="page" id="page-oportunidades">
       <div style="max-width:1100px;margin:0 auto">
@@ -3910,6 +3986,320 @@ function _perfTabelaAuditoria(d){
     </div>`;
 }
 
+// ── JANUS FISCAL — CENTRAL FISCAL ────────────────────────────
+let _fiscalMesAtual = null;
+let _fiscalMesReabrirAlvo = null;
+
+function _mesAtualStr(){ return new Date().toISOString().slice(0,7); }
+
+function _popularSeletorMesesFiscal(){
+  const sel = document.getElementById('fiscal-mes-select');
+  if(!sel) return;
+  const hoje = new Date();
+  const opcoes = [];
+  for(let i=0;i<18;i++){
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    const ym = d.toISOString().slice(0,7);
+    const label = d.toLocaleDateString('pt-BR', {month:'long', year:'numeric'});
+    opcoes.push(`<option value="${ym}">${label.charAt(0).toUpperCase()+label.slice(1)}</option>`);
+  }
+  sel.innerHTML = opcoes.join('');
+}
+
+async function carregarFiscal(){
+  if(!_fiscalMesAtual) _fiscalMesAtual = _mesAtualStr();
+  _popularSeletorMesesFiscal();
+  document.getElementById('fiscal-mes-select').value = _fiscalMesAtual;
+  await Promise.all([
+    _carregarResumoFiscal(),
+    _carregarExtratoFiscal(),
+    _carregarHistoricoFiscal(),
+  ]);
+}
+
+function mudarMesFiscal(ano_mes){
+  _fiscalMesAtual = ano_mes;
+  _carregarResumoFiscal();
+  _carregarExtratoFiscal();
+}
+
+async function _carregarResumoFiscal(){
+  const area = document.getElementById('fiscal-resumo-area');
+  const darfArea = document.getElementById('fiscal-darf-area');
+  const acoesArea = document.getElementById('fiscal-acoes-area');
+  if(!area) return;
+  try{
+    const r = await fetch(`/api/fiscal/apuracao/${_fiscalMesAtual}`);
+    const d = await r.json();
+    _renderResumoFiscal(d);
+    _renderDarfArea(d);
+    _renderAcoesFiscal(d);
+  }catch(e){
+    area.innerHTML = `<div class="cockpit-card" style="text-align:center;padding:2rem;color:#e53935">❌ Erro ao carregar apuração</div>`;
+  }
+}
+
+function _renderResumoFiscal(d){
+  const area = document.getElementById('fiscal-resumo-area');
+  if(!area) return;
+
+  if(d.erro === 'sem_vendas'){
+    area.innerHTML = `<div class="cockpit-card" style="text-align:center;padding:2.5rem 2rem">
+      <div style="font-size:32px;margin-bottom:.75rem">🧾</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:.5rem">Nenhuma venda registrada em ${_formatarMesAno(_fiscalMesAtual)}</div>
+      <div style="font-size:12px;color:var(--text2)">Vendas feitas pela Carteira (botão 💰) aparecem aqui automaticamente.</div>
+    </div>`;
+    return;
+  }
+
+  const statusCor = {Calculado:'#64748b', Fechado:'#16a34a', Reaberto:'#f59e0b', Reprocessado:'#7c3aed'};
+  const statusIcone = {Calculado:'📝', Fechado:'🔒', Reaberto:'🔓', Reprocessado:'♻️'};
+  const cor = statusCor[d.status] || '#64748b';
+  const pctLimite = Math.min(100, (d.total_vendas / 20000) * 100);
+
+  area.innerHTML = `
+    <div class="cockpit-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+        <div style="font-size:13px;font-weight:700">${_formatarMesAno(d.ano_mes)}</div>
+        <span style="font-size:11px;font-weight:700;color:${cor};background:${cor}1a;padding:4px 10px;border-radius:10px">${statusIcone[d.status]||''} ${d.status}</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:1rem">
+        <div style="background:var(--bg);border-radius:10px;padding:10px 12px">
+          <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Total Vendido</div>
+          <div style="font-size:17px;font-weight:800;margin-top:2px">R$ ${fmt(d.total_vendas)}</div>
+        </div>
+        <div style="background:var(--bg);border-radius:10px;padding:10px 12px">
+          <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Resultado do Mês</div>
+          <div class="${d.resultado_liquido>=0?'lucro-pos':'lucro-neg'}" style="font-size:17px;font-weight:800;margin-top:2px">${d.resultado_liquido>=0?'+':''}R$ ${fmt(d.resultado_liquido)}</div>
+        </div>
+        <div style="background:var(--bg);border-radius:10px;padding:10px 12px">
+          <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Situação</div>
+          <div style="font-size:14px;font-weight:800;margin-top:4px;color:${d.isento?'#16a34a':'#e53935'}">${d.isento?'✅ Isento':'💰 Tributável'}</div>
+        </div>
+        <div style="background:var(--bg);border-radius:10px;padding:10px 12px">
+          <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">IR a Pagar Agora</div>
+          <div style="font-size:17px;font-weight:800;margin-top:2px;color:${d.imposto_a_pagar_agora>0?'#e53935':'var(--text)'}">R$ ${fmt(d.imposto_a_pagar_agora)}</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:${d.prejuizo_novo_saldo>0||d.imposto_acumulado_novo_saldo>0?'.75rem':'0'}">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
+          <span>Limite de isenção mensal (R$ 20.000)</span><span>${pctLimite.toFixed(0)}%</span>
+        </div>
+        <div style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pctLimite}%;background:${pctLimite>=100?'#e53935':pctLimite>70?'#f59e0b':'#16a34a'};transition:width .3s"></div>
+        </div>
+      </div>
+
+      ${d.prejuizo_novo_saldo>0?`<div style="font-size:11px;color:var(--text2);margin-top:6px">📉 Saldo de prejuízo a compensar em meses futuros: <strong>R$ ${fmt(d.prejuizo_novo_saldo)}</strong></div>`:''}
+      ${d.imposto_acumulado_novo_saldo>0?`<div style="font-size:11px;color:var(--text2);margin-top:4px">⏳ IR abaixo do mínimo legal, acumulando pro próximo mês: <strong>R$ ${fmt(d.imposto_acumulado_novo_saldo)}</strong></div>`:''}
+    </div>`;
+}
+
+function _renderDarfArea(d){
+  const area = document.getElementById('fiscal-darf-area');
+  if(!area) return;
+  if(!d.darf){ area.innerHTML = ''; return; }
+  const venc = new Date(d.darf.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR');
+  area.innerHTML = `
+    <div class="cockpit-card" style="background:rgba(229,57,53,0.06);border-color:#e53935">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#e53935;text-transform:uppercase">💸 DARF a pagar</div>
+          <div style="font-size:24px;font-weight:800;margin-top:2px">R$ ${fmt(d.darf.valor)}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:4px">Código ${d.darf.codigo_receita} · Competência ${d.darf.competencia} · Vencimento <strong>${venc}</strong></div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);max-width:220px">
+          Gere o DARF no Sicalc da Receita ou no app do seu banco usando o código e o valor acima. O Janus não emite nem envia isso pra Receita.
+        </div>
+      </div>
+    </div>`;
+}
+
+function _renderAcoesFiscal(d){
+  const area = document.getElementById('fiscal-acoes-area');
+  if(!area) return;
+  if(d.erro){ area.innerHTML = ''; return; }
+  if(d.status === 'Calculado' || d.status === 'Reaberto' || d.status === 'Reprocessado'){
+    area.innerHTML = `<button onclick="fecharMesFiscal()" class="btn" style="background:var(--green);color:#fff;border-color:var(--green);padding:9px 16px;font-size:12px">
+      🔒 Fechar ${_formatarMesAno(_fiscalMesAtual)}
+    </button>`;
+  } else if(d.status === 'Fechado'){
+    area.innerHTML = `<button onclick="abrirModalReabrir()" class="btn" style="padding:9px 16px;font-size:12px;color:#f59e0b;border-color:#f59e0b">
+      🔓 Reabrir mês (requer motivo)
+    </button>`;
+  } else {
+    area.innerHTML = '';
+  }
+}
+
+async function fecharMesFiscal(){
+  if(!confirm(`Fechar ${_formatarMesAno(_fiscalMesAtual)}? Depois de fechado, só pode ser alterado reabrindo com um motivo registrado.`)) return;
+  try{
+    const r = await fetch(`/api/fiscal/mes/${_fiscalMesAtual}/fechar`, {method:'POST'});
+    const d = await r.json();
+    if(!r.ok){ alert(`Erro: ${d.erro}`); return; }
+    await _carregarResumoFiscal();
+    await _carregarHistoricoFiscal();
+  }catch(e){ alert('Erro de conexão'); }
+}
+
+function abrirModalReabrir(){
+  _fiscalMesReabrirAlvo = _fiscalMesAtual;
+  document.getElementById('reabrir-mes-titulo').textContent = _formatarMesAno(_fiscalMesAtual);
+  document.getElementById('reabrir-motivo').value = '';
+  document.getElementById('reabrir-cascata').checked = false;
+  document.getElementById('reabrir-modal').classList.add('open');
+}
+
+function fecharModalReabrir(e){
+  if(!e || e.target === document.getElementById('reabrir-modal')){
+    document.getElementById('reabrir-modal').classList.remove('open');
+  }
+}
+
+async function confirmarReaberturaMes(){
+  const motivo = document.getElementById('reabrir-motivo').value.trim();
+  const cascata = document.getElementById('reabrir-cascata').checked;
+  if(!motivo){ alert('Informe o motivo da reabertura'); return; }
+
+  const btn = document.getElementById('reabrir-btn-confirmar');
+  btn.disabled = true; btn.textContent = '⏳ Reabrindo...';
+  try{
+    const r = await fetch(`/api/fiscal/mes/${_fiscalMesReabrirAlvo}/reabrir`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({motivo, cascata})
+    });
+    const d = await r.json();
+    btn.disabled = false; btn.textContent = '🔓 Reabrir mês';
+    if(!r.ok){ alert(`Erro: ${d.erro}`); return; }
+    fecharModalReabrir();
+    if(d.meses_ainda_bloqueados?.length){
+      alert(`Mês reaberto. Atenção: os meses seguintes ${d.meses_ainda_bloqueados.join(', ')} também estão fechados e não foram tocados — marque "propagar" se quiser incluí-los.`);
+    }
+    await carregarFiscal();
+  }catch(e){
+    btn.disabled = false; btn.textContent = '🔓 Reabrir mês';
+    alert('Erro de conexão');
+  }
+}
+
+async function _carregarExtratoFiscal(){
+  const area = document.getElementById('fiscal-extrato-area');
+  if(!area) return;
+  try{
+    const r = await fetch(`/api/fiscal/vendas?ano_mes=${_fiscalMesAtual}`);
+    const vendas = await r.json();
+    if(!vendas.length){
+      area.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px">Nenhuma venda neste mês</div>`;
+      return;
+    }
+    area.innerHTML = `<div style="overflow-x:auto"><table class="ct-table" style="width:100%">
+      <thead><tr>
+        <th style="text-align:left">Data</th><th style="text-align:left">Ativo</th>
+        <th class="num">Qtd</th><th class="num">Preço</th><th class="num">Bruto</th>
+        <th class="num">Custo Base</th><th class="num">Resultado</th>
+      </tr></thead><tbody>
+      ${vendas.map(v=>{
+        const dataFmt = new Date(v.data_operacao+'T12:00:00').toLocaleDateString('pt-BR');
+        const res = v.resultado_liquido || 0;
+        return `<tr>
+          <td style="color:var(--text2)">${dataFmt}</td>
+          <td style="font-weight:700">${v.ticker}</td>
+          <td class="num">${v.quantidade}</td>
+          <td class="num">R$ ${fmt(v.preco_unitario)}</td>
+          <td class="num">R$ ${fmt(v.valor_bruto)}</td>
+          <td class="num">R$ ${fmt(v.custo_base)}</td>
+          <td class="num ${res>=0?'lucro-pos':'lucro-neg'}">${res>=0?'+':''}R$ ${fmt(res)}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table></div>`;
+  }catch(e){
+    area.innerHTML = `<div style="text-align:center;padding:1.5rem;color:#e53935">❌ Erro ao carregar extrato</div>`;
+  }
+}
+
+async function _carregarHistoricoFiscal(){
+  const area = document.getElementById('fiscal-historico-area');
+  if(!area) return;
+  try{
+    const r = await fetch('/api/fiscal/apuracoes?limite=18');
+    const historico = await r.json();
+    if(!historico.length){
+      area.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px">Nenhuma apuração ainda</div>`;
+      return;
+    }
+    const statusIcone = {Calculado:'📝', Fechado:'🔒', Reaberto:'🔓', Reprocessado:'♻️'};
+    area.innerHTML = `<div style="overflow-x:auto"><table class="ct-table" style="width:100%">
+      <thead><tr>
+        <th style="text-align:left">Mês</th><th class="num">Resultado</th>
+        <th class="num">Prejuízo Compensado</th><th class="num">IR Pago</th>
+        <th class="num">Saldo Prejuízo</th><th style="text-align:center">Status</th>
+      </tr></thead><tbody>
+      ${historico.map(a=>{
+        const res = a.resultado_liquido;
+        return `<tr onclick="mudarMesFiscal('${a.ano_mes}');document.getElementById('fiscal-mes-select').value='${a.ano_mes}'" style="cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+          <td style="font-weight:600">${_formatarMesAno(a.ano_mes)}</td>
+          <td class="num ${res>=0?'lucro-pos':'lucro-neg'}">${res>=0?'+':''}R$ ${fmt(res)}</td>
+          <td class="num">${a.prejuizo_compensado>0?'R$ '+fmt(a.prejuizo_compensado):'—'}</td>
+          <td class="num">${a.imposto_a_pagar_agora>0?'R$ '+fmt(a.imposto_a_pagar_agora):(a.isento?'Isento':'—')}</td>
+          <td class="num">${a.prejuizo_novo_saldo>0?'R$ '+fmt(a.prejuizo_novo_saldo):'—'}</td>
+          <td style="text-align:center">${statusIcone[a.status]||''}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table></div>`;
+  }catch(e){
+    area.innerHTML = `<div style="text-align:center;padding:1.5rem;color:#e53935">❌ Erro ao carregar histórico</div>`;
+  }
+}
+
+function toggleLogFiscal(){
+  const area = document.getElementById('fiscal-log-area');
+  const arrow = document.getElementById('fiscal-log-arrow');
+  const abrindo = area.style.display === 'none';
+  area.style.display = abrindo ? 'block' : 'none';
+  arrow.textContent = abrindo ? '▴' : '▾';
+  if(abrindo) _carregarLogFiscal();
+}
+
+async function _carregarLogFiscal(){
+  const area = document.getElementById('fiscal-log-area');
+  try{
+    const r = await fetch('/api/fiscal/reprocessamento/log');
+    const log = await r.json();
+    if(!log.length){
+      area.innerHTML = `<div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">Nenhum fechamento ou reabertura registrado ainda</div>`;
+      return;
+    }
+    const acaoLabel = {FECHOU:'🔒 Fechou', REABRIU:'🔓 Reabriu', REPROCESSOU:'♻️ Reprocessou'};
+    area.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+      ${log.map(l=>{
+        const data = new Date(l.criado_em).toLocaleString('pt-BR');
+        return `<div style="background:var(--bg);border-radius:8px;padding:8px 10px;font-size:11px">
+          <div style="display:flex;justify-content:space-between"><strong>${acaoLabel[l.acao]||l.acao} — ${_formatarMesAno(l.ano_mes)}</strong><span style="color:var(--text3)">${data}</span></div>
+          ${l.motivo?`<div style="color:var(--text2);margin-top:2px">Motivo: ${l.motivo}</div>`:''}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }catch(e){
+    area.innerHTML = `<div style="text-align:center;padding:1rem;color:#e53935">❌ Erro ao carregar log</div>`;
+  }
+}
+
+function exportarIRPF(){
+  const ano = prompt('Ano da declaração:', new Date().getFullYear());
+  if(!ano) return;
+  window.open(`/api/fiscal/export/irpf/${ano}`, '_blank');
+}
+
+function _formatarMesAno(ym){
+  if(!ym) return '';
+  const [ano, mes] = ym.split('-');
+  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  return `${meses[parseInt(mes)-1]}/${ano}`;
+}
+
 // ── DIVIDENDOS ───────────────────────────────────────────────
 async function carregarDividendosRanking(){
   try{
@@ -6461,7 +6851,7 @@ document.addEventListener('click', e=>{
 
 // Mapeamento de página → grupo
 const _paginaGrupo = {
-  carteira:'grupo-carteira', alertas:'grupo-carteira', performance:'grupo-carteira',
+  carteira:'grupo-carteira', alertas:'grupo-carteira', performance:'grupo-carteira', fiscal:'grupo-carteira',
   janus:'grupo-mercado', dividendos:'grupo-mercado', setores:'grupo-mercado', empresas:'grupo-mercado',
   backtesting:'grupo-ferramentas', builder:'grupo-ferramentas',
 };
@@ -6534,6 +6924,7 @@ function goPage(p,el){
   if(p==='janus') carregarJanusIndex();
   if(p==='dividendos') carregarDividendos();
   if(p==='performance') carregarPerformance();
+  if(p==='fiscal') carregarFiscal();
 }
 function goBack(){currentSector=null;document.getElementById('tab-empresas').style.display='none';goPage('setores',document.querySelector('.tab'));}
 
