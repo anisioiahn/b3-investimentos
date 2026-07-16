@@ -120,6 +120,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .tab-dropdown-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:500;min-width:200px;padding:6px;margin-top:0}
 .tab-dropdown:hover .tab-dropdown-menu,.tab-dropdown.open .tab-dropdown-menu{display:block}
 .tab-dropdown-item{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;white-space:nowrap;transition:all .1s}
+.bm-nav-item{display:flex;align-items:center;gap:8px;padding:9px 6px;font-size:13px;color:var(--text);cursor:pointer;border-radius:8px}
+.bm-nav-item:active{background:var(--bg)}
+.bm-nav-group-label{font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.5px;margin:10px 0 4px;padding:0 6px}
 .tab-dropdown-item:hover{background:var(--bg);color:var(--green)}
 .tab-dropdown-item.active{color:var(--green);font-weight:600;background:var(--green-light)}
 .tab-dropdown-arrow{font-size:10px;margin-left:3px;opacity:.6}
@@ -8495,16 +8498,19 @@ async function removerAlerta(ticker, direcao, btnEl){
 }
 
 function updateAltCnt(){
-  const el = document.getElementById('alt-cnt');
   const disparados = (_disparadosServidor||[]).length;
-  if(disparados > 0){
-    el.textContent = disparados;
-    el.style.display = 'inline';
-    el.style.background = '#e53935';
-    el.title = `${disparados} alerta${disparados>1?'s':''} disparado${disparados>1?'s':''}`;
-  } else {
-    el.style.display = 'none';
-  }
+  ['alt-cnt', 'alt-cnt-mobile'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(disparados > 0){
+      el.textContent = disparados;
+      el.style.display = 'inline';
+      el.style.background = '#e53935';
+      el.title = `${disparados} alerta${disparados>1?'s':''} disparado${disparados>1?'s':''}`;
+    } else {
+      el.style.display = 'none';
+    }
+  });
 }
 
 function renderAlerts(){
@@ -10782,8 +10788,31 @@ const _pollDados=setInterval(async()=>{
 </nav>
 
 <!-- Menu expandido do "Mais" -->
-<div id="bottom-menu" style="display:none;position:fixed;bottom:70px;left:0;right:0;z-index:199;padding:0 1rem">
+<div id="bottom-menu" style="display:none;position:fixed;bottom:70px;left:0;right:0;z-index:199;padding:0 1rem;max-height:80vh;overflow-y:auto">
   <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 -8px 32px rgba(0,0,0,.12);overflow:hidden">
+
+    <!-- NAVEGAÇÃO -->
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:2px">🧭 NAVEGAÇÃO</div>
+
+      <div class="bm-nav-group-label">CARTEIRA</div>
+      <div class="bm-nav-item" onclick="goPage('carteira',null);atualizarBottomBar('carteira');fecharBottomMenu()">💼 Carteira</div>
+      <div class="bm-nav-item" onclick="goPage('performance',null);fecharBottomMenu()">📈 Performance</div>
+      <div class="bm-nav-item" onclick="goPage('fiscal',null);fecharBottomMenu()">🧾 Fiscal</div>
+      <div class="bm-nav-item" onclick="goPage('alertas',null);atualizarBottomBar('alertas');fecharBottomMenu()">
+        🔔 Alertas <span id="alt-cnt-mobile" style="margin-left:auto;background:#e53935;color:#fff;border-radius:10px;font-size:11px;padding:2px 8px;display:none">0</span>
+      </div>
+
+      <div class="bm-nav-group-label">MERCADO</div>
+      <div class="bm-nav-item" onclick="goPage('janus',null);atualizarBottomBar('janus');fecharBottomMenu()">🎯 Janus Score</div>
+      <div class="bm-nav-item" onclick="goPage('dividendos',null);atualizarBottomBar('dividendos');fecharBottomMenu()">💰 Dividendos</div>
+      <div class="bm-nav-item" onclick="goPage('setores',null);atualizarBottomBar('setores');fecharBottomMenu()">📊 Setores</div>
+
+      <div class="bm-nav-group-label">FERRAMENTAS</div>
+      <div class="bm-nav-item" onclick="goPage('oportunidades',null);fecharBottomMenu()">🎯 Oportunidades</div>
+      <div class="bm-nav-item" onclick="goPage('backtesting',null);fecharBottomMenu()">🔬 Backtesting</div>
+      <div class="bm-nav-item" onclick="goPage('builder',null);fecharBottomMenu()">🏗️ Builder</div>
+    </div>
 
     <!-- ATUALIZAÇÃO -->
     <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
@@ -10831,14 +10860,6 @@ const _pollDados=setInterval(async()=>{
         style="width:100%;padding:10px;border:none;border-radius:10px;background:var(--green);color:#fff;font-size:13px;font-weight:600;cursor:pointer">
         ↻ Atualizar agora
       </button>
-    </div>
-
-    <!-- Alertas -->
-    <div onclick="goPage('alertas',null);atualizarBottomBar('alertas');fecharBottomMenu()"
-      style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      <span style="font-size:14px;font-weight:500">Alertas</span>
-      <span id="bottom-menu-alertas" style="margin-left:auto;background:#e53935;color:#fff;border-radius:10px;font-size:11px;padding:2px 8px;display:none">0</span>
     </div>
 
     <!-- Log -->
