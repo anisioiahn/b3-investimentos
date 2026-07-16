@@ -13,6 +13,7 @@ import sys
 from fiscal_engine import (
     processar_compra, processar_venda, apurar_mes,
     PosicaoFiscal, ConfiguracaoFiscal, ErroValidacaoFiscal,
+    calcular_vencimento_darf, gerar_darf,
 )
 
 _falhas = []
@@ -222,6 +223,87 @@ def _():
         assert False
     except ErroValidacaoFiscal:
         pass
+
+
+# ── Mínimo legal de recolhimento (seção 8, 13) ─────────────────
+@teste("imposto abaixo do mínimo (R$10) não gera DARF, acumula pro próximo mês")
+def _():
+    pos = processar_compra(None, "PETR4", 1000, 20.0)
+    venda = processar_venda(pos, 1000, 20.05)  # lucro de R$50 -> IR de R$7,50 (abaixo de R$10)
+    apuracao = apurar_mes([venda], prejuizo_anterior=0.0, irrf_disponivel=0.0, ano_mes="2026-01")
+    assert apuracao.imposto_devido == 7.5
+    assert apuracao.imposto_a_pagar_agora == 0.0, "abaixo do mínimo não deveria gerar DARF ainda"
+    assert apuracao.imposto_acumulado_novo_saldo == 7.5
+    darf = gerar_darf(apuracao)
+    assert darf is None, "sem DARF quando ainda está abaixo do mínimo"
+
+
+@teste("imposto acumulado de meses anteriores + este mês atinge o mínimo -> libera o DARF")
+def _():
+    pos = processar_compra(None, "PETR4", 1000, 20.0)
+    venda = processar_venda(pos, 1000, 20.05)  # IR de R$7,50 de novo
+    apuracao = apurar_mes([venda], prejuizo_anterior=0.0, irrf_disponivel=0.0,
+                           ano_mes="2026-02", imposto_acumulado_anterior=7.5)
+    assert apuracao.imposto_a_pagar_agora == 15.0, "7.5 acumulado + 7.5 novo = 15, acima do mínimo"
+    assert apuracao.imposto_acumulado_novo_saldo == 0.0
+    darf = gerar_darf(apuracao)
+    assert darf is not None
+    assert darf.valor == 15.0
+    assert darf.codigo_receita == "6015"
+
+
+@teste("mês isento não soma nada ao acumulado, saldo anterior permanece intacto")
+def _():
+    pos = processar_compra(None, "PETR4", 500, 20.0)
+    venda = processar_venda(pos, 500, 21.0)  # venda de 10.500, dentro do limite -> isento
+    apuracao = apurar_mes([venda], prejuizo_anterior=0.0, irrf_disponivel=0.0,
+                           ano_mes="2026-01", imposto_acumulado_anterior=5.0)
+    assert apuracao.isento
+    assert apuracao.imposto_devido == 0.0
+    assert apuracao.imposto_acumulado_novo_saldo == 5.0, "isenção não deve mexer no saldo acumulado de outro mês"
+
+
+@teste("imposto negativo acumulado é rejeitado")
+def _():
+    pos = processar_compra(None, "PETR4", 100, 20.0)
+    venda = processar_venda(pos, 100, 25.0)
+    try:
+        apurar_mes([venda], prejuizo_anterior=0.0, irrf_disponivel=0.0,
+                   ano_mes="2026-01", imposto_acumulado_anterior=-5.0)
+        assert False
+    except ErroValidacaoFiscal:
+        pass
+
+
+# ── DARF: vencimento ─────────────────────────────────────────────
+@teste("vencimento do DARF é sempre no mês seguinte ao da apuração")
+def _():
+    venc = calcular_vencimento_darf("2026-06")
+    assert venc.startswith("2026-07"), f"deveria vencer em julho, veio {venc}"
+
+
+@teste("vencimento em dezembro rola pro ano seguinte corretamente")
+def _():
+    venc = calcular_vencimento_darf("2026-12")
+    assert venc.startswith("2027-01"), f"deveria vencer em janeiro/2027, veio {venc}"
+
+
+@teste("vencimento do DARF nunca cai em fim de semana")
+def _():
+    from datetime import date
+    for ano_mes in ["2026-01","2026-02","2026-03","2026-04","2026-05","2026-06",
+                     "2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"]:
+        venc = calcular_vencimento_darf(ano_mes)
+        d = date.fromisoformat(venc)
+        assert d.weekday() < 5, f"{ano_mes} -> {venc} caiu em fim de semana"
+
+
+@teste("gerar_darf devolve None quando não há imposto a pagar")
+def _():
+    pos = processar_compra(None, "PETR4", 100, 20.0)
+    venda = processar_venda(pos, 100, 18.0)  # prejuízo
+    apuracao = apurar_mes([venda], prejuizo_anterior=0.0, irrf_disponivel=0.0, ano_mes="2026-01")
+    assert gerar_darf(apuracao) is None
 
 
 # ── Determinismo ────────────────────────────────────────────────
