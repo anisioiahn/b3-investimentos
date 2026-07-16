@@ -1428,6 +1428,7 @@ def db_listar_operacoes_fiscais(uid, ticker=None, ano_mes=None):
             for r in rows:
                 for campo in ('quantidade','preco_unitario','valor_bruto','custos','irrf','custo_base','resultado_liquido'):
                     if r.get(campo) is not None: r[campo] = float(r[campo])
+                if r.get('data_operacao'): r['data_operacao'] = r['data_operacao'].isoformat()
         conn.close()
         return rows
     except Exception as e:
