@@ -1301,6 +1301,19 @@ def db_init_fiscal_tables(conn):
                 criado_em TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_fiscal_reproc_usuario ON fiscal_reprocessamento_log(usuario_id, ano_mes);
+
+            CREATE TABLE IF NOT EXISTS regras_fiscais (
+                id SERIAL PRIMARY KEY,
+                tipo_regra TEXT NOT NULL,
+                valor NUMERIC NOT NULL,
+                vigencia_inicio DATE NOT NULL,
+                vigencia_fim DATE,
+                fonte_normativa TEXT,
+                observacao TEXT,
+                criado_por INTEGER,
+                criado_em TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_regras_fiscais_tipo ON regras_fiscais(tipo_regra, vigencia_inicio);
         """)
         # Migração defensiva: bancos que já tinham apuracoes_fiscais_mensais
         # de uma versão anterior (Fase 2 original) não têm essas colunas —
@@ -1312,7 +1325,131 @@ def db_init_fiscal_tables(conn):
                 ADD COLUMN IF NOT EXISTS imposto_acumulado_novo_saldo NUMERIC NOT NULL DEFAULT 0,
                 ADD COLUMN IF NOT EXISTS fechado_em TEXT;
         """)
+        # Seed inicial: só roda se a tabela estiver vazia (primeira vez) —
+        # usa os mesmos valores que já eram hard-coded como default em
+        # ConfiguracaoFiscal, com vigência retroativa segura (2020-01-01)
+        # pra cobrir qualquer operação já existente no sistema.
+        cur.execute("SELECT COUNT(*) FROM regras_fiscais")
+        if cur.fetchone()[0] == 0:
+            seed_em = agora_str()
+            cur.execute("""
+                INSERT INTO regras_fiscais (tipo_regra, valor, vigencia_inicio, fonte_normativa, observacao, criado_em)
+                VALUES
+                ('limite_isencao_mensal_acoes', 20000.0, '2020-01-01', 'Lei 11.033/2004, art. 3º, I', 'Regra inicial (seed automático)', %(t)s),
+                ('aliquota_swing_trade', 0.15, '2020-01-01', 'Lei 11.033/2004, art. 2º', 'Regra inicial (seed automático)', %(t)s),
+                ('aliquota_day_trade', 0.20, '2020-01-01', 'Lei 11.033/2004, art. 2º, §único', 'Regra inicial (seed automático) — day trade ainda não implementado no motor', %(t)s),
+                ('minimo_recolhimento_darf', 10.0, '2020-01-01', 'IN RFB', 'Regra inicial (seed automático)', %(t)s)
+            """, {"t": seed_em})
     conn.commit()
+
+
+def db_buscar_regra_vigente(tipo_regra, data_referencia):
+    """
+    Devolve o valor da regra fiscal vigente numa data específica (não
+    necessariamente hoje) — importante pra recalcular meses antigos com
+    a regra que valia NAQUELE mês, não a atual. Se houver mais de uma
+    regra "vigente" na mesma data por algum erro de cadastro, usa a mais
+    recente (maior vigencia_inicio) como desempate.
+    """
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT valor FROM regras_fiscais
+                WHERE tipo_regra=%s AND vigencia_inicio <= %s
+                  AND (vigencia_fim IS NULL OR vigencia_fim >= %s)
+                ORDER BY vigencia_inicio DESC LIMIT 1
+            """, (tipo_regra, data_referencia, data_referencia))
+            row = cur.fetchone()
+        conn.close()
+        return float(row[0]) if row else None
+    except Exception as e:
+        print(f"[DB] Erro ao buscar regra fiscal vigente ({tipo_regra}): {e}")
+        return None
+
+
+def db_montar_configuracao_fiscal(data_referencia):
+    """
+    Monta um dict pronto pra virar ConfiguracaoFiscal(**dict), buscando
+    cada regra vigente na data de referência (tipicamente o dia 1 do
+    ano_mes sendo apurado). Cai nos defaults do fiscal_engine.py só se
+    alguma regra não for encontrada (banco vazio/erro) — nunca deixa o
+    motor sem número nenhum pra rodar.
+    """
+    from fiscal_engine import ConfiguracaoFiscal
+    default = ConfiguracaoFiscal()
+    limite = db_buscar_regra_vigente('limite_isencao_mensal_acoes', data_referencia)
+    aliq_swing = db_buscar_regra_vigente('aliquota_swing_trade', data_referencia)
+    aliq_day = db_buscar_regra_vigente('aliquota_day_trade', data_referencia)
+    minimo = db_buscar_regra_vigente('minimo_recolhimento_darf', data_referencia)
+    return {
+        "limite_isencao_mensal_acoes": limite if limite is not None else default.limite_isencao_mensal_acoes,
+        "aliquota_swing_trade": aliq_swing if aliq_swing is not None else default.aliquota_swing_trade,
+        "aliquota_day_trade": aliq_day if aliq_day is not None else default.aliquota_day_trade,
+        "minimo_recolhimento_darf": minimo if minimo is not None else default.minimo_recolhimento_darf,
+    }
+
+
+def db_listar_regras_fiscais(tipo_regra=None):
+    """Lista TODAS as regras (inclusive vencidas/históricas) — pra tela
+    de administração mostrar o histórico completo de mudanças."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            if tipo_regra:
+                cur.execute("""
+                    SELECT * FROM regras_fiscais WHERE tipo_regra=%s
+                    ORDER BY tipo_regra, vigencia_inicio DESC
+                """, (tipo_regra,))
+            else:
+                cur.execute("SELECT * FROM regras_fiscais ORDER BY tipo_regra, vigencia_inicio DESC")
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                r['valor'] = float(r['valor'])
+                if r.get('vigencia_inicio'): r['vigencia_inicio'] = r['vigencia_inicio'].isoformat()
+                if r.get('vigencia_fim'): r['vigencia_fim'] = r['vigencia_fim'].isoformat()
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[DB] Erro ao listar regras fiscais: {e}")
+        return []
+
+
+TIPOS_REGRA_VALIDOS = (
+    'limite_isencao_mensal_acoes', 'aliquota_swing_trade',
+    'aliquota_day_trade', 'minimo_recolhimento_darf',
+)
+
+
+def db_criar_regra_fiscal(tipo_regra, valor, vigencia_inicio, fonte_normativa=None, observacao=None, criado_por=None):
+    """
+    Cria uma nova regra vigente a partir de `vigencia_inicio` — fecha
+    automaticamente a regra anterior do MESMO tipo (define vigencia_fim
+    = vigencia_inicio - 1 dia), pra nunca ter 2 regras do mesmo tipo
+    vigentes ao mesmo tempo sem querer.
+    """
+    if tipo_regra not in TIPOS_REGRA_VALIDOS:
+        return False, f"Tipo de regra inválido. Use um de: {', '.join(TIPOS_REGRA_VALIDOS)}"
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE regras_fiscais SET vigencia_fim = %s::date - INTERVAL '1 day'
+                WHERE tipo_regra=%s AND vigencia_fim IS NULL AND vigencia_inicio < %s
+            """, (vigencia_inicio, tipo_regra, vigencia_inicio))
+            cur.execute("""
+                INSERT INTO regras_fiscais
+                    (tipo_regra, valor, vigencia_inicio, fonte_normativa, observacao, criado_por, criado_em)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (tipo_regra, valor, vigencia_inicio, fonte_normativa, observacao, criado_por, agora_str()))
+            novo_id = cur.fetchone()[0]
+        conn.commit()
+        conn.close()
+        return True, novo_id
+    except Exception as e:
+        print(f"[DB] Erro ao criar regra fiscal: {e}")
+        return False, str(e)
 
 
 def db_obter_posicao_fiscal(uid, ticker):
