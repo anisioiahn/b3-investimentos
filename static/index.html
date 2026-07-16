@@ -1112,9 +1112,66 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         </div>
 
         <!-- Log de auditoria -->
-        <div class="cockpit-card">
+        <div class="cockpit-card" style="margin-bottom:1rem">
           <div class="cockpit-card-title" style="cursor:pointer" onclick="toggleLogFiscal()">🔍 Log de Auditoria (fechamentos e reprocessamentos) <span id="fiscal-log-arrow">▾</span></div>
           <div id="fiscal-log-area" style="display:none"><div style="text-align:center;padding:1.5rem;color:var(--text3)">Carregando...</div></div>
+        </div>
+
+        <!-- Regras fiscais versionadas -->
+        <div class="cockpit-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleRegrasFiscais()">
+            <div class="cockpit-card-title" style="margin:0">⚙️ Regras Fiscais (limite, alíquotas, mínimo) <span id="fiscal-regras-arrow">▾</span></div>
+          </div>
+          <div id="fiscal-regras-area" style="display:none">
+            <div style="text-align:center;padding:1.5rem;color:var(--text3)">Carregando...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL NOVA REGRA FISCAL -->
+    <div class="pos-modal-overlay" id="regra-modal" onclick="fecharModalRegra(event)">
+      <div class="pos-modal" onclick="event.stopPropagation()">
+        <div class="pos-modal-header">
+          <div class="pos-modal-title">⚙️ Nova regra fiscal</div>
+          <button class="modal-close" onclick="fecharModalRegra()">✕</button>
+        </div>
+        <div class="pos-modal-body">
+          <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px;font-size:12px;color:#1e40af">
+            💡 Isso cria uma <strong>nova regra vigente a partir da data escolhida</strong> — meses já apurados antes dessa data continuam usando a regra antiga. Não é uma edição retroativa.
+          </div>
+          <div class="pos-field">
+            <label>Qual regra</label>
+            <select id="regra-tipo" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text)">
+              <option value="limite_isencao_mensal_acoes">Limite de isenção mensal (venda de ações)</option>
+              <option value="aliquota_swing_trade">Alíquota — Swing Trade</option>
+              <option value="aliquota_day_trade">Alíquota — Day Trade</option>
+              <option value="minimo_recolhimento_darf">Mínimo legal de recolhimento (DARF)</option>
+            </select>
+          </div>
+          <div class="pos-field-row">
+            <div class="pos-field">
+              <label id="regra-valor-label">Valor (R$)</label>
+              <input id="regra-valor" type="number" step="0.0001" placeholder="0" oninput="_atualizarDicaRegraValor()">
+              <div id="regra-valor-dica" style="font-size:10px;color:var(--text3);margin-top:2px"></div>
+            </div>
+            <div class="pos-field">
+              <label>Vigente a partir de</label>
+              <input id="regra-vigencia" type="date">
+            </div>
+          </div>
+          <div class="pos-field">
+            <label>Fonte normativa <span style="font-weight:400;color:var(--text3)">opcional</span></label>
+            <input id="regra-fonte" type="text" placeholder="Ex: Lei 11.033/2004, art. 3º">
+          </div>
+          <div class="pos-field">
+            <label>Observação <span style="font-weight:400;color:var(--text3)">opcional</span></label>
+            <input id="regra-observacao" type="text" placeholder="Ex: atualização anunciada pela Receita em...">
+          </div>
+        </div>
+        <div class="pos-modal-footer">
+          <button class="pos-btn-cancel" onclick="fecharModalRegra()">Cancelar</button>
+          <button class="pos-btn-save" id="regra-btn-salvar" onclick="salvarNovaRegra()">💾 Criar regra</button>
         </div>
       </div>
     </div>
@@ -4298,6 +4355,133 @@ function _formatarMesAno(ym){
   const [ano, mes] = ym.split('-');
   const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
   return `${meses[parseInt(mes)-1]}/${ano}`;
+}
+
+// ── Regras fiscais versionadas ───────────────────────────────
+const _regraLabels = {
+  limite_isencao_mensal_acoes: 'Limite de isenção mensal',
+  aliquota_swing_trade: 'Alíquota — Swing Trade',
+  aliquota_day_trade: 'Alíquota — Day Trade',
+  minimo_recolhimento_darf: 'Mínimo legal de recolhimento',
+};
+const _regraEhAliquota = (tipo) => tipo.startsWith('aliquota');
+
+function toggleRegrasFiscais(){
+  const area = document.getElementById('fiscal-regras-area');
+  const arrow = document.getElementById('fiscal-regras-arrow');
+  const abrindo = area.style.display === 'none';
+  area.style.display = abrindo ? 'block' : 'none';
+  arrow.textContent = abrindo ? '▴' : '▾';
+  if(abrindo) _carregarRegrasFiscais();
+}
+
+async function _carregarRegrasFiscais(){
+  const area = document.getElementById('fiscal-regras-area');
+  try{
+    const r = await fetch('/api/fiscal/regras');
+    const regras = await r.json();
+    _renderRegrasFiscais(regras);
+  }catch(e){
+    area.innerHTML = `<div style="text-align:center;padding:1rem;color:#e53935">❌ Erro ao carregar regras</div>`;
+  }
+}
+
+function _fmtValorRegra(tipo, valor){
+  return _regraEhAliquota(tipo) ? `${(valor*100).toFixed(2)}%` : `R$ ${fmt(valor)}`;
+}
+
+function _renderRegrasFiscais(regras){
+  const area = document.getElementById('fiscal-regras-area');
+  const porTipo = {};
+  regras.forEach(r => { (porTipo[r.tipo_regra] = porTipo[r.tipo_regra] || []).push(r); });
+
+  const blocos = Object.keys(_regraLabels).map(tipo => {
+    const lista = (porTipo[tipo] || []).sort((a,b) => b.vigencia_inicio.localeCompare(a.vigencia_inicio));
+    if(!lista.length) return '';
+    const vigente = lista.find(r => !r.vigencia_fim) || lista[0];
+    const historico = lista.filter(r => r !== vigente);
+    return `
+      <div style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span style="font-size:12px;font-weight:600">${_regraLabels[tipo]}</span>
+          <span style="font-size:16px;font-weight:800">${_fmtValorRegra(tipo, vigente.valor)}</span>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Vigente desde ${new Date(vigente.vigencia_inicio+'T12:00:00').toLocaleDateString('pt-BR')}${vigente.fonte_normativa?' · '+vigente.fonte_normativa:''}</div>
+        ${historico.length ? `<details style="margin-top:6px"><summary style="font-size:10px;color:var(--text3);cursor:pointer">${historico.length} regra(s) anterior(es)</summary>
+          <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">
+            ${historico.map(h => `<div style="font-size:10px;color:var(--text2)">${_fmtValorRegra(tipo,h.valor)} — ${new Date(h.vigencia_inicio+'T12:00:00').toLocaleDateString('pt-BR')} até ${h.vigencia_fim?new Date(h.vigencia_fim+'T12:00:00').toLocaleDateString('pt-BR'):'?'}</div>`).join('')}
+          </div>
+        </details>` : ''}
+      </div>`;
+  }).join('');
+
+  area.innerHTML = `
+    <div style="margin-top:8px">${blocos}</div>
+    <button onclick="abrirModalRegra()" class="btn" style="margin-top:4px;padding:8px 14px;font-size:12px">➕ Nova regra vigente</button>`;
+}
+
+function abrirModalRegra(){
+  document.getElementById('regra-tipo').value = 'limite_isencao_mensal_acoes';
+  document.getElementById('regra-valor').value = '';
+  document.getElementById('regra-vigencia').value = '';
+  document.getElementById('regra-fonte').value = '';
+  document.getElementById('regra-observacao').value = '';
+  _atualizarDicaRegraValor();
+  document.getElementById('regra-modal').classList.add('open');
+}
+
+function fecharModalRegra(e){
+  if(!e || e.target === document.getElementById('regra-modal')){
+    document.getElementById('regra-modal').classList.remove('open');
+  }
+}
+
+function _atualizarDicaRegraValor(){
+  const tipo = document.getElementById('regra-tipo').value;
+  const label = document.getElementById('regra-valor-label');
+  const dica = document.getElementById('regra-valor-dica');
+  if(_regraEhAliquota(tipo)){
+    label.textContent = 'Valor (fração decimal)';
+    dica.textContent = 'Ex: 0.15 para 15% — NÃO digite 15';
+  } else {
+    label.textContent = 'Valor (R$)';
+    dica.textContent = '';
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById('regra-tipo');
+  if(sel) sel.addEventListener('change', _atualizarDicaRegraValor);
+});
+
+async function salvarNovaRegra(){
+  const tipo_regra = document.getElementById('regra-tipo').value;
+  const valor = parseFloat(document.getElementById('regra-valor').value);
+  const vigencia_inicio = document.getElementById('regra-vigencia').value;
+  const fonte_normativa = document.getElementById('regra-fonte').value.trim();
+  const observacao = document.getElementById('regra-observacao').value.trim();
+
+  if(isNaN(valor)){ alert('Informe o valor da regra'); return; }
+  if(!vigencia_inicio){ alert('Informe a partir de quando a regra vale'); return; }
+  if(_regraEhAliquota(tipo_regra) && valor > 1){
+    if(!confirm(`Você digitou ${valor} — pra alíquota isso deveria ser uma fração (ex: 0.15 para 15%). Confirma mesmo assim?`)) return;
+  }
+
+  const btn = document.getElementById('regra-btn-salvar');
+  btn.disabled = true; btn.textContent = '⏳ Salvando...';
+  try{
+    const r = await fetch('/api/fiscal/regras', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tipo_regra, valor, vigencia_inicio, fonte_normativa: fonte_normativa||null, observacao: observacao||null})
+    });
+    const d = await r.json();
+    btn.disabled = false; btn.textContent = '💾 Criar regra';
+    if(!r.ok){ alert(`Erro: ${d.erro}`); return; }
+    fecharModalRegra();
+    await _carregarRegrasFiscais();
+  }catch(e){
+    btn.disabled = false; btn.textContent = '💾 Criar regra';
+    alert('Erro de conexão');
+  }
 }
 
 // ── DIVIDENDOS ───────────────────────────────────────────────
