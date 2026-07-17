@@ -7730,7 +7730,13 @@ async function abrirGrafico(ticker){
   const badgeEl = document.getElementById('modal-janus-badge');
   if(janusItem?.score !== null && janusItem?.score !== undefined){
     const slug = ji_classSlug(janusClassificacaoPorScore(janusItem.score));
-    badgeEl.innerHTML = `<span class="ji-score-badge ji-score-${slug}" title="Ver detalhamento do Janus Score" onclick="abrirDetalheJanusScore('${ticker}')" style="cursor:pointer">${janusItem.score.toFixed(1)}</span>`;
+    const coresScore = {'muito-favoravel':'#15803d','favoravel':'#16a34a','neutro':'#a16207','desfavoravel':'#c2410c','muito-desfavoravel':'#dc2626'};
+    const cor = coresScore[slug] || '#64748b';
+    badgeEl.innerHTML = `<span title="Ver detalhamento do Janus Score"
+      onclick="abrirDetalheJanusScore('${ticker}')"
+      style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:${cor}22;border:1px solid ${cor}44;border-radius:20px;font-size:11px;font-weight:700;color:${cor};cursor:pointer">
+      🎯 Score ${janusItem.score.toFixed(1)}
+    </span>`;
     badgeEl.style.display = 'block';
   } else {
     badgeEl.style.display = 'none';
