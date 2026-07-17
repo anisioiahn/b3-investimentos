@@ -1,7 +1,7 @@
 import json, time, requests, xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
-import os
+import os, re, unicodedata
 
 TOKEN = os.environ.get("BRAPI_TOKEN", "iSm92y2Qg4f9iapi1MuHhh")
 BASE_URL = "https://brapi.dev/api/quote"
@@ -193,11 +193,36 @@ def _parse_rss(content, ticker, nome_empresa, max_items=3):
         del n["_data_dt"]
     return candidatas[:max_items]
 
+def _slugificar_nome(nome_empresa):
+    """
+    Gera o slug que sites de notícias costumam usar em tags/categorias
+    baseadas no NOME da empresa (ex: InfoMoney usa /tudo-sobre/axia/,
+    não /tudo-sobre/axia3/ — o ticker não é a mesma coisa que o slug
+    de conteúdo do site). 'Axia Energia' -> 'axia-energia'.
+
+    ATENÇÃO: isso é uma aproximação (nome completo, minúsculo, hífens).
+    Alguns sites usam só a primeira palavra do nome como tag (ex:
+    InfoMoney tem tanto /tudo-sobre/axia/ quanto /tudo-sobre/axia-energia/
+    como páginas válidas e diferentes) — vale conferir manualmente qual
+    delas tem mais conteúdo antes de configurar a URL de uma fonte nova.
+    """
+    if not nome_empresa:
+        return ""
+    texto = unicodedata.normalize("NFKD", nome_empresa).encode("ascii", "ignore").decode("ascii")
+    texto = texto.lower().strip()
+    texto = re.sub(r"[^a-z0-9\s-]", "", texto)
+    texto = re.sub(r"\s+", "-", texto)
+    return texto
+
 def buscar_noticias_rss(ticker, nome_empresa, fontes):
     """
     Busca notícias de cada fonte RSS configurada.
-    - Se a URL da fonte contém {ticker}, substitui e filtra normalmente.
-    - Se a URL é genérica (sem {ticker}), filtra os itens pelo ticker/nome.
+    - {ticker} na URL vira o ticker em minúsculo (ex: petr4).
+    - {slug} na URL vira o nome da empresa "slugificado" (ex: axia-energia)
+      — use isso pra fontes que organizam conteúdo por nome da empresa,
+      não por ticker (é o caso do InfoMoney, por exemplo).
+    - Se a URL é genérica (sem {ticker}/{slug}), filtra os itens pelo
+      ticker/nome depois de buscar.
     - Se a fonte configurada não trouxer NADA, o frame correspondente
       fica vazio de propósito ("sem notícias recentes") — NUNCA
       substitui silenciosamente por outra fonte disfarçada do nome
@@ -211,11 +236,19 @@ def buscar_noticias_rss(ticker, nome_empresa, fontes):
     for fonte in fontes:
         noticias = []
         try:
-            url_rss = fonte.get("url", "").replace("{ticker}", ticker.lower())
+            url_rss = fonte.get("url", "")
+            url_rss = url_rss.replace("{ticker}", ticker.lower())
+            url_rss = url_rss.replace("{slug}", _slugificar_nome(nome_empresa))
             if url_rss:
                 resp = requests.get(url_rss, timeout=10, headers=hdrs)
                 if resp.status_code == 200:
                     noticias = _parse_rss(resp.content, ticker, nome_empresa)
+                else:
+                    # Log específico pra status != 200 — ajuda a detectar
+                    # URL de fonte mal configurada (como o caso do InfoMoney
+                    # usando {ticker} onde precisava de {slug}) em vez de só
+                    # "sem notícia" silencioso indistinguível de "nada novo hoje"
+                    print(f"  ⚠️ RSS {fonte['nome']} devolveu status {resp.status_code} pra URL {url_rss} — confira se a URL configurada está certa pra este site")
         except Exception as e:
             print(f"  ⚠️ RSS {fonte['nome']}: {e}")
 
@@ -223,10 +256,10 @@ def buscar_noticias_rss(ticker, nome_empresa, fontes):
 
     return noticias_por_fonte
 
-def montar_url_rss(fonte, ticker):
+def montar_url_rss(fonte, ticker, nome_empresa=""):
     base = fonte.get("url", "")
-    if "{ticker}" in base:
-        return base.replace("{ticker}", ticker.lower())
+    base = base.replace("{ticker}", ticker.lower())
+    base = base.replace("{slug}", _slugificar_nome(nome_empresa))
     return base
 
 def buscar_todas_cotacoes():
