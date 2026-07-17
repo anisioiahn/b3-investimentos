@@ -7517,10 +7517,30 @@ let _jaiaHistorico = []; // histórico de conversa da AJIA por sessão
 let _jaiaContexto = null; // contexto do ativo para a AJIA
 
 async function abrirDetalheJanusScore(ticker){
-  const r = await fetch(`/api/janus/score/${ticker}`);
-  const d = await r.json();
-  const score = d.janus_score?.overall_score;
-  if(d.erro || score === null || score === undefined) return;
+  const loading = _abrirModalCarregando('Carregando Janus Score...');
+  let r, d;
+  try{
+    r = await fetch(`/api/janus/score/${ticker}`);
+    d = await r.json();
+  }catch(e){
+    loading.innerHTML = `<div style="background:var(--card);border-radius:16px;max-width:320px;width:100%;padding:2rem;text-align:center" onclick="event.stopPropagation()">
+      <div style="font-size:32px;margin-bottom:12px">❌</div>
+      <div style="font-size:14px;font-weight:600">Erro de conexão ao carregar o Janus Score</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="margin-top:12px;padding:8px 16px;border:none;border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer">Fechar</button>
+    </div>`;
+    return;
+  }
+  const score = parseFloat(d.janus_score?.overall_score);
+  if(d.erro || isNaN(score)){
+    loading.innerHTML = `<div style="background:var(--card);border-radius:16px;max-width:320px;width:100%;padding:2rem;text-align:center" onclick="event.stopPropagation()">
+      <div style="font-size:32px;margin-bottom:12px">🎯</div>
+      <div style="font-size:14px;font-weight:600">Janus Score indisponível para ${ticker}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">${d.erro||'Ainda não há dados fundamentalistas suficientes.'}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="margin-top:12px;padding:8px 16px;border:none;border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer">Fechar</button>
+    </div>`;
+    return;
+  }
+  loading.remove();
 
   const classificacao = d.janus_score.classification || janusClassificacaoPorScore(score);
   const slug = ji_classSlug(classificacao);
@@ -7578,10 +7598,45 @@ async function abrirDetalheJanusScore(ticker){
   document.body.appendChild(modal);
 }
 
+function _abrirModalCarregando(titulo){
+  const modal = document.createElement('div');
+  modal.id = '_modal-carregando-detalhe';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;max-width:320px;width:100%;padding:2rem;box-shadow:0 16px 48px rgba(0,0,0,.3);text-align:center" onclick="event.stopPropagation()">
+      <div style="font-size:32px;margin-bottom:12px;animation:spin 1s linear infinite;display:inline-block">⏳</div>
+      <div style="font-size:14px;font-weight:600">${titulo}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">Isso pode levar alguns segundos...</div>
+    </div>`;
+  modal.onclick = ()=>modal.remove();
+  document.body.appendChild(modal);
+  return modal;
+}
+
 async function abrirDetalheRisco(ticker){
-  const r = await fetch(`/api/risco/${ticker}`);
-  const d = await r.json();
-  if(d.erro || !d.risk_score) return;
+  const loading = _abrirModalCarregando('Calculando Score de Risco...');
+  let r, d;
+  try{
+    r = await fetch(`/api/risco/${ticker}`);
+    d = await r.json();
+  }catch(e){
+    loading.innerHTML = `<div style="background:var(--card);border-radius:16px;max-width:320px;width:100%;padding:2rem;text-align:center" onclick="event.stopPropagation()">
+      <div style="font-size:32px;margin-bottom:12px">❌</div>
+      <div style="font-size:14px;font-weight:600">Erro de conexão ao calcular o risco</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="margin-top:12px;padding:8px 16px;border:none;border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer">Fechar</button>
+    </div>`;
+    return;
+  }
+  if(d.erro || !d.risk_score){
+    loading.innerHTML = `<div style="background:var(--card);border-radius:16px;max-width:320px;width:100%;padding:2rem;text-align:center" onclick="event.stopPropagation()">
+      <div style="font-size:32px;margin-bottom:12px">📊</div>
+      <div style="font-size:14px;font-weight:600">Score de risco indisponível para ${ticker}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">${d.erro||'Dados insuficientes para calcular.'}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="margin-top:12px;padding:8px 16px;border:none;border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer">Fechar</button>
+    </div>`;
+    return;
+  }
+  loading.remove();
 
   const cor = d.risk_score<=20?'#16a34a':d.risk_score<=40?'#22c55e':d.risk_score<=60?'#f59e0b':d.risk_score<=80?'#f97316':'#e53935';
 
