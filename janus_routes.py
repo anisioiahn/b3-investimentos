@@ -9,8 +9,30 @@
 import psycopg2.extras, os, threading
 import db
 from flask import jsonify, request
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
+from decimal import Decimal
 from janus_collector import BENCHMARKS, PESOS
+
+
+def _limpar_decimais(obj):
+    """
+    Converte Decimal->float e date->isoformat recursivamente em
+    dicts/listas — psycopg2 devolve NUMERIC como Decimal, e o
+    serializador padrão do Flask converte Decimal em STRING (não em
+    número), o que quebra qualquer .toFixed()/aritmética no frontend
+    silenciosamente (sem erro visível pro usuário). Aplicado em toda
+    resposta que vem direto de RealDictCursor sem conversão manual.
+    """
+    if isinstance(obj, dict):
+        return {k: _limpar_decimais(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_limpar_decimais(v) for v in obj]
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, date):
+        return obj.isoformat()
+    return obj
+
 
 # Rótulos amigáveis pros indicadores do Quality Engine — só exibição,
 # não influencia o cálculo (que usa exclusivamente BENCHMARKS/PESOS
@@ -160,13 +182,13 @@ def registrar_rotas_janus(app, requer_auth):
                 ultima = cur.fetchone()
             conn.close()
 
-            return jsonify({
+            return jsonify(_limpar_decimais({
                 "status":        "online",
                 "total_ativos":  total_ativos,
                 "total_scores":  total_scores,
                 "rodando":       _janus_estado["rodando"],  # flag real do processo em memória
                 "ultima_coleta": dict(ultima) if ultima else None
-            })
+            }))
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
 
@@ -290,12 +312,12 @@ Escreva em português, tom profissional mas acessível, destacando os pontos for
                 rows = [dict(r) for r in cur.fetchall()]
             conn.close()
 
-            return jsonify({
+            return jsonify(_limpar_decimais({
                 "reference_date": str(ref_date),
                 "ranking_type":   tipo,
                 "total":          len(rows),
                 "ranking":        rows
-            })
+            }))
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
 
@@ -369,7 +391,7 @@ Escreva em português, tom profissional mas acessível, destacando os pontos for
 
             conn.close()
 
-            return jsonify({
+            resposta = {
                 "ticker":        ticker,
                 "empresa":       asset["trading_name"],
                 "setor":         asset["sector"],
@@ -378,7 +400,8 @@ Escreva em português, tom profissional mas acessível, destacando os pontos for
                 "indicadores":   indicadores,
                 "historico":     historico,
                 "quality_breakdown": _montar_quality_breakdown(indicadores),
-            })
+            }
+            return jsonify(_limpar_decimais(resposta))
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
     @app.route("/api/janus/evidence/<ticker>")
@@ -403,11 +426,11 @@ Escreva em português, tom profissional mas acessível, destacando os pontos for
                 evidencias = [dict(r) for r in cur.fetchall()]
             conn.close()
 
-            return jsonify({
+            return jsonify(_limpar_decimais({
                 "ticker":     ticker,
                 "total":      len(evidencias),
                 "evidencias": evidencias
-            })
+            }))
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
 
