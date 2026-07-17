@@ -1,5 +1,6 @@
 import json, time, requests, xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
 import os
 
 TOKEN = os.environ.get("BRAPI_TOKEN", "iSm92y2Qg4f9iapi1MuHhh")
@@ -84,52 +85,125 @@ def buscar_historico(ticker):
         print(f"  ⚠️ Histórico {ticker}: {e}")
     return []
 
+DIAS_MAX_NOTICIA = 30  # notícia mais velha que isso é descartada, mesmo que mencione o ativo
+
+# Palavras do nome da empresa genéricas demais pra servir de filtro sozinhas
+# (ex: "Banco do Brasil" -> "banco" apareceria em qualquer notícia de banco)
+_STOPWORDS_EMPRESA = {
+    "do", "da", "de", "das", "dos", "e", "s.a", "sa", "ltda", "grupo",
+    "banco", "companhia", "cia", "brasil", "brasileira", "holding", "participacoes",
+}
+
+def _parse_data_noticia(data_str):
+    """
+    Converte a data de uma notícia (RSS = RFC 822, Atom = ISO 8601) num
+    datetime de verdade — antes o código só cortava a string pros
+    primeiros 16 caracteres, sem nunca comparar datas de verdade, o que
+    permitia notícia de meses atrás aparecer misturada com as recentes.
+    Devolve None se não conseguir interpretar (nesse caso a notícia é
+    descartada por segurança, não fica um formato de data estranho na tela).
+    """
+    if not data_str:
+        return None
+    data_str = data_str.strip()
+    try:
+        dt = parsedate_to_datetime(data_str)  # RFC 822: "Wed, 04 Mar 2026 10:30:00 +0000"
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (TypeError, ValueError):
+        pass
+    try:
+        dt = datetime.fromisoformat(data_str.replace("Z", "+00:00"))  # ISO 8601 (Atom)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        pass
+    return None
+
+def _termos_relevantes_empresa(nome_empresa):
+    """Palavras do nome da empresa que servem de filtro sozinhas — exclui
+    conectores e termos genéricos demais (seção 'Banco'/'Grupo'/etc)."""
+    if not nome_empresa:
+        return []
+    palavras = nome_empresa.lower().replace(".", "").replace(",", "").split()
+    return [p for p in palavras if p not in _STOPWORDS_EMPRESA and len(p) > 2]
+
+def _texto_menciona_ativo(texto, ticker, nome_empresa):
+    """
+    Confere se um texto realmente é sobre o ativo — antes só checava a
+    PRIMEIRA palavra do nome da empresa, o que gerava falso positivo em
+    nomes com palavra inicial genérica ("Banco do Brasil" -> "banco" bate
+    em qualquer notícia de banco). Agora exige o ticker, o nome completo,
+    ou uma palavra realmente específica do nome (não genérica).
+    """
+    texto = texto.lower()
+    ticker_lower = ticker.lower()
+    if ticker_lower in texto:
+        return True
+    nome_completo = (nome_empresa or "").lower().strip()
+    if nome_completo and nome_completo in texto:
+        return True
+    termos = _termos_relevantes_empresa(nome_empresa)
+    return any(t in texto for t in termos)
+
 def _parse_rss(content, ticker, nome_empresa, max_items=3):
-    """Parseia XML RSS e filtra por ticker/nome."""
-    noticias = []
+    """
+    Parseia XML RSS/Atom, filtra por ticker/nome, descarta notícia sem
+    data interpretável ou mais velha que DIAS_MAX_NOTICIA, e ordena da
+    mais recente pra mais antiga antes de cortar pros max_items — antes
+    pegava os primeiros itens que batiam no filtro, na ordem crua do
+    feed, sem checar se eram realmente recentes.
+    """
+    candidatas = []
     try:
         root = ET.fromstring(content)
         ns = {"atom": "http://www.w3.org/2005/Atom"}
         items = root.findall(".//item") or root.findall(".//atom:entry", ns)
-        ticker_lower = ticker.lower()
-        nome_lower = nome_empresa.lower().split()[0] if nome_empresa else ticker_lower
+        agora = datetime.now(timezone.utc)
+        limite_antiguidade = agora - timedelta(days=DIAS_MAX_NOTICIA)
+
         for item in items[:30]:
             titulo = (item.findtext("title") or item.findtext("atom:title", namespaces=ns) or "").strip()
             link   = (item.findtext("link")  or item.findtext("atom:link",  namespaces=ns) or "").strip()
             desc   = (item.findtext("description") or item.findtext("atom:summary", namespaces=ns) or "").strip()
-            data   = (item.findtext("pubDate") or item.findtext("atom:published", namespaces=ns) or "").strip()
-            texto  = (titulo + " " + desc).lower()
-            if ticker_lower in texto or nome_lower in texto:
-                noticias.append({
-                    "titulo": titulo[:120],
-                    "link": link,
-                    "data": data[:16],
-                    "resumo": desc[:200]
-                })
-            if len(noticias) >= max_items:
-                break
+            data_raw = (item.findtext("pubDate") or item.findtext("atom:published", namespaces=ns) or "").strip()
+
+            texto = titulo + " " + desc
+            if not _texto_menciona_ativo(texto, ticker, nome_empresa):
+                continue
+
+            data_dt = _parse_data_noticia(data_raw)
+            if data_dt is None or data_dt < limite_antiguidade:
+                continue  # sem data confiável, ou velha demais — descarta
+
+            candidatas.append({
+                "titulo": titulo[:120],
+                "link": link,
+                "data": data_dt.strftime("%d/%m/%Y %H:%M"),
+                "resumo": desc[:200],
+                "_data_dt": data_dt,  # só pra ordenar, removido antes de devolver
+            })
     except Exception:
         pass
-    return noticias
 
-def _buscar_google_news(ticker, nome_empresa, max_items=3):
-    """Google News RSS — sempre filtra por ticker+nome, muito atualizado."""
-    try:
-        query = f"{ticker} {nome_empresa.split()[0] if nome_empresa else ticker}"
-        url = f"https://news.google.com/rss/search?q={requests.utils.quote(query)}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
-        resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-        if resp.status_code == 200:
-            return _parse_rss(resp.content, ticker, nome_empresa, max_items)
-    except Exception as e:
-        print(f"  ⚠️ Google News {ticker}: {e}")
-    return []
+    candidatas.sort(key=lambda n: n["_data_dt"], reverse=True)
+    for n in candidatas:
+        del n["_data_dt"]
+    return candidatas[:max_items]
 
 def buscar_noticias_rss(ticker, nome_empresa, fontes):
     """
     Busca notícias de cada fonte RSS configurada.
     - Se a URL da fonte contém {ticker}, substitui e filtra normalmente.
     - Se a URL é genérica (sem {ticker}), filtra os itens pelo ticker/nome.
-    - Google News é sempre usado como complemento para garantir notícias recentes.
+    - Se a fonte configurada não trouxer NADA, o frame correspondente
+      fica vazio de propósito ("sem notícias recentes") — NUNCA
+      substitui silenciosamente por outra fonte disfarçada do nome
+      configurado (isso já causou notícia errada aparecendo como se
+      fosse do site configurado, e a MESMA notícia repetida em vários
+      frames quando várias fontes falhavam ao mesmo tempo).
     """
     noticias_por_fonte = {}
     hdrs = {"User-Agent": "Mozilla/5.0"}
@@ -145,11 +219,7 @@ def buscar_noticias_rss(ticker, nome_empresa, fontes):
         except Exception as e:
             print(f"  ⚠️ RSS {fonte['nome']}: {e}")
 
-        # Se não encontrou notícias pela URL configurada, tenta Google News filtrado
-        if not noticias:
-            noticias = _buscar_google_news(ticker, nome_empresa)
-
-        noticias_por_fonte[fonte["nome"]] = noticias[:3]
+        noticias_por_fonte[fonte["nome"]] = noticias
 
     return noticias_por_fonte
 
