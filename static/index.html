@@ -7502,6 +7502,68 @@ let _painelCo = null;
 let _jaiaHistorico = []; // histórico de conversa da AJIA por sessão
 let _jaiaContexto = null; // contexto do ativo para a AJIA
 
+async function abrirDetalheJanusScore(ticker){
+  const r = await fetch(`/api/janus/score/${ticker}`);
+  const d = await r.json();
+  const score = d.janus_score?.overall_score;
+  if(d.erro || score === null || score === undefined) return;
+
+  const classificacao = d.janus_score.classification || janusClassificacaoPorScore(score);
+  const slug = ji_classSlug(classificacao);
+  const cores = {'muito-favoravel':'#16a34a','favoravel':'#22c55e','neutro':'#f59e0b','desfavoravel':'#f97316','muito-desfavoravel':'#e53935'};
+  const cor = cores[slug] || '#64748b';
+
+  const breakdown = d.quality_breakdown || [];
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;max-width:440px;width:100%;padding:1.5rem;box-shadow:0 16px 48px rgba(0,0,0,.3);max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <div>
+          <div style="font-size:16px;font-weight:700">🎯 Janus Score — ${ticker}</div>
+          <div style="font-size:12px;color:var(--text3)">Quanto maior, mais favorável</div>
+        </div>
+        <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text3)">✕</button>
+      </div>
+
+      <!-- Score principal -->
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;padding:1rem;background:var(--bg);border-radius:12px">
+        <div style="font-size:48px;font-weight:800;color:${cor}">${score.toFixed(1)}</div>
+        <div>
+          <div style="font-size:15px;font-weight:700;color:${cor}">${classificacao}</div>
+          <div style="background:var(--card);border-radius:20px;height:8px;width:160px;overflow:hidden;margin-top:6px">
+            <div style="height:100%;width:${score}%;background:linear-gradient(90deg,#e53935,#f59e0b,#16a34a);border-radius:20px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detalhamento por indicador -->
+      ${breakdown.length ? `<div style="display:flex;flex-direction:column;gap:8px">
+        ${breakdown.map(item=>{
+          if(item.valor === null) return `<div style="font-size:11px;color:var(--text3)">${item.label} (peso ${item.peso_pct}%): sem dado disponível</div>`;
+          const pct = item.score_normalizado;
+          const corPts = pct>=66?'#16a34a':pct>=33?'#f59e0b':'#e53935';
+          return `<div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:12px">
+              <span>${item.label} <span style="color:var(--text3)">(peso ${item.peso_pct}%)</span></span>
+              <span style="color:var(--text3)">${item.valor}% → <strong style="color:${corPts}">${item.score_normalizado.toFixed(0)}/100</strong></span>
+            </div>
+            <div style="background:var(--bg);border-radius:4px;height:5px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${corPts};border-radius:4px"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>` : `<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">Detalhamento indisponível para este ativo.</div>`}
+
+      <div style="margin-top:1rem;font-size:11px;color:var(--text3);padding:8px;background:var(--bg);border-radius:8px">
+        Janus Score = ROE (30%) + ROIC (25%) + Margem Líquida (25%) + Crescimento de Receita (20%) — hoje representa só o <strong>Quality Engine</strong> (qualidade fundamentalista). O Score de Risco 🛡️ e o ranking de Dividendos são calculados separadamente e ainda não entram nesta nota.
+      </div>
+    </div>`;
+  modal.onclick = ()=>modal.remove();
+  document.body.appendChild(modal);
+}
+
 async function abrirDetalheRisco(ticker){
   const r = await fetch(`/api/risco/${ticker}`);
   const d = await r.json();
@@ -7599,7 +7661,7 @@ async function abrirGrafico(ticker){
   const badgeEl = document.getElementById('modal-janus-badge');
   if(janusItem?.score !== null && janusItem?.score !== undefined){
     const slug = ji_classSlug(janusClassificacaoPorScore(janusItem.score));
-    badgeEl.innerHTML = `<span class="ji-score-badge ji-score-${slug}" title="Janus Score">${janusItem.score.toFixed(1)}</span>`;
+    badgeEl.innerHTML = `<span class="ji-score-badge ji-score-${slug}" title="Ver detalhamento do Janus Score" onclick="abrirDetalheJanusScore('${ticker}')" style="cursor:pointer">${janusItem.score.toFixed(1)}</span>`;
     badgeEl.style.display = 'block';
   } else {
     badgeEl.style.display = 'none';
