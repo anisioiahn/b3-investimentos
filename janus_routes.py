@@ -10,6 +10,51 @@ import psycopg2.extras, os, threading
 import db
 from flask import jsonify, request
 from datetime import datetime, timezone, timedelta
+from janus_collector import BENCHMARKS, PESOS
+
+# Rótulos amigáveis pros indicadores do Quality Engine — só exibição,
+# não influencia o cálculo (que usa exclusivamente BENCHMARKS/PESOS
+# importados do coletor, garantindo que a tela de transparência nunca
+# possa divergir do número real).
+LABELS_INDICADOR = {
+    "FIN_ROE": "ROE (Retorno sobre Patrimônio)",
+    "FIN_ROIC": "ROIC (Retorno sobre Capital Investido)",
+    "FIN_NET_MARGIN": "Margem Líquida",
+    "FIN_REVENUE_GROWTH": "Crescimento de Receita",
+}
+
+def _montar_quality_breakdown(indicadores):
+    """
+    Reconstrói o detalhamento do Quality Engine (score, peso, contribuição
+    de cada indicador) usando os MESMOS BENCHMARKS/PESOS do coletor —
+    nunca hard-coda esses números aqui, pra garantir que a tela de
+    transparência do Janus Score sempre bate com o valor real calculado.
+    """
+    # indicadores vem ordenado por reference_date DESC — pega o mais
+    # recente de cada código
+    mais_recente = {}
+    for ind in indicadores:
+        code = ind["indicator_code"]
+        if code not in mais_recente:
+            mais_recente[code] = ind
+
+    breakdown = []
+    for code, peso in PESOS.items():
+        ind = mais_recente.get(code)
+        b = BENCHMARKS.get(code)
+        if not b:
+            continue
+        item = {
+            "codigo": code, "label": LABELS_INDICADOR.get(code, code),
+            "peso_pct": round(peso * 100, 1), "valor": None, "score_normalizado": None,
+        }
+        if ind and ind.get("raw_value") is not None:
+            valor = float(ind["raw_value"])
+            norm = max(0.0, min(100.0, (valor - b["min"]) / (b["max"] - b["min"]) * 100))
+            item["valor"] = round(valor * 100, 2)  # indicadores são fração (0.15 = 15%), exibe em %
+            item["score_normalizado"] = round(norm, 1)
+        breakdown.append(item)
+    return breakdown
 
 TZ_BRASILIA = timezone(timedelta(hours=-3))
 def agora():    return datetime.now(TZ_BRASILIA)
@@ -331,7 +376,8 @@ Escreva em português, tom profissional mas acessível, destacando os pontos for
                 "janus_score":   score if isinstance(score, dict) else (dict(score) if score else None),
                 "engine_scores": engine_scores,
                 "indicadores":   indicadores,
-                "historico":     historico
+                "historico":     historico,
+                "quality_breakdown": _montar_quality_breakdown(indicadores),
             })
         except Exception as e:
             return jsonify({"erro": str(e)}), 500
