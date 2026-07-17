@@ -2320,9 +2320,11 @@ function exportarLog(){
 
 // ── DADOS ────────────────────────────────────────────────────
 let dadosCarregados=false;
-async function carregarDados(){
+async function carregarDados(tentativa=1){
+  const MAX_TENTATIVAS = 3;
   try{
     const r=await fetch('/api/cotacoes');
+    if(!r.ok) throw new Error(`HTTP ${r.status}`); // resposta não-2xx (ex: 502 durante cold start do Render)
     const novo=await r.json();
     const temEmpresas=novo.setores&&Object.values(novo.setores).some(s=>s.empresas&&s.empresas.length>0);
     if(!temEmpresas){
@@ -2346,6 +2348,18 @@ async function carregarDados(){
     if(_paginaAtiva !== 'carteira') { renderAlerts(); updateAltCnt(); }
     if(_paginaAtiva === 'cockpit'){ renderCockpit(); calcularJanusPulse(); }
   }catch(e){
+    // Retry automático com backoff — cobre o caso comum de "primeira carga
+    // logo após o servidor acordar de inatividade no Render" (1 worker só),
+    // onde a rajada de chamadas simultâneas do carregamento inicial pode
+    // esbarrar num 502/timeout passageiro. Clicar "Atualizar" manualmente
+    // já resolvia isso porque, na 2ª tentativa, o servidor já está de pé —
+    // isso automatiza exatamente esse mesmo comportamento.
+    if(tentativa < MAX_TENTATIVAS){
+      document.getElementById('status-txt').textContent = `Reconectando... (${tentativa}/${MAX_TENTATIVAS})`;
+      const espera = tentativa * 1500; // 1.5s, 3s
+      setTimeout(() => carregarDados(tentativa + 1), espera);
+      return;
+    }
     document.getElementById('status-txt').textContent='Erro de conexão';
     document.getElementById('sdot').className='dot err';
   }
