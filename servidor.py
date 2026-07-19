@@ -2497,7 +2497,13 @@ def api_detalhe(ticker):
 @app.route("/api/noticias/<ticker>")
 @requer_auth
 def api_noticias(ticker):
-    nome = next((e["nome"] for s in _cache.get("setores",{}).values() for e in s["empresas"] if e["ticker"]==ticker.upper()),ticker)
+    # Prioriza o nome curado no banco (tabela companies) sobre o nome
+    # bruto do cache de cotações — o cache reflete o "name" que a Brapi
+    # devolveu no cadastro, que pode estar ausente/errado (foi o caso da
+    # AXIA3 e ~28 outros tickers, principalmente fracionários e BDRs).
+    nome_banco = db.db_obter_nome_empresa(ticker.upper())
+    nome_cache = next((e["nome"] for s in _cache.get("setores",{}).values() for e in s["empresas"] if e["ticker"]==ticker.upper()),ticker)
+    nome = nome_banco or nome_cache
     noticias = buscar_noticias_rss(ticker.upper(), nome, get_fontes())
     rec = gerar_recomendacao(ticker.upper(), nome, noticias)
     return jsonify({"ticker":ticker.upper(),"nome":nome,"noticias":noticias,"recomendacao":rec})
