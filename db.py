@@ -580,6 +580,31 @@ def db_listar_todos_alertas():
     except: return []
 
 # ── CARTEIRA por usuário ───────────────────────────────────────
+def db_obter_nome_empresa(ticker):
+    """
+    Nome da empresa (trading_name) a partir do ticker, direto da tabela
+    companies — fonte mais confiável que o campo 'nome' do cache de
+    cotações em memória (que reflete o 'name' bruto que a Brapi devolveu
+    no momento do cadastro, e pode estar ausente/errado pra fracionários,
+    BDRs e tickers recém-renomeados — foi exatamente o caso da AXIA3,
+    corrigida manualmente no banco depois de descoberta via notícias
+    que não apareciam). Usada pela rota de notícias em vez do cache.
+    """
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT c.trading_name FROM assets a
+                JOIN companies c ON c.company_id = a.company_id
+                WHERE a.ticker = %s
+            """, (ticker.upper(),))
+            row = cur.fetchone()
+        conn.close()
+        return row[0] if row and row[0] else None
+    except Exception as e:
+        print(f"[DB] Erro ao obter nome da empresa: {e}")
+        return None
+
 def db_listar_carteira(uid):
     """Retorna TODAS as posições (confirmadas e pendentes). O front separa por 'status'."""
     try:
