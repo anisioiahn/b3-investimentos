@@ -1878,7 +1878,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div style="border-top:1px solid var(--border);margin:1.5rem 0"></div>
       <div class="params-section">
         <div class="params-title">⚙️ Fontes de Notícias</div>
-        <div class="params-desc">Configure as 3 fontes de notícias que aparecerão no painel de análise de cada ativo. Use <code>{ticker}</code> na URL para substituição automática pelo ticker da ação.</div>
+        <div class="params-desc">Configure as 3 fontes de notícias que aparecerão no painel de análise de cada ativo. Use <code>{ticker}</code> na URL pra sites organizados por ticker (ex: petr4), ou <code>{slug}</code> pra sites organizados pelo nome da empresa (ex: InfoMoney usa <code>/tudo-sobre/axia/</code>, não <code>/tudo-sobre/axia3/</code> — nesse caso use <code>{slug}</code>).</div>
         <div id="fontes-config"></div>
         <button class="save-btn" onclick="salvarFontes()">💾 Salvar configurações</button>
         <div class="save-msg" id="save-msg">✅ Configurações salvas!</div>
@@ -8868,7 +8868,7 @@ function renderFontes(){
         <div class="fonte-num">${i+1}</div>
         <input class="fonte-nome-inp" id="fonte-nome-${i}" value="${f.nome}" placeholder="Nome da fonte">
       </div>
-      <input class="fonte-url-inp" id="fonte-url-${i}" value="${f.url}" placeholder="URL do RSS (use {ticker} para substituição automática)">
+      <input class="fonte-url-inp" id="fonte-url-${i}" value="${f.url}" placeholder="URL do RSS (use {ticker} ou {slug} para substituição automática)">
       <div class="fonte-hint">Exemplo Infomoney: https://www.infomoney.com.br/tudo-sobre/{ticker}/feed/</div>
     </div>`).join('');
 }
