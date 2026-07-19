@@ -122,7 +122,16 @@ def upsert_assets_batch(conn, lista, on_progress=None):
         for stock in mini_lote:
             ticker = stock.get("stock") or stock.get("symbol")
             if not ticker: continue
-            nome  = stock.get("name", ticker)
+            nome_brapi = stock.get("name")
+            if not nome_brapi:
+                # Brapi não devolveu nome pra este ticker — cair pro próprio
+                # ticker como nome quebra qualquer busca de notícia por nome
+                # de empresa depois (já aconteceu com AXIA3/AXIA7 e outros
+                # ~25 tickers, principalmente fracionários "F" e BDRs "34").
+                # Cadastra mesmo assim (senão o ativo nem aparece), mas avisa
+                # alto no log pra dar pra corrigir manualmente rápido.
+                print(f"[COLLECTOR] ⚠️ Brapi sem 'name' para {ticker} — usando o ticker como nome temporário, corrigir manualmente depois", flush=True)
+            nome  = nome_brapi or ticker
             setor = stock.get("sector")
             ticker_para_nome[ticker] = nome
             if nome not in vistos:
