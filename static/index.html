@@ -1879,9 +1879,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div class="params-section">
         <div class="params-title">⚙️ Fontes de Notícias</div>
         <div class="params-desc">Configure as 3 fontes de notícias que aparecerão no painel de análise de cada ativo.
-          <strong>Recomendado:</strong> pra sites WordPress (a maioria dos portais de notícias financeiras), use a busca nativa do próprio site —
-          <code>https://SITE/?s={ticker}&feed=rss2&orderby=date&order=DESC</code> — funciona pra qualquer ticker sem precisar acertar nome de empresa nem página de tag.
-          Alternativas: <code>{ticker}</code> (ticker minúsculo) e <code>{slug}</code>/<code>{slug_curto}</code> (nome da empresa) pra sites que exigem URL de tag/categoria específica (ex: <code>/tudo-sobre/{slug}/feed/</code>).
+          <strong>Recomendado (1ª opção):</strong> API REST nativa do WordPress —
+          <code>https://SITE/wp-json/wp/v2/posts?search={ticker}&per_page=10&orderby=date&order=desc</code> —
+          funciona pra qualquer ticker sem depender do nome da empresa estar bem cadastrado. Confirmado funcionando no InfoMoney e Money Times.
+          <strong>2ª opção</strong> (se o site não tiver API REST habilitada): busca RSS —
+          <code>https://SITE/?s={ticker}&feed=rss2&orderby=date&order=DESC</code> — <em>atenção: em alguns sites (ex: Money Times) esse RSS não filtra de verdade,
+          devolvendo os posts mais recentes do site inteiro ignorando a busca — teste antes de confiar nele.</em>
+          <strong>3ª opção</strong> (sites sem busca funcional): página de tag/categoria da empresa, usando <code>{slug}</code> (nome completo) ou <code>{slug_curto}</code> (1ª palavra) —
+          ex: <code>/tudo-sobre/{slug}/feed/</code> — mas essa depende do nome da empresa estar cadastrado corretamente no banco.
         </div>
         <div id="fontes-config"></div>
         <button class="save-btn" onclick="salvarFontes()">💾 Salvar configurações</button>
