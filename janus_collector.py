@@ -118,15 +118,23 @@ def upsert_assets_batch(conn, lista, on_progress=None):
     for i in range(0, total, 50):
         mini_lote = lista[i:i+50]
 
-        # Primeiro passe: descobre quais tickers vieram sem nome da Brapi
-        # nesse mini-lote, ANTES de decidir se cria linha de empresa fallback
-        # pra eles — evita criar empresa órfã "AXIA3" quando o ativo já tem
-        # uma ligação boa (nome de verdade) que não deve ser tocada.
+        # Primeiro passe: descobre quais tickers vieram sem nome REAL da
+        # Brapi nesse mini-lote, ANTES de decidir se cria linha de empresa
+        # fallback pra eles — evita criar empresa órfã "AXIA3" quando o
+        # ativo já tem uma ligação boa (nome de verdade) que não deve ser
+        # tocada. IMPORTANTE: "sem nome real" não é só campo ausente/vazio —
+        # a Brapi às vezes devolve o PRÓPRIO TICKER no campo "name" (ex:
+        # {"stock": "AXIA3", "name": "AXIA3", ...}), que passa no teste
+        # bool() mas não é um nome de empresa de verdade nenhum. Confirmado
+        # ao vivo pra AXIA3/AXIA3F/AXIA7/AXIA7F — todos os 4 com name=ticker.
+        def _nome_e_valido(nome, ticker):
+            return bool(nome) and nome.strip().upper() != ticker.upper()
+
         ticker_teve_nome_real = {}
         for stock in mini_lote:
             ticker = stock.get("stock") or stock.get("symbol")
             if not ticker: continue
-            ticker_teve_nome_real[ticker] = bool(stock.get("name"))
+            ticker_teve_nome_real[ticker] = _nome_e_valido(stock.get("name"), ticker)
 
         tickers_sem_nome_real = [t for t, teve in ticker_teve_nome_real.items() if not teve]
         tickers_com_link_bom = set()
@@ -147,19 +155,21 @@ def upsert_assets_batch(conn, lista, on_progress=None):
             ticker = stock.get("stock") or stock.get("symbol")
             if not ticker: continue
             nome_brapi = stock.get("name")
-            if not nome_brapi and ticker in tickers_com_link_bom:
+            nome_valido = _nome_e_valido(nome_brapi, ticker)
+            if not nome_valido and ticker in tickers_com_link_bom:
                 # Já tem ligação boa no banco — nem cria a empresa fallback
                 # órfã, nem mexe no ativo (ver o filtro de assets_rows abaixo)
                 continue
-            if not nome_brapi:
-                # Brapi não devolveu nome pra este ticker — cair pro próprio
-                # ticker como nome quebra qualquer busca de notícia por nome
-                # de empresa depois (já aconteceu com AXIA3/AXIA7 e outros
-                # ~25 tickers, principalmente fracionários "F" e BDRs "34").
-                # Cadastra mesmo assim (senão o ativo nem aparece), mas avisa
-                # alto no log pra dar pra corrigir manualmente rápido.
-                print(f"[COLLECTOR] ⚠️ Brapi sem 'name' para {ticker} — usando o ticker como nome temporário, corrigir manualmente depois", flush=True)
-            nome  = nome_brapi or ticker
+            if not nome_valido:
+                # Brapi não devolveu nome de verdade pra este ticker (campo
+                # ausente OU igual ao próprio ticker) — cair pro ticker como
+                # nome quebra qualquer busca de notícia por nome de empresa
+                # depois (já aconteceu com AXIA3/AXIA7 e outros ~25 tickers,
+                # principalmente fracionários "F" e BDRs "34"). Cadastra
+                # mesmo assim (senão o ativo nem aparece), mas avisa alto no
+                # log pra dar pra corrigir manualmente rápido.
+                print(f"[COLLECTOR] ⚠️ Brapi sem nome de verdade para {ticker} (veio: {nome_brapi!r}) — usando o ticker como nome temporário, corrigir manualmente depois", flush=True)
+            nome  = nome_brapi if nome_valido else ticker
             setor = stock.get("sector")
             ticker_para_nome[ticker] = nome
             if nome not in vistos:
