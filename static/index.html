@@ -1878,7 +1878,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div style="border-top:1px solid var(--border);margin:1.5rem 0"></div>
       <div class="params-section">
         <div class="params-title">⚙️ Fontes de Notícias</div>
-        <div class="params-desc">Configure as 3 fontes de notícias que aparecerão no painel de análise de cada ativo. Use <code>{ticker}</code> na URL pra sites organizados por ticker (ex: petr4), ou <code>{slug}</code> pra sites organizados pelo nome da empresa (ex: InfoMoney usa <code>/tudo-sobre/axia/</code>, não <code>/tudo-sobre/axia3/</code> — nesse caso use <code>{slug}</code>).</div>
+        <div class="params-desc">Configure as 3 fontes de notícias que aparecerão no painel de análise de cada ativo.
+          <strong>Recomendado:</strong> pra sites WordPress (a maioria dos portais de notícias financeiras), use a busca nativa do próprio site —
+          <code>https://SITE/?s={ticker}&feed=rss2&orderby=date&order=DESC</code> — funciona pra qualquer ticker sem precisar acertar nome de empresa nem página de tag.
+          Alternativas: <code>{ticker}</code> (ticker minúsculo) e <code>{slug}</code>/<code>{slug_curto}</code> (nome da empresa) pra sites que exigem URL de tag/categoria específica (ex: <code>/tudo-sobre/{slug}/feed/</code>).
+        </div>
         <div id="fontes-config"></div>
         <button class="save-btn" onclick="salvarFontes()">💾 Salvar configurações</button>
         <div class="save-msg" id="save-msg">✅ Configurações salvas!</div>
