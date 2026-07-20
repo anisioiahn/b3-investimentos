@@ -118,11 +118,39 @@ def upsert_assets_batch(conn, lista, on_progress=None):
     for i in range(0, total, 50):
         mini_lote = lista[i:i+50]
 
+        # Primeiro passe: descobre quais tickers vieram sem nome da Brapi
+        # nesse mini-lote, ANTES de decidir se cria linha de empresa fallback
+        # pra eles — evita criar empresa órfã "AXIA3" quando o ativo já tem
+        # uma ligação boa (nome de verdade) que não deve ser tocada.
+        ticker_teve_nome_real = {}
+        for stock in mini_lote:
+            ticker = stock.get("stock") or stock.get("symbol")
+            if not ticker: continue
+            ticker_teve_nome_real[ticker] = bool(stock.get("name"))
+
+        tickers_sem_nome_real = [t for t, teve in ticker_teve_nome_real.items() if not teve]
+        tickers_com_link_bom = set()
+        if tickers_sem_nome_real:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT a.ticker FROM assets a
+                        JOIN companies c ON c.company_id = a.company_id
+                        WHERE a.ticker = ANY(%s) AND UPPER(c.trading_name) != a.ticker
+                    """, (tickers_sem_nome_real,))
+                    tickers_com_link_bom = {r[0] for r in cur.fetchall()}
+            except Exception as e:
+                print(f"[COLLECTOR] ⚠️ Erro ao checar ligações existentes: {e}", flush=True)
+
         companies_rows, vistos, ticker_para_nome = [], set(), {}
         for stock in mini_lote:
             ticker = stock.get("stock") or stock.get("symbol")
             if not ticker: continue
             nome_brapi = stock.get("name")
+            if not nome_brapi and ticker in tickers_com_link_bom:
+                # Já tem ligação boa no banco — nem cria a empresa fallback
+                # órfã, nem mexe no ativo (ver o filtro de assets_rows abaixo)
+                continue
             if not nome_brapi:
                 # Brapi não devolveu nome pra este ticker — cair pro próprio
                 # ticker como nome quebra qualquer busca de notícia por nome
@@ -154,6 +182,8 @@ def upsert_assets_batch(conn, lista, on_progress=None):
                     for stock in mini_lote:
                         ticker = stock.get("stock") or stock.get("symbol")
                         if not ticker: continue
+                        if ticker in tickers_com_link_bom:
+                            continue  # já tem ligação melhor no banco — não desfaz
                         company_id = nome_para_company_id.get(ticker_para_nome[ticker])
                         if company_id is None: continue
                         assets_rows.append((ticker, company_id, agora_str()))
