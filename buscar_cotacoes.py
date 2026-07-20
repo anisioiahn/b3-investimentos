@@ -227,21 +227,76 @@ def _slugificar_primeira_palavra(nome_empresa):
     primeira = nome_empresa.strip().split()[0] if nome_empresa.strip() else ""
     return _slugificar_nome(primeira)
 
+def _parse_wp_rest_json(conteudo_json, ticker, nome_empresa, max_items=3):
+    """
+    Parseia a resposta da API REST nativa do WordPress
+    (/wp-json/wp/v2/posts?search=...) — alternativa ao RSS de busca
+    (?s=...&feed=rss2) para sites onde esse RSS não filtra de verdade
+    (confirmado no Money Times: RSS de busca sempre devolvia os posts
+    mais recentes do site inteiro, ignorando o termo buscado; a API
+    REST filtra corretamente). Mesma lógica de filtro/data/ordenação
+    do _parse_rss, só a extração dos campos é diferente (JSON, não XML).
+    """
+    import json as _json
+    candidatas = []
+    try:
+        posts = _json.loads(conteudo_json)
+        if not isinstance(posts, list):
+            return []
+        agora = datetime.now(timezone.utc)
+        limite_antiguidade = agora - timedelta(days=DIAS_MAX_NOTICIA)
+
+        for post in posts:
+            titulo = (post.get("title", {}) or {}).get("rendered", "").strip()
+            link = post.get("link", "").strip()
+            desc = (post.get("content", {}) or {}).get("rendered", "") or \
+                   (post.get("excerpt", {}) or {}).get("rendered", "")
+            data_raw = post.get("date_gmt") or post.get("date") or ""
+
+            texto = titulo + " " + desc
+            if not _texto_menciona_ativo(texto, ticker, nome_empresa):
+                continue
+
+            # date_gmt vem sem sufixo de fuso ("2026-07-20T20:53:35") — é UTC
+            data_dt = _parse_data_noticia(data_raw + "+00:00" if data_raw and "+" not in data_raw and "Z" not in data_raw else data_raw)
+            if data_dt is None or data_dt < limite_antiguidade:
+                continue
+
+            candidatas.append({
+                "titulo": titulo[:120],
+                "link": link,
+                "data": data_dt.strftime("%d/%m/%Y %H:%M"),
+                "resumo": desc[:200],
+                "_data_dt": data_dt,
+            })
+    except Exception:
+        pass
+
+    candidatas.sort(key=lambda n: n["_data_dt"], reverse=True)
+    for n in candidatas:
+        del n["_data_dt"]
+    return candidatas[:max_items]
+
 def buscar_noticias_rss(ticker, nome_empresa, fontes):
     """
-    Busca notícias de cada fonte RSS configurada.
+    Busca notícias de cada fonte configurada.
     - {ticker} na URL vira o ticker em minúsculo (ex: petr4).
     - {slug} na URL vira o nome da empresa "slugificado" (ex: axia-energia)
       — use isso pra fontes que organizam conteúdo por nome da empresa,
       não por ticker (é o caso do InfoMoney, por exemplo).
-    - Se a URL é genérica (sem {ticker}/{slug}), filtra os itens pelo
+    - {slug_curto} = só a 1ª palavra do nome, pra sites que taggeiam só
+      pelo nome curto/comercial (ex: Money Times usa /tag/axia/, não
+      /tag/axia-energia/).
+    - Se a URL contém "/wp-json/", usa o parser de API REST (JSON) em
+      vez do parser de RSS (XML) — mais confiável pra busca por ticker
+      em sites onde o RSS de busca (?s=...&feed=rss2) não filtra de
+      verdade (confirmado no Money Times).
+    - Se a URL é genérica (sem placeholder nenhum), filtra os itens pelo
       ticker/nome depois de buscar.
     - Se a fonte configurada não trouxer NADA, o frame correspondente
       fica vazio de propósito ("sem notícias recentes") — NUNCA
       substitui silenciosamente por outra fonte disfarçada do nome
-      configurado (isso já causou notícia errada aparecendo como se
-      fosse do site configurado, e a MESMA notícia repetida em vários
-      frames quando várias fontes falhavam ao mesmo tempo).
+      configurado.
     """
     noticias_por_fonte = {}
     hdrs = {"User-Agent": "Mozilla/5.0"}
@@ -256,7 +311,10 @@ def buscar_noticias_rss(ticker, nome_empresa, fontes):
             if url_rss:
                 resp = requests.get(url_rss, timeout=10, headers=hdrs)
                 if resp.status_code == 200:
-                    noticias = _parse_rss(resp.content, ticker, nome_empresa)
+                    if "/wp-json/" in url_rss:
+                        noticias = _parse_wp_rest_json(resp.content, ticker, nome_empresa)
+                    else:
+                        noticias = _parse_rss(resp.content, ticker, nome_empresa)
                 else:
                     # Log específico pra status != 200 — ajuda a detectar
                     # URL de fonte mal configurada (como o caso do InfoMoney
