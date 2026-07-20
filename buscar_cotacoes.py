@@ -203,8 +203,10 @@ def _slugificar_nome(nome_empresa):
     ATENÇÃO: isso é uma aproximação (nome completo, minúsculo, hífens).
     Alguns sites usam só a primeira palavra do nome como tag (ex:
     InfoMoney tem tanto /tudo-sobre/axia/ quanto /tudo-sobre/axia-energia/
-    como páginas válidas e diferentes) — vale conferir manualmente qual
-    delas tem mais conteúdo antes de configurar a URL de uma fonte nova.
+    como páginas válidas; já o Money Times só tem /tag/axia/, não
+    /tag/axia-energia/) — pra esse segundo caso use {slug_curto} em vez
+    de {slug} na URL da fonte. Vale conferir manualmente qual delas tem
+    mais conteúdo antes de configurar a URL de uma fonte nova.
     """
     if not nome_empresa:
         return ""
@@ -213,6 +215,17 @@ def _slugificar_nome(nome_empresa):
     texto = re.sub(r"[^a-z0-9\s-]", "", texto)
     texto = re.sub(r"\s+", "-", texto)
     return texto
+
+def _slugificar_primeira_palavra(nome_empresa):
+    """
+    Slug de só a primeira palavra do nome — alguns sites (ex: Money
+    Times) taggeiam empresas só pelo nome curto/comercial, não pelo
+    nome completo. 'Axia Energia' -> 'axia', 'Petróleo Brasileiro' -> 'petroleo'.
+    """
+    if not nome_empresa:
+        return ""
+    primeira = nome_empresa.strip().split()[0] if nome_empresa.strip() else ""
+    return _slugificar_nome(primeira)
 
 def buscar_noticias_rss(ticker, nome_empresa, fontes):
     """
@@ -239,6 +252,7 @@ def buscar_noticias_rss(ticker, nome_empresa, fontes):
             url_rss = fonte.get("url", "")
             url_rss = url_rss.replace("{ticker}", ticker.lower())
             url_rss = url_rss.replace("{slug}", _slugificar_nome(nome_empresa))
+            url_rss = url_rss.replace("{slug_curto}", _slugificar_primeira_palavra(nome_empresa))
             if url_rss:
                 resp = requests.get(url_rss, timeout=10, headers=hdrs)
                 if resp.status_code == 200:
@@ -260,6 +274,7 @@ def montar_url_rss(fonte, ticker, nome_empresa=""):
     base = fonte.get("url", "")
     base = base.replace("{ticker}", ticker.lower())
     base = base.replace("{slug}", _slugificar_nome(nome_empresa))
+    base = base.replace("{slug_curto}", _slugificar_primeira_palavra(nome_empresa))
     return base
 
 def buscar_todas_cotacoes():
