@@ -372,7 +372,7 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
             )
         return jsonify(resposta)
 
-
+    @app.route("/api/fiscal/apuracao/<ano_mes>", methods=["GET"])
     @requer_auth
     def api_fiscal_apuracao(ano_mes):
         salva = db.db_obter_apuracao_mensal(uid(), ano_mes)
