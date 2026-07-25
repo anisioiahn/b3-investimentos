@@ -14,6 +14,7 @@ from flask import jsonify, request, Response
 
 import db
 import fiscal_engine as fe
+from buscar_cotacoes import cor_para_ticker
 
 TZ_BR = timezone(timedelta(hours=-3))
 def hoje(): return datetime.now(TZ_BR).date()
@@ -215,7 +216,7 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
         db.db_criar_operacao(
             uid(), ticker, "VENDA", data_operacao, quantidade, preco_unitario,
             corretora=corretora, categoria_id=categoria_id,
-            observacao="Fiscal — venda registrada",
+            observacao="Fiscal — venda registrada", operacao_fiscal_id=op_fiscal_id,
         )
 
         if pos_carteira:
@@ -256,7 +257,122 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
             )
         return jsonify(resposta)
 
-    @app.route("/api/fiscal/apuracao/<ano_mes>", methods=["GET"])
+    @app.route("/api/fiscal/vendas/<int:operacao_fiscal_id>", methods=["DELETE"])
+    @requer_auth
+    def api_fiscal_excluir_venda(operacao_fiscal_id):
+        """
+        Desfaz uma venda: devolve a quantidade pra Carteira, reverte a
+        posição fiscal (custo médio não muda numa venda — só a
+        quantidade/custo total), remove a operação espelhada do
+        Performance, recalcula a apuração do mês, e registra tudo no
+        log de auditoria. Só permite a venda MAIS RECENTE de cada ticker
+        (ver db_eh_venda_mais_recente_do_ticker) — evita ter que
+        reprocessar um histórico inteiro de compras/vendas posteriores.
+        """
+        op = db.db_obter_operacao_fiscal(uid(), operacao_fiscal_id)
+        if not op:
+            return jsonify({"erro": "Venda não encontrada."}), 404
+        if op["tipo"] != "VENDA":
+            return jsonify({"erro": "Só é possível excluir operações do tipo VENDA."}), 400
+
+        ticker = op["ticker"]
+        if not db.db_eh_venda_mais_recente_do_ticker(uid(), ticker, operacao_fiscal_id):
+            return jsonify({
+                "erro": "venda_nao_e_mais_recente",
+                "mensagem": f"Essa não é a venda mais recente de {ticker}. Só é possível excluir "
+                            f"a venda mais recente de cada ativo, pra manter o custo médio consistente "
+                            f"— exclua as vendas mais novas primeiro, se precisar chegar até essa.",
+            }), 400
+
+        ano_mes = op["data_operacao"][:7]
+        apuracao_existente = db.db_obter_apuracao_mensal(uid(), ano_mes)
+        if apuracao_existente and apuracao_existente.get("status") == "Fechado":
+            return jsonify({
+                "erro": "mes_fechado",
+                "mensagem": f"O mês {ano_mes} está fechado. Reabra-o na Central Fiscal (com um motivo) "
+                            f"antes de excluir uma venda registrada nele.",
+            }), 400
+
+        quantidade_venda = op["quantidade"]
+
+        # 1) Reverte a posição fiscal — venda não altera custo médio,
+        #    só reduz quantidade/custo total, então reverter é somar de volta.
+        #    IMPORTANTE: quando uma venda zera a posição, o motor fiscal
+        #    ZERA o custo_medio também (seção 6 do motor — custo médio de
+        #    zero ações não tem sentido de guardar). Isso significa que,
+        #    ao desfazer uma venda que zerou a posição, NÃO dá pra confiar
+        #    no custo_medio salvo (ele já é 0) — tem que reconstruir a
+        #    partir do custo_base da própria venda sendo desfeita.
+        pos_fiscal = db.db_obter_posicao_fiscal(uid(), ticker)
+        posicao_estava_zerada = not pos_fiscal or pos_fiscal["quantidade"] <= 1e-9
+        if posicao_estava_zerada:
+            custo_medio_revertido = round(op["custo_base"] / quantidade_venda, 2) if op.get("custo_base") else op["preco_unitario"]
+            nova_quantidade = quantidade_venda
+            novo_custo_total = round(nova_quantidade * custo_medio_revertido, 2)
+        else:
+            custo_medio_revertido = pos_fiscal["custo_medio"]
+            nova_quantidade = pos_fiscal["quantidade"] + quantidade_venda
+            novo_custo_total = round(nova_quantidade * custo_medio_revertido, 2)
+        db.db_salvar_posicao_fiscal(uid(), ticker, nova_quantidade, custo_medio_revertido, novo_custo_total)
+
+        # 2) Reverte a Carteira — soma de volta se a posição ainda existe,
+        #    recria com melhor esforço se a venda tinha zerado e removido
+        posicoes_carteira = db.db_listar_carteira(uid())
+        pos_carteira = next((p for p in posicoes_carteira if p["ticker"] == ticker and p.get("status") == "confirmada"), None)
+        if pos_carteira:
+            nova_qtd_carteira = float(pos_carteira["quantidade"]) + quantidade_venda
+            db.db_salvar_posicao(
+                uid(), ticker, pos_carteira["nome"], pos_carteira["cor"],
+                pos_carteira.get("setor_id"), pos_carteira.get("setor_nome"),
+                custo_medio_revertido, nova_qtd_carteira,
+                pos_carteira["data_compra"], pos_carteira.get("corretora"), pos_carteira.get("categoria_id"),
+            )
+        else:
+            nome_empresa = db.db_obter_nome_empresa(ticker) or ticker
+            db.db_salvar_posicao(
+                uid(), ticker, nome_empresa, cor_para_ticker(ticker),
+                None, None, custo_medio_revertido, quantidade_venda,
+                op["data_operacao"], None, op.get("categoria_id"),
+            )
+
+        # 3) Remove a operação espelhada no Performance
+        db.db_excluir_operacao_por_fiscal_id(uid(), operacao_fiscal_id)
+
+        # 4) Remove a operação fiscal em si
+        db.db_excluir_operacao_fiscal(uid(), operacao_fiscal_id)
+
+        # 5) Recalcula a apuração do mês (ou zera se não sobrou nenhuma venda)
+        apuracao_recalculada = _recalcular_e_salvar_mes(uid(), ano_mes, permitir_sobrescrever_fechado=True)
+        if apuracao_recalculada is None:
+            # Não sobrou nenhuma venda nesse mês — a apuração salva
+            # anteriormente ficaria com dado velho/errado se não for limpa
+            db.db_excluir_apuracao_mensal(uid(), ano_mes)
+
+        # 6) Propaga em cascata pros meses seguintes (o saldo de prejuízo/
+        #    imposto acumulado que esse mês alimentava mudou)
+        _, bloqueados = _reprocessar_cascata(uid(), ano_mes, forcar_reabertura=False)
+
+        # 7) Log de auditoria — nunca silencioso
+        db.db_registrar_log_reprocessamento(
+            uid(), ano_mes, "EXCLUIU_VENDA",
+            motivo=f"Venda de {quantidade_venda} {ticker} excluída pelo usuário (id {operacao_fiscal_id})",
+            valores_antes=op, valores_depois=None,
+        )
+
+        resposta = {
+            "ok": True,
+            "ticker": ticker,
+            "quantidade_devolvida": quantidade_venda,
+            "apuracao_mes": _serializar_apuracao(db.db_obter_apuracao_mensal(uid(), ano_mes)),
+        }
+        if bloqueados:
+            resposta["aviso"] = (
+                f"Meses fechados à frente desta venda não foram recalculados automaticamente: "
+                f"{', '.join(bloqueados)}. Reabra-os manualmente se precisar refletir essa exclusão neles."
+            )
+        return jsonify(resposta)
+
+
     @requer_auth
     def api_fiscal_apuracao(ano_mes):
         salva = db.db_obter_apuracao_mensal(uid(), ano_mes)
