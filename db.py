@@ -1064,16 +1064,24 @@ def db_init_operacoes_table(conn):
                 corretora TEXT,
                 categoria_id INTEGER DEFAULT NULL,
                 observacao TEXT,
+                operacao_fiscal_id INTEGER DEFAULT NULL,
                 criado_em TEXT,
                 atualizado_em TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_operacoes_usuario ON operacoes(usuario_id, data_operacao);
             CREATE INDEX IF NOT EXISTS idx_operacoes_ticker ON operacoes(usuario_id, ticker);
+            CREATE INDEX IF NOT EXISTS idx_operacoes_fiscal_id ON operacoes(operacao_fiscal_id);
+        """)
+        # Migração defensiva: bancos com a tabela operacoes de antes dessa
+        # coluna existir precisam do ALTER — CREATE TABLE IF NOT EXISTS
+        # sozinho não adiciona coluna nova numa tabela já existente.
+        cur.execute("""
+            ALTER TABLE operacoes ADD COLUMN IF NOT EXISTS operacao_fiscal_id INTEGER DEFAULT NULL;
         """)
     conn.commit()
 
 def db_criar_operacao(uid, ticker, tipo, data_operacao, quantidade, preco_unitario,
-                       corretora=None, categoria_id=None, observacao=None):
+                       corretora=None, categoria_id=None, observacao=None, operacao_fiscal_id=None):
     if tipo not in ('COMPRA', 'VENDA'):
         raise ValueError("tipo deve ser 'COMPRA' ou 'VENDA'")
     valor_total = round(float(quantidade) * float(preco_unitario), 2)
@@ -1084,11 +1092,11 @@ def db_criar_operacao(uid, ticker, tipo, data_operacao, quantidade, preco_unitar
                 INSERT INTO operacoes
                     (usuario_id, ticker, tipo, data_operacao, quantidade,
                      preco_unitario, valor_total, corretora, categoria_id,
-                     observacao, criado_em, atualizado_em)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                     observacao, operacao_fiscal_id, criado_em, atualizado_em)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING id
             """, (uid, ticker.upper(), tipo, data_operacao, quantidade, preco_unitario,
-                  valor_total, corretora, categoria_id, observacao, agora_str(), agora_str()))
+                  valor_total, corretora, categoria_id, observacao, operacao_fiscal_id, agora_str(), agora_str()))
             novo_id = cur.fetchone()[0]
         conn.commit()
         conn.close()
@@ -1540,6 +1548,88 @@ def db_salvar_posicao_fiscal(uid, ticker, quantidade, custo_medio, custo_total, 
         return False
 
 
+def db_obter_operacao_fiscal(uid, operacao_fiscal_id):
+    """Busca uma operação fiscal específica, garantindo que pertence ao
+    usuário (nunca deixa excluir operação de outra pessoa por ID)."""
+    try:
+        conn = get_conn()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM operacoes_fiscais WHERE id=%s AND usuario_id=%s
+            """, (operacao_fiscal_id, uid))
+            row = cur.fetchone()
+        conn.close()
+        if not row: return None
+        d = dict(row)
+        for campo in ('quantidade','preco_unitario','valor_bruto','custos','irrf','custo_base','resultado_liquido'):
+            if d.get(campo) is not None: d[campo] = float(d[campo])
+        if d.get('data_operacao'): d['data_operacao'] = d['data_operacao'].isoformat()
+        return d
+    except Exception as e:
+        print(f"[DB] Erro ao obter operação fiscal: {e}")
+        return None
+
+
+def db_eh_venda_mais_recente_do_ticker(uid, ticker, operacao_fiscal_id):
+    """
+    Só permite excluir a venda MAIS RECENTE de um ticker — o custo médio
+    fiscal é calculado em sequência, então desfazer uma venda no meio do
+    histórico (com compras/vendas depois dela) exigiria reprocessar tudo
+    que veio depois. Excluir sempre 'de trás pra frente' evita essa
+    complicação e mantém a conta sempre auditável.
+    """
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id FROM operacoes_fiscais
+                WHERE usuario_id=%s AND ticker=%s AND tipo='VENDA'
+                ORDER BY data_operacao DESC, id DESC
+                LIMIT 1
+            """, (uid, ticker.upper()))
+            row = cur.fetchone()
+        conn.close()
+        return row is not None and row[0] == operacao_fiscal_id
+    except Exception as e:
+        print(f"[DB] Erro ao checar venda mais recente: {e}")
+        return False
+
+
+def db_excluir_operacao_fiscal(uid, operacao_fiscal_id):
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM operacoes_fiscais WHERE id=%s AND usuario_id=%s
+            """, (operacao_fiscal_id, uid))
+            afetadas = cur.rowcount
+        conn.commit()
+        conn.close()
+        return afetadas > 0
+    except Exception as e:
+        print(f"[DB] Erro ao excluir operação fiscal: {e}")
+        return False
+
+
+def db_excluir_operacao_por_fiscal_id(uid, operacao_fiscal_id):
+    """Remove a operação do Performance vinculada a uma venda fiscal
+    (via operacao_fiscal_id), pra manter os dois lados em sincronia
+    ao desfazer uma venda."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM operacoes WHERE operacao_fiscal_id=%s AND usuario_id=%s
+            """, (operacao_fiscal_id, uid))
+            afetadas = cur.rowcount
+        conn.commit()
+        conn.close()
+        return afetadas > 0
+    except Exception as e:
+        print(f"[DB] Erro ao excluir operação vinculada: {e}")
+        return False
+
+
 def db_registrar_operacao_fiscal(uid, ticker, tipo, modalidade, data_operacao, quantidade,
                                   preco_unitario, valor_bruto, custos=0.0, irrf=0.0,
                                   custo_base=None, resultado_liquido=None,
@@ -1721,6 +1811,23 @@ def db_salvar_apuracao_mensal(uid, ano_mes, apuracao_dict, permitir_sobrescrever
         return True
     except Exception as e:
         print(f"[DB] Erro ao salvar apuração mensal: {e}")
+        return False
+
+
+def db_excluir_apuracao_mensal(uid, ano_mes):
+    """Remove a apuração salva de um mês — usado quando a última venda
+    desse mês é excluída (senão ficaria um dado velho/incorreto salvo,
+    mostrando resultado de vendas que não existem mais)."""
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM apuracoes_fiscais_mensais WHERE usuario_id=%s AND ano_mes=%s", (uid, ano_mes))
+            afetadas = cur.rowcount
+        conn.commit()
+        conn.close()
+        return afetadas > 0
+    except Exception as e:
+        print(f"[DB] Erro ao excluir apuração mensal: {e}")
         return False
 
 
