@@ -270,7 +270,6 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
         reprocessar um histórico inteiro de compras/vendas posteriores.
         """
         op = db.db_obter_operacao_fiscal(uid(), operacao_fiscal_id)
-        print(f"[DIAGNÓSTICO EXCLUIR VENDA] uid()={uid()!r}, operacao_fiscal_id={operacao_fiscal_id!r}, achou={op is not None}", flush=True)
         if not op:
             return jsonify({"erro": "Venda não encontrada."}), 404
         if op["tipo"] != "VENDA":
