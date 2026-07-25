@@ -4358,7 +4358,7 @@ async function _carregarExtratoFiscal(){
       <thead><tr>
         <th style="text-align:left">Data</th><th style="text-align:left">Ativo</th>
         <th class="num">Qtd</th><th class="num">Preço</th><th class="num">Bruto</th>
-        <th class="num">Custo Base</th><th class="num">Resultado</th>
+        <th class="num">Custo Base</th><th class="num">Resultado</th><th></th>
       </tr></thead><tbody>
       ${vendas.map(v=>{
         const dataFmt = new Date(v.data_operacao+'T12:00:00').toLocaleDateString('pt-BR');
@@ -4371,11 +4371,32 @@ async function _carregarExtratoFiscal(){
           <td class="num">R$ ${fmt(v.valor_bruto)}</td>
           <td class="num">R$ ${fmt(v.custo_base)}</td>
           <td class="num ${res>=0?'lucro-pos':'lucro-neg'}">${res>=0?'+':''}R$ ${fmt(res)}</td>
+          <td style="text-align:center">
+            <button onclick="excluirVendaFiscal(${v.id}, '${v.ticker}', ${v.quantidade})" title="Excluir esta venda"
+              style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text3);padding:2px 6px">🗑️</button>
+          </td>
         </tr>`;
       }).join('')}
       </tbody></table></div>`;
   }catch(e){
     area.innerHTML = `<div style="text-align:center;padding:1.5rem;color:#e53935">❌ Erro ao carregar extrato</div>`;
+  }
+}
+
+async function excluirVendaFiscal(operacaoFiscalId, ticker, quantidade){
+  if(!confirm(`Excluir esta venda de ${quantidade} ${ticker}?\n\nIsso devolve a quantidade pra Carteira, reverte o custo médio fiscal, remove do Performance e recalcula a apuração do mês. Só funciona se essa for a venda mais recente desse ativo.`)) return;
+
+  try{
+    const r = await fetch(`/api/fiscal/vendas/${operacaoFiscalId}`, {method:'DELETE'});
+    const d = await r.json();
+    if(!r.ok){
+      alert(`Não foi possível excluir: ${d.mensagem || d.erro}`);
+      return;
+    }
+    if(d.aviso) alert(d.aviso);
+    await carregarFiscal();
+  }catch(e){
+    alert('Erro de conexão ao excluir a venda');
   }
 }
 
