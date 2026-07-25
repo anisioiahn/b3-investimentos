@@ -328,11 +328,28 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
                 pos_carteira["data_compra"], pos_carteira.get("corretora"), pos_carteira.get("categoria_id"),
             )
         else:
+            # A posição foi zerada e removida da Carteira pela venda que
+            # estamos desfazendo — a data_compra original não existe mais
+            # em lugar nenhum da Carteira. Recupera do histórico de
+            # operações do Performance (a 1ª COMPRA registrada pra esse
+            # ticker reflete a data_compra original, gravada lá no momento
+            # em que a Carteira foi sincronizada pela 1ª vez). Só usa a
+            # data da própria venda como último recurso se não achar nada.
+            historico_ticker = db.db_listar_operacoes(uid(), ticker=ticker)
+            primeira_compra = next((o for o in historico_ticker if o["tipo"] == "COMPRA"), None)
+            if primeira_compra and primeira_compra.get("data_operacao"):
+                data_compra_recuperada = primeira_compra["data_operacao"]
+                if hasattr(data_compra_recuperada, "isoformat"):
+                    data_compra_recuperada = data_compra_recuperada.isoformat()
+            else:
+                print(f"[FISCAL] ⚠️ Não achei compra original de {ticker} no histórico do Performance ao desfazer venda — usando a data da venda como último recurso", flush=True)
+                data_compra_recuperada = op["data_operacao"]
+
             nome_empresa = db.db_obter_nome_empresa(ticker) or ticker
             db.db_salvar_posicao(
                 uid(), ticker, nome_empresa, cor_para_ticker(ticker),
                 None, None, custo_medio_revertido, quantidade_venda,
-                op["data_operacao"], None, op.get("categoria_id"),
+                data_compra_recuperada, None, op.get("categoria_id"),
             )
 
         # 3) Remove a operação espelhada no Performance
