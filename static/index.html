@@ -4386,9 +4386,11 @@ async function _carregarExtratoFiscal(){
 async function excluirVendaFiscal(operacaoFiscalId, ticker, quantidade){
   if(!confirm(`Excluir esta venda de ${quantidade} ${ticker}?\n\nIsso devolve a quantidade pra Carteira, reverte o custo médio fiscal, remove do Performance e recalcula a apuração do mês. Só funciona se essa for a venda mais recente desse ativo.`)) return;
 
+  const loading = _abrirModalCarregando('Excluindo venda...');
   try{
     const r = await fetch(`/api/fiscal/vendas/${operacaoFiscalId}`, {method:'DELETE'});
     const d = await r.json();
+    loading.remove();
     if(!r.ok){
       alert(`Não foi possível excluir: ${d.mensagem || d.erro}`);
       return;
@@ -4396,6 +4398,7 @@ async function excluirVendaFiscal(operacaoFiscalId, ticker, quantidade){
     if(d.aviso) alert(d.aviso);
     await carregarFiscal();
   }catch(e){
+    loading.remove();
     alert('Erro de conexão ao excluir a venda');
   }
 }
