@@ -211,6 +211,7 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
             resultado.valor_bruto, custos=custos, irrf=irrf,
             custo_base=resultado.custo_base, resultado_liquido=resultado.resultado_liquido,
             categoria_id=categoria_id, observacao="Venda registrada via Janus Fiscal",
+            data_compra_anterior=pos_carteira.get("data_compra") if pos_carteira else None,
         )
 
         db.db_criar_operacao(
@@ -329,21 +330,27 @@ def registrar_rotas_fiscal(app, requer_auth, uid):
             )
         else:
             # A posição foi zerada e removida da Carteira pela venda que
-            # estamos desfazendo — a data_compra original não existe mais
-            # em lugar nenhum da Carteira. Recupera do histórico de
-            # operações do Performance (a 1ª COMPRA registrada pra esse
-            # ticker reflete a data_compra original, gravada lá no momento
-            # em que a Carteira foi sincronizada pela 1ª vez). Só usa a
-            # data da própria venda como último recurso se não achar nada.
-            historico_ticker = db.db_listar_operacoes(uid(), ticker=ticker)
-            primeira_compra = next((o for o in historico_ticker if o["tipo"] == "COMPRA"), None)
-            if primeira_compra and primeira_compra.get("data_operacao"):
-                data_compra_recuperada = primeira_compra["data_operacao"]
-                if hasattr(data_compra_recuperada, "isoformat"):
-                    data_compra_recuperada = data_compra_recuperada.isoformat()
+            # estamos desfazendo. FONTE PRIMÁRIA: data_compra_anterior,
+            # gravada na PRÓPRIA operação fiscal no momento da venda —
+            # não depende de nenhuma tabela mutável que possa ter mudado
+            # desde então (diferente do histórico do Performance, que se
+            # recria toda vez que "Atualizar Performance" é clicado, e já
+            # causou uma data errada se propagar num caso real). Só cai
+            # pro histórico do Performance (fallback) em vendas registradas
+            # ANTES dessa coluna existir, e pra data da venda como último
+            # recurso se nem isso existir.
+            if op.get("data_compra_anterior"):
+                data_compra_recuperada = op["data_compra_anterior"]
             else:
-                print(f"[FISCAL] ⚠️ Não achei compra original de {ticker} no histórico do Performance ao desfazer venda — usando a data da venda como último recurso", flush=True)
-                data_compra_recuperada = op["data_operacao"]
+                historico_ticker = db.db_listar_operacoes(uid(), ticker=ticker)
+                primeira_compra = next((o for o in historico_ticker if o["tipo"] == "COMPRA"), None)
+                if primeira_compra and primeira_compra.get("data_operacao"):
+                    data_compra_recuperada = primeira_compra["data_operacao"]
+                    if hasattr(data_compra_recuperada, "isoformat"):
+                        data_compra_recuperada = data_compra_recuperada.isoformat()
+                else:
+                    print(f"[FISCAL] ⚠️ Não achei compra original de {ticker} (nem data_compra_anterior, nem histórico do Performance) ao desfazer venda — usando a data da venda como último recurso", flush=True)
+                    data_compra_recuperada = op["data_operacao"]
 
             nome_empresa = db.db_obter_nome_empresa(ticker) or ticker
             db.db_salvar_posicao(
