@@ -1291,6 +1291,7 @@ def db_init_fiscal_tables(conn):
                 resultado_liquido NUMERIC,         -- só em VENDA
                 categoria_id INTEGER,
                 observacao TEXT,
+                data_compra_anterior TEXT,         -- só em VENDA: data_compra da posição NO MOMENTO da venda, pra reverter com segurança depois (nunca deduzida de outra tabela mutável)
                 criado_em TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_operacoes_fiscais_usuario
@@ -1357,6 +1358,10 @@ def db_init_fiscal_tables(conn):
                 ADD COLUMN IF NOT EXISTS imposto_a_pagar_agora NUMERIC NOT NULL DEFAULT 0,
                 ADD COLUMN IF NOT EXISTS imposto_acumulado_novo_saldo NUMERIC NOT NULL DEFAULT 0,
                 ADD COLUMN IF NOT EXISTS fechado_em TEXT;
+        """)
+        cur.execute("""
+            ALTER TABLE operacoes_fiscais
+                ADD COLUMN IF NOT EXISTS data_compra_anterior TEXT;
         """)
         # Seed inicial: só roda se a tabela estiver vazia (primeira vez) —
         # usa os mesmos valores que já eram hard-coded como default em
@@ -1633,7 +1638,7 @@ def db_excluir_operacao_por_fiscal_id(uid, operacao_fiscal_id):
 def db_registrar_operacao_fiscal(uid, ticker, tipo, modalidade, data_operacao, quantidade,
                                   preco_unitario, valor_bruto, custos=0.0, irrf=0.0,
                                   custo_base=None, resultado_liquido=None,
-                                  categoria_id=None, observacao=None):
+                                  categoria_id=None, observacao=None, data_compra_anterior=None):
     try:
         conn = get_conn()
         with conn.cursor() as cur:
@@ -1641,12 +1646,12 @@ def db_registrar_operacao_fiscal(uid, ticker, tipo, modalidade, data_operacao, q
                 INSERT INTO operacoes_fiscais
                     (usuario_id, ticker, tipo, modalidade, data_operacao, quantidade,
                      preco_unitario, valor_bruto, custos, irrf, custo_base,
-                     resultado_liquido, categoria_id, observacao, criado_em)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                     resultado_liquido, categoria_id, observacao, data_compra_anterior, criado_em)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING id
             """, (uid, ticker.upper(), tipo, modalidade, data_operacao, quantidade,
                   preco_unitario, valor_bruto, custos, irrf, custo_base,
-                  resultado_liquido, categoria_id, observacao, agora_str()))
+                  resultado_liquido, categoria_id, observacao, data_compra_anterior, agora_str()))
             novo_id = cur.fetchone()[0]
         conn.commit()
         conn.close()
